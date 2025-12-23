@@ -1,2 +1,2 @@
 #!/usr/bin/env bun
-import "../src/index.tsx";
+import "../src/index.ts";
