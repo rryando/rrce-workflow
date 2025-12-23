@@ -5,6 +5,7 @@
 - Author: `{{author}}`
 - Date: `{{date}}`
 - Source Request / Conversation URL: `{{source}}`
+- Workspace: `{{workspace_name}}`
 
 ## 1. Request Summary
 - Concise restatement of the user's ask.
@@ -15,7 +16,7 @@
 - [ ] Replace with next ready-to-run action.
 
 ## 2. Current Knowledge Snapshot
-- Relevant prior work or documents from `.codex/knowledge` or repo.
+- Relevant prior work or documents from `{{RRCE_CACHE}}/knowledge` or workspace.
 - Key facts that shape feasibility or scope.
 
 ## 3. Clarifications & Responses

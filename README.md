@@ -1,42 +1,111 @@
 # TUI Agent Workflow Generator
 
-A terminal-based agentic code workflow generator designed to work seamlessly with:
-- **GitHub Copilot CLI** - Command-line AI assistance
-- **Antigravity IDE** - Google's agentic coding environment  
-- **VS Code** - With Copilot and other AI extensions
+[![RRCE-Workflow](https://img.shields.io/badge/RRCE-Workflow-blue)](https://github.com/rryando/tui-agemt-workflow-gen)
+
+> **RR Context Engineering Workflow** - A selection-agnostic agentic code workflow generator
+
+A terminal-based multi-agent workflow system designed to work seamlessly with:
+- 🤖 **GitHub Copilot CLI** - Command-line AI assistance
+- 🚀 **Antigravity IDE** - Google's agentic coding environment  
+- 💻 **VS Code** - With Copilot and other AI extensions
 
 ## Overview
 
-This project provides a structured approach to defining, generating, and executing AI-assisted coding workflows through a terminal user interface.
+RRCE-Workflow provides a structured approach to AI-assisted software development through a 4-agent pipeline:
+
+```
+Research → Planning → Execution → Documentation
+              ↓
+        Knowledge Cache (persistent context)
+```
+
+## Key Features
+
+- **Selection Agnostic** - Same prompts work across all supported tools
+- **Workspace Aware** - Respects project boundaries and maintainer preferences  
+- **Global Cache, Project Scoped** - Knowledge persists in `~/.rrce-workflow/` but is organized per-project
+- **Non-Intrusive** - Minimal footprint in your workspace
+
+## Quick Start
+
+```bash
+# Install and run setup wizard
+npx rrce-workflow
+
+# Initialize project context (first time or to refresh)
+rrce-workflow init
+
+# Start a new task
+rrce-workflow research "Add user authentication"
+
+# Continue with planning
+rrce-workflow plan auth-feature
+
+# Execute the plan
+rrce-workflow execute auth-feature
+
+# Generate documentation
+rrce-workflow document auth-feature
+```
 
 ## Project Structure
 
 ```
-tui-agemt-workflow-gen/
-├── agent-core/           # Core agent definitions and workflows
-│   ├── knowledge/        # Domain knowledge and context
-│   ├── prompts/          # Agent prompt definitions
-│   ├── refs/             # Reference materials
-│   ├── tasks/            # Task definitions
-│   └── templates/        # Output templates
-├── .agent/               # Agent workflow configurations
-│   └── workflows/        # Reusable workflow definitions
-└── ...
+~/.rrce-workflow/                    # Global installation
+├── config.yaml                      # User preferences
+├── templates/                       # Default templates
+└── workspaces/                      # Project-scoped cache
+    └── <hash>/                      # Per-project knowledge & tasks
+
+<your-project>/
+└── .rrce-workflow.yaml              # Optional: project config
 ```
 
-## Agent Prompts
+## Agent Roles
 
-The `agent-core/prompts/` directory contains specialized prompts for different agent roles:
-- `documentation.md` - Documentation generation
-- `executor.md` - Code execution workflows
-- `planning_orchestrator.md` - Task planning and orchestration
-- `research_discussion.md` - Research and discovery
-- `sync.md` - Synchronization workflows
+| Agent | Purpose |
+|-------|---------|
+| **Init** | Analyze codebase, establish project context (tech stack, conventions, scope) |
+| **Research** | Clarify requirements, surface risks, create requirements brief |
+| **Planning** | Convert research into actionable, prioritized task breakdown |
+| **Executor** | Implement code, run tests, maintain execution log |
+| **Documentation** | Synthesize work into release-ready documentation |
+| **Sync** | Reconcile codebase state with knowledge cache |
 
-## Getting Started
+## Configuration
 
-*Coming soon*
+### User Config (`~/.rrce-workflow/config.yaml`)
+
+```yaml
+version: 1
+author: "your-name"
+email: "your@email.com"
+```
+
+### Project Config (`.rrce-workflow.yaml`)
+
+```yaml
+version: 1
+cache:
+  enabled: true    # Set to false to disable caching for this repo
+project:
+  name: "my-project"
+```
+
+## Documentation
+
+- [Architecture](./docs/architecture.md) - Detailed system design
+- [Prompts](./agent-core/prompts/) - Agent prompt definitions
+- [Templates](./agent-core/templates/) - Output templates
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RRCE_HOME` | Global installation path | `~/.rrce-workflow` |
+| `RRCE_WORKSPACE` | Explicit workspace root | Auto-detected |
+| `RRCE_AUTHOR` | Default author name | From config |
 
 ## License
 
-*TBD*
+MIT

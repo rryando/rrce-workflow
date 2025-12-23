@@ -6,6 +6,7 @@
 - Date: `{{date}}`
 - Plan Artifact: `{{plan_artifact}}`
 - Branch / Commit Reference: `{{git_ref}}`
+- Workspace: `{{workspace_name}}`
 
 ## 1. Work Summary
 - Brief narrative of what was completed.

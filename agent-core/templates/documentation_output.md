@@ -6,6 +6,7 @@
 - Date: `{{date}}`
 - Execution Artifact: `{{execution_artifact}}`
 - Release / Merge Reference: `{{release_ref}}`
+- Workspace: `{{workspace_name}}`
 
 ## 1. Overview
 - Purpose of the work and high-level outcome.
@@ -28,7 +29,7 @@
 - Deferred items or future considerations.
 
 ## 5. Knowledge Sync
-- Updates pushed to `.codex/knowledge` with file references.
+- Updates pushed to `{{RRCE_CACHE}}/knowledge` with file references.
 - External documentation or runbooks updated.
 
 ## 6. Operational Notes

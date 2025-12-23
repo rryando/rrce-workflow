@@ -5,6 +5,7 @@
 - Planner: `{{author}}`
 - Date: `{{date}}`
 - Research Artifact: `{{research_artifact}}`
+- Workspace: `{{workspace_name}}`
 
 ## 1. Scope Confirmation
 - Summary of the agreed requirements.
@@ -32,7 +33,7 @@
 - Tooling or environments needed.
 
 ## 6. Knowledge & Asset Updates
-- Files in `.codex/knowledge` to create or update, with reasoning.
+- Files in `{{RRCE_CACHE}}/knowledge` to create or update, with reasoning.
 - Additional references or diagrams to produce.
 
 ## 7. Handoff Checklist

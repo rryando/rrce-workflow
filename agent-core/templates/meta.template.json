@@ -4,6 +4,11 @@
   "title": "",
   "status": "draft",
   "summary": "",
+  "workspace": {
+    "name": "",
+    "path": "",
+    "hash": ""
+  },
   "created_at": "",
   "updated_at": "",
   "tags": [],
