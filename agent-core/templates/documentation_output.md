@@ -29,7 +29,7 @@
 - Deferred items or future considerations.
 
 ## 5. Knowledge Sync
-- Updates pushed to `{{RRCE_CACHE}}/knowledge` with file references.
+- Updates pushed to `{{RRCE_DATA}}/knowledge` with file references.
 - External documentation or runbooks updated.
 
 ## 6. Operational Notes

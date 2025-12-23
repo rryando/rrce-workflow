@@ -60,6 +60,20 @@ The system provides a structured multi-agent pipeline for software development t
 
 ## Path Resolution
 
+### Storage Modes
+
+| Mode | Location | Use Case |
+|------|----------|----------|
+| `global` (default) | `~/.rrce-workflow/workspaces/<workspace-name>/` | Non-intrusive, survives repo deletion |
+| `workspace` | `<workspace>/.rrce-workflow/` | Portable, team-shareable |
+| `both` | Both locations with sync | Redundancy, flexibility |
+
+Configure via `.rrce-workflow.yaml`:
+```yaml
+storage:
+  mode: global  # or: workspace, both
+```
+
 ### Environment Variables
 
 | Variable | Purpose | Default |
@@ -68,14 +82,14 @@ The system provides a structured multi-agent pipeline for software development t
 | `RRCE_WORKSPACE` | Explicit workspace root | Auto-detected |
 | `RRCE_AUTHOR` | Default author name | From `config.yaml` |
 
-### Template Variables (used in prompts and templates)
+### Template Variables
 
 | Variable | Resolves To |
 |----------|-------------|
 | `{{RRCE_HOME}}` | Global installation path |
-| `{{RRCE_CACHE}}` | `{{RRCE_HOME}}/workspaces/{{WORKSPACE_HASH}}` |
-| `{{WORKSPACE_ROOT}}` | Detected workspace directory |
-| `{{WORKSPACE_HASH}}` | SHA256 hash of workspace absolute path |
+| `{{RRCE_DATA}}` | Data path (based on storage mode) |
+| `{{WORKSPACE_ROOT}}` | Workspace directory |
+| `{{WORKSPACE_NAME}}` | Project name (from config or directory) |
 
 ### Workspace Detection Algorithm
 
@@ -86,6 +100,18 @@ The system provides a structured multi-agent pipeline for software development t
    - .rrce-workflow.yaml
 3. Fall back to CWD
 ```
+
+### Cross-Project References
+
+Reference another project's context when needed:
+```
+{{RRCE_HOME}}/workspaces/<other-project-name>/knowledge/project-context.md
+```
+
+**Use cases:**
+- FE project referencing BE API specs
+- Microservice referencing shared library conventions
+- Monorepo packages accessing root-level decisions
 
 ---
 
@@ -191,14 +217,21 @@ required-args:
     prompt: "Interactive prompt if arg is missing"
 optional-args:
   - name: ARG_NAME
-    default: "default value or $ENV_VAR"
+    default: "default value"
+auto-identity:
+  user: "$GIT_USER"      # Auto-detect from `git config user.name`
+  model: "$AGENT_MODEL"  # Auto-detect from runtime (gemini-2.0, claude-sonnet, etc.)
 ---
 ```
 
-The TUI parses this to:
-1. Display help/usage information
-2. Auto-prompt for missing required arguments
-3. Apply defaults for optional arguments
+### Auto-Identity
+
+Identity is automatically detected - no user input required:
+
+| Variable | Source | Example |
+|----------|--------|---------|
+| `$GIT_USER` | `git config user.name` | "John Doe" |
+| `$AGENT_MODEL` | Runtime environment | "gemini-2.0-flash", "claude-sonnet-4" |
 
 ---
 
@@ -211,7 +244,7 @@ RRCE-Workflow prompts are designed to work across multiple AI coding tools:
 | Tool | Prompt Location | Extension | Notes |
 |------|----------------|-----------|-------|
 | **Antigravity IDE** | `.agent/workflows/` | `.md` | Native workflow support |
-| **GitHub Copilot (VSCode)** | `.github/prompts/` | `.prompt.md` | Requires `chat.promptFiles: true` |
+| **GitHub Copilot (VSCode)** | `.github/agents/` | `.agent.md` | Custom agents format |
 | **Copilot CLI** | Any location | `.md` | Reference via file path |
 
 ### Wizard Command

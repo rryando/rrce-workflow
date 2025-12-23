@@ -33,7 +33,7 @@
 - Tooling or environments needed.
 
 ## 6. Knowledge & Asset Updates
-- Files in `{{RRCE_CACHE}}/knowledge` to create or update, with reasoning.
+- Files in `{{RRCE_DATA}}/knowledge` to create or update, with reasoning.
 - Additional references or diagrams to produce.
 
 ## 7. Handoff Checklist

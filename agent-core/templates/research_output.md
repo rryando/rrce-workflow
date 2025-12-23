@@ -16,7 +16,7 @@
 - [ ] Replace with next ready-to-run action.
 
 ## 2. Current Knowledge Snapshot
-- Relevant prior work or documents from `{{RRCE_CACHE}}/knowledge` or workspace.
+- Relevant prior work or documents from `{{RRCE_DATA}}/knowledge` or workspace.
 - Key facts that shape feasibility or scope.
 
 ## 3. Clarifications & Responses

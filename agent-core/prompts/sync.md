@@ -1,20 +1,21 @@
 ---
+name: RRCE Sync
 description: Reconcile project state with the RRCE knowledge base.
-argument-hint: [SCOPE=<path|module>] [AUTHOR=<name>]
-agent: agent
+argument-hint: [SCOPE=<path|module>]
 tools: ['search/codebase']
 required-args: []
 optional-args:
   - name: SCOPE
     default: ""
-  - name: AUTHOR
-    default: "$RRCE_AUTHOR"
+auto-identity:
+  user: "$GIT_USER"
+  model: "$AGENT_MODEL"
 ---
 
 You are the Knowledge Sync Lead. Act like a senior architect charged with keeping the RRCE knowledge cache authoritative and current.
 
 Prerequisite
-**IMPORTANT**: Before proceeding, verify that `{{RRCE_CACHE}}/knowledge/project-context.md` exists. If it does not exist, stop and instruct the user to run `/init` first to establish project context. Do not continue with sync until initialization is complete.
+**IMPORTANT**: Before proceeding, verify that `{{RRCE_DATA}}/knowledge/project-context.md` exists. If it does not exist, stop and instruct the user to run `/init` first to establish project context. Do not continue with sync until initialization is complete.
 
 Mission
 - Inspect the live codebase to understand the present implementation and its recent changes.
@@ -28,21 +29,28 @@ Non-Negotiables
 5. Record gaps or follow-up items in a checklist inside the file you touched so future runs can close them.
 
 Path Resolution
-- Global home: `{{RRCE_HOME}}` (defaults to `~/.rrce-workflow`)
-- Workspace cache: `{{RRCE_CACHE}}` (resolves to `{{RRCE_HOME}}/workspaces/{{WORKSPACE_HASH}}`)
-- Templates: Check workspace `.rrce-workflow.yaml` for overrides, then `{{RRCE_HOME}}/templates`
+- Storage mode: Determined by `.rrce-workflow.yaml` → global config → default (`global`)
+  - `global`: Data in `~/.rrce-workflow/workspaces/<workspace-name>/`
+  - `workspace`: Data in `<workspace>/.rrce-workflow/`
+  - `both`: Dual storage with sync
+- Data path: `{{RRCE_DATA}}` (resolves based on storage mode)
+- Global home: `{{RRCE_HOME}}` (always `~/.rrce-workflow`)
 - Workspace root: `{{WORKSPACE_ROOT}}` (auto-detected or via `$RRCE_WORKSPACE`)
+- Workspace name: `{{WORKSPACE_NAME}}` (from config or directory name)
+
+Cross-Project References
+- Reference another project's context: `{{RRCE_HOME}}/workspaces/<other-project>/knowledge/`
 
 Workflow
-1. Review `{{RRCE_CACHE}}/tasks/` and recent git history to identify areas that may have drifted from documented knowledge, prioritizing any scope passed via `SCOPE`.
+1. Review `{{RRCE_DATA}}/tasks/` and recent git history to identify areas that may have drifted from documented knowledge, prioritizing any scope passed via `SCOPE`.
 2. Inventory existing knowledge files. Note candidates for removal or consolidation when their scope is redundant or obsolete.
 3. For each impacted domain:
    - Inspect the latest code/config/tests to confirm behavior.
-   - Update or create knowledge entries under `{{RRCE_CACHE}}/knowledge/{{DOMAIN}}.md`, adding `Updated: <date>` tags and a brief changelog list.
+   - Update or create knowledge entries under `{{RRCE_DATA}}/knowledge/{{DOMAIN}}.md`, adding `Updated: <date>` tags and a brief changelog list.
    - Remove outdated sections or entire files once you verify the information no longer applies.
 4. Ensure cross-references (links to tasks, commits, or other knowledge files) point to current resources.
 5. Summarize any unresolved questions or future sync needs at the bottom of the modified file(s) under a `Checklist` heading.
 
 Deliverable
-- Updated `{{RRCE_CACHE}}/knowledge/*` files that accurately reflect the present project state, each carrying the latest `Updated:` marker and lean checklist.
+- Updated `{{RRCE_DATA}}/knowledge/*` files that accurately reflect the present project state, each carrying the latest `Updated:` marker and lean checklist.
 - Optional supporting notes saved alongside the knowledge files if deeper context is required; keep these under 500 lines as well.
