@@ -1,111 +1,80 @@
-# TUI Agent Workflow Generator
+# RRCE-Workflow
 
-[![RRCE-Workflow](https://img.shields.io/badge/RRCE-Workflow-blue)](https://github.com/rryando/tui-agemt-workflow-gen)
+> Agentic code workflow generator for AI-assisted development
 
-> **RR Context Engineering Workflow** - A selection-agnostic agentic code workflow generator
+[![npm version](https://badge.fury.io/js/rrce-workflow.svg)](https://www.npmjs.com/package/rrce-workflow)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A terminal-based multi-agent workflow system designed to work seamlessly with:
-- 🤖 **GitHub Copilot CLI** - Command-line AI assistance
-- 🚀 **Antigravity IDE** - Google's agentic coding environment  
-- 💻 **VS Code** - With Copilot and other AI extensions
+RRCE-Workflow is a TUI that helps you set up and manage AI agent workflows for your codebase. It works with GitHub Copilot, Antigravity IDE, and other AI coding tools.
 
-## Overview
+## Installation
 
-RRCE-Workflow provides a structured approach to AI-assisted software development through a 4-agent pipeline:
+```bash
+# Using npm
+npx rrce-workflow
 
+# Using bun (recommended)
+bunx rrce-workflow
+
+# Global install
+npm install -g rrce-workflow
 ```
-Research → Planning → Execution → Documentation
-              ↓
-        Knowledge Cache (persistent context)
-```
-
-## Key Features
-
-- **Selection Agnostic** - Same prompts work across all supported tools
-- **Workspace Aware** - Respects project boundaries and maintainer preferences  
-- **Global Cache, Project Scoped** - Knowledge persists in `~/.rrce-workflow/` but is organized per-project
-- **Non-Intrusive** - Minimal footprint in your workspace
 
 ## Quick Start
 
 ```bash
-# Install and run setup wizard
-npx rrce-workflow
+# Run setup wizard
+rrce-workflow wizard
 
-# Initialize project context (first time or to refresh)
-rrce-workflow init
-
-# Start a new task
-rrce-workflow research "Add user authentication"
-
-# Continue with planning
-rrce-workflow plan auth-feature
-
-# Execute the plan
-rrce-workflow execute auth-feature
-
-# Generate documentation
-rrce-workflow document auth-feature
+# Or just run to see available agents
+rrce-workflow
 ```
 
-## Project Structure
+## Features
 
-```
-~/.rrce-workflow/                    # Global installation
-├── config.yaml                      # User preferences
-├── templates/                       # Default templates
-└── workspaces/                      # Project-scoped cache
-    └── <hash>/                      # Per-project knowledge & tasks
+- **Setup Wizard** - Interactive configuration for storage mode and AI tools
+- **Agent Prompts** - Pre-built prompts for init, research, planning, execution, documentation, and sync
+- **Multi-Tool Support** - Works with GitHub Copilot (`.agent.md`) and Antigravity IDE
+- **Cross-Project References** - Reference context from related projects
 
-<your-project>/
-└── .rrce-workflow.yaml              # Optional: project config
-```
+## Agents
 
-## Agent Roles
-
-| Agent | Purpose |
-|-------|---------|
-| **Init** | Analyze codebase, establish project context (tech stack, conventions, scope) |
-| **Research** | Clarify requirements, surface risks, create requirements brief |
-| **Planning** | Convert research into actionable, prioritized task breakdown |
-| **Executor** | Implement code, run tests, maintain execution log |
-| **Documentation** | Synthesize work into release-ready documentation |
-| **Sync** | Reconcile codebase state with knowledge cache |
+| Agent | Command | Description |
+|-------|---------|-------------|
+| **Init** | `/init` | Initialize or update project context |
+| **Research** | `/research` | Clarify requirements and create research brief |
+| **Planning** | `/plan` | Transform requirements into execution plan |
+| **Executor** | `/execute` | Implement the planned tasks |
+| **Documentation** | `/docs` | Generate project documentation |
+| **Sync** | `/sync` | Reconcile codebase with knowledge base |
 
 ## Configuration
 
-### User Config (`~/.rrce-workflow/config.yaml`)
+After running the wizard, a `.rrce-workflow.yaml` is created in your project:
 
 ```yaml
 version: 1
-author: "your-name"
-email: "your@email.com"
-```
 
-### Project Config (`.rrce-workflow.yaml`)
+storage:
+  mode: global  # or: workspace, both
 
-```yaml
-version: 1
-cache:
-  enabled: true    # Set to false to disable caching for this repo
 project:
   name: "my-project"
 ```
 
-## Documentation
+### Storage Modes
 
-- [Architecture](./docs/architecture.md) - Detailed system design
-- [Prompts](./agent-core/prompts/) - Agent prompt definitions
-- [Templates](./agent-core/templates/) - Output templates
+| Mode | Location | Use Case |
+|------|----------|----------|
+| `global` | `~/.rrce-workflow/workspaces/<name>/` | Non-intrusive |
+| `workspace` | `.rrce-workflow/` | Portable with repo |
+| `both` | Both locations | Redundancy |
 
-## Environment Variables
+## Requirements
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `RRCE_HOME` | Global installation path | `~/.rrce-workflow` |
-| `RRCE_WORKSPACE` | Explicit workspace root | Auto-detected |
-| `RRCE_AUTHOR` | Default author name | From config |
+- Node.js 18+ or Bun 1.0+
+- Git (for user detection)
 
 ## License
 
-MIT
+MIT © RRCE Team

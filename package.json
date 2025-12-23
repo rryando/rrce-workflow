@@ -1,0 +1,57 @@
+{
+  "name": "rrce-workflow",
+  "version": "0.1.0",
+  "description": "RRCE-Workflow TUI - Agentic code workflow generator for AI-assisted development",
+  "author": "RRCE Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rryando/rrce-workflow"
+  },
+  "homepage": "https://github.com/rryando/rrce-workflow#readme",
+  "bugs": {
+    "url": "https://github.com/rryando/rrce-workflow/issues"
+  },
+  "keywords": [
+    "ai",
+    "workflow",
+    "copilot",
+    "agent",
+    "tui",
+    "cli",
+    "code-generation",
+    "agentic",
+    "ink"
+  ],
+  "type": "module",
+  "module": "src/index.tsx",
+  "bin": {
+    "rrce-workflow": "./bin/rrce-workflow.js"
+  },
+  "files": [
+    "src",
+    "agent-core",
+    "docs",
+    "bin"
+  ],
+  "scripts": {
+    "dev": "bun run src/index.tsx",
+    "wizard": "bun run src/index.tsx wizard",
+    "start": "bun run src/index.tsx"
+  },
+  "engines": {
+    "node": ">=18",
+    "bun": ">=1.0"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "ink": "^6.6.0",
+    "ink-select-input": "^6.2.0",
+    "react": "^18",
+    "zod": "^4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^18"
+  }
+}

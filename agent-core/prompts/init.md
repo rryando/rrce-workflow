@@ -87,20 +87,59 @@ Discovery Workflow
 
 Workflow Steps
 1. Ensure `{{RRCE_DATA}}/knowledge` directory exists, creating it if absent.
-2. **Check for existing context**: If `{{RRCE_DATA}}/knowledge/project-context.md` exists:
+
+2. **Detect workspace state**:
+   - Check if workspace is empty (no manifest files, no src/, no meaningful code files)
+   - If empty, proceed to Step 3 (Bootstrap Mode)
+   - If has content, skip to Step 4 (Analysis Mode)
+
+3. **Bootstrap Mode** (empty workspace):
+   Engage in an interactive dialogue to fully define the project. Continue asking until you have enough information to produce a complete project context that the Research agent can use.
+
+   **Core Questions** (ask all):
+   - "What type of project is this?" (web app, CLI, library, API, mobile, etc.)
+   - "What's your primary language and runtime?" (TypeScript/Node, Python 3.x, Go, Rust, etc.)
+   - "What's the project name and a one-line description?"
+   
+   **Follow-up Questions** (based on project type):
+   - For web apps: "Frontend framework? Backend? Database? Auth approach?"
+   - For APIs: "REST or GraphQL? What entities/resources? Auth mechanism?"
+   - For CLIs: "What commands/subcommands? Config file format? Output format?"
+   - For libraries: "What's the public API? Target consumers? Versioning strategy?"
+   
+   **Architecture Questions** (dig deeper):
+   - "What's your preferred code organization?" (monorepo, layered, feature-based)
+   - "Any external services or APIs you'll integrate with?"
+   - "Testing approach?" (unit, integration, e2e frameworks)
+   - "Deployment target?" (Vercel, AWS, Docker, etc.)
+   
+   **Completion Criteria** - Keep asking until you can answer:
+   - [ ] What is the project and what problem does it solve?
+   - [ ] What technologies will be used (language, frameworks, databases)?
+   - [ ] How will the code be organized?
+   - [ ] What are the key features or components?
+   - [ ] What conventions should the Executor follow?
+   
+   Once complete:
+   - Generate full `project-context.md` with all gathered information
+   - Hand over to Research agent for first task exploration
+
+4. **Check for existing context**: If `{{RRCE_DATA}}/knowledge/project-context.md` exists:
    - Read the existing document and preserve manual edits/notes
    - Compare current codebase state against documented state
    - Update sections that have drifted (like Sync agent behavior)
    - Add `Updated: YYYY-MM-DD` timestamp to modified sections
    - Preserve the original `Initialized:` date
-3. If no existing context, perform fresh initialization:
+
+5. **Analysis Mode** (has content, no existing context):
    - Scan workspace root for manifest files and configuration
    - Analyze directory structure and sample code files
    - Extract patterns and conventions from linter/formatter configs
-4. Compile findings using `{{RRCE_HOME}}/templates/init_output.md` template.
-5. Save to `{{RRCE_DATA}}/knowledge/project-context.md`.
-6. Update `{{RRCE_DATA}}/workspace.json` with project metadata.
-7. Log changes made (new sections, updated sections, removed outdated info).
+
+6. Compile findings using `{{RRCE_HOME}}/templates/init_output.md` template.
+7. Save to `{{RRCE_DATA}}/knowledge/project-context.md`.
+8. Update `{{RRCE_DATA}}/workspace.json` with project metadata.
+9. Log changes made (new sections, updated sections, removed outdated info).
 
 Deliverable
 - File: `{{RRCE_DATA}}/knowledge/project-context.md`

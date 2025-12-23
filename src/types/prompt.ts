@@ -1,0 +1,53 @@
+import { z } from 'zod';
+
+// Prompt frontmatter schema
+export const PromptArgSchema = z.object({
+  name: z.string(),
+  default: z.string().optional(),
+  prompt: z.string().optional(),
+});
+
+export const AutoIdentitySchema = z.object({
+  user: z.string(),
+  model: z.string(),
+});
+
+export const PromptFrontmatterSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  'argument-hint': z.union([z.string(), z.array(z.string())]).optional(),
+  tools: z.array(z.string()).optional(),
+  'required-args': z.array(PromptArgSchema).optional(),
+  'optional-args': z.array(PromptArgSchema).optional(),
+  'auto-identity': AutoIdentitySchema.optional(),
+});
+
+export type PromptArg = z.infer<typeof PromptArgSchema>;
+export type AutoIdentity = z.infer<typeof AutoIdentitySchema>;
+export type PromptFrontmatter = z.infer<typeof PromptFrontmatterSchema>;
+
+// Parsed prompt with content
+export interface ParsedPrompt {
+  frontmatter: PromptFrontmatter;
+  content: string;
+  filePath: string;
+}
+
+// Storage mode options
+export type StorageMode = 'global' | 'workspace' | 'both';
+
+// Config schema
+export interface RRCEConfig {
+  version: number;
+  storage: {
+    mode: StorageMode;
+  };
+  workspace: {
+    name: string;
+    path: string;
+  };
+  tools: {
+    copilot: boolean;
+    antigravity: boolean;
+  };
+}
