@@ -1,12 +1,12 @@
 {
   "name": "rrce-workflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "RRCE-Workflow TUI - Agentic code workflow generator for AI-assisted development",
   "author": "RRCE Team",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/rryando/rrce-workflow"
+    "url": "git+https://github.com/rryando/rrce-workflow.git"
   },
   "homepage": "https://github.com/rryando/rrce-workflow#readme",
   "bugs": {
@@ -24,9 +24,9 @@
     "ink"
   ],
   "type": "module",
-  "module": "src/index.tsx",
+  "module": "src/index.ts",
   "bin": {
-    "rrce-workflow": "./bin/rrce-workflow.js"
+    "rrce-workflow": "bin/rrce-workflow.js"
   },
   "files": [
     "src",
@@ -35,23 +35,22 @@
     "bin"
   ],
   "scripts": {
-    "dev": "bun run src/index.tsx",
-    "wizard": "bun run src/index.tsx wizard",
-    "start": "bun run src/index.tsx"
+    "dev": "bun run src/index.ts",
+    "wizard": "bun run src/index.ts wizard",
+    "select": "bun run src/index.ts select",
+    "start": "bun run src/index.ts"
   },
   "engines": {
     "node": ">=18",
     "bun": ">=1.0"
   },
   "dependencies": {
+    "@clack/prompts": "^0.11.0",
     "gray-matter": "^4.0.3",
-    "ink": "^6.6.0",
-    "ink-select-input": "^6.2.0",
-    "react": "^18",
-    "zod": "^4"
+    "picocolors": "^1.1.1",
+    "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "@types/react": "^18"
+    "@types/bun": "latest"
   }
 }
