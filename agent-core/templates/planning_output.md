@@ -1,0 +1,43 @@
+# Execution Plan – {{task_title}}
+
+- Task ID: `{{task_id}}`
+- Task Slug: `{{task_slug}}`
+- Planner: `{{author}}`
+- Date: `{{date}}`
+- Research Artifact: `{{research_artifact}}`
+
+## 1. Scope Confirmation
+- Summary of the agreed requirements.
+- Explicit inclusions / exclusions.
+
+## Checklist
+- [ ] Replace with planned deliverable checkpoint.
+- [ ] Replace with verification gate.
+
+## 2. Objectives & Success Criteria
+- Primary outcomes to deliver.
+- Quantifiable acceptance checks or KPIs.
+
+## 3. Task Breakdown
+| Order | Task | Owner | Acceptance Criteria | Dependencies | Est. Effort |
+| --- | --- | --- | --- | --- | --- |
+| 1 |  |  |  |  |  |
+
+## 4. Risks & Mitigations
+- Top risks with mitigation or contingency.
+- Blockers requiring external support.
+
+## 5. Validation Strategy
+- Tests to run (unit/integration/e2e/manual).
+- Tooling or environments needed.
+
+## 6. Knowledge & Asset Updates
+- Files in `.codex/knowledge` to create or update, with reasoning.
+- Additional references or diagrams to produce.
+
+## 7. Handoff Checklist
+- Prerequisites for the Executor (branches, feature flags, data, etc.).
+- Metrics or telemetry to monitor during implementation.
+- Open questions carried forward (also logged in `meta.json`).
+
+> Keep this plan under 500 lines. Remove unused rows or sections once populated.

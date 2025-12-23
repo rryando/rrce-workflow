@@ -1,0 +1,49 @@
+{
+  "task_id": "",
+  "task_slug": "",
+  "title": "",
+  "status": "draft",
+  "summary": "",
+  "created_at": "",
+  "updated_at": "",
+  "tags": [],
+  "checklist": [
+    {
+      "id": "",
+      "label": "",
+      "status": "pending",
+      "owner": "",
+      "notes": ""
+    }
+  ],
+  "references": [],
+  "open_questions": [],
+  "decisions": [],
+  "milestones": [],
+  "agents": {
+    "research": {
+      "owner": "",
+      "status": "pending",
+      "artifact": "",
+      "notes": ""
+    },
+    "planning": {
+      "owner": "",
+      "status": "pending",
+      "artifact": "",
+      "notes": ""
+    },
+    "executor": {
+      "owner": "",
+      "status": "pending",
+      "artifact": "",
+      "notes": ""
+    },
+    "documentation": {
+      "owner": "",
+      "status": "pending",
+      "artifact": "",
+      "notes": ""
+    }
+  }
+}
