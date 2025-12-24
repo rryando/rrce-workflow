@@ -66,9 +66,23 @@ project:
 
 | Mode | Location | Use Case |
 |------|----------|----------|
-| `global` | `~/.rrce-workflow/workspaces/<name>/` | Non-intrusive |
-| `workspace` | `.rrce-workflow/` | Portable with repo |
-| `both` | Both locations | Redundancy |
+| `global` | `~/.rrce-workflow/workspaces/<name>/` | Non-intrusive, cross-project access |
+| `workspace` | `.rrce-workflow/` | Portable with repo, team sharing |
+| `both` | Both locations (synced) | Redundancy + cross-project access |
+
+When `both` is selected, data is stored in **both** locations simultaneously:
+- Primary (for reads): `<workspace>/.rrce-workflow/`
+- Secondary (auto-synced): `~/.rrce-workflow/workspaces/<name>/`
+
+Each storage location contains:
+```
+<storage-path>/
+├── knowledge/      # Project context and domain knowledge
+├── prompts/        # Agent prompt files
+├── refs/           # External references
+├── tasks/          # Task artifacts and metadata
+└── templates/      # Output templates
+```
 
 ## Requirements
 

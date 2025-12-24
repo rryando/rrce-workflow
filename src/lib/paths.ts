@@ -38,7 +38,8 @@ export function getWorkspaceName(workspaceRoot: string): string {
 }
 
 /**
- * Resolve data path based on storage mode
+ * Resolve primary data path based on storage mode
+ * Note: For 'both' mode, use resolveAllDataPaths() to get all paths
  */
 export function resolveDataPath(mode: StorageMode, workspaceName: string, workspaceRoot: string): string {
   switch (mode) {
@@ -55,10 +56,62 @@ export function resolveDataPath(mode: StorageMode, workspaceName: string, worksp
 }
 
 /**
+ * Resolve ALL data paths based on storage mode
+ * Returns array of paths where data should be stored:
+ * - 'global': [~/.rrce-workflow/workspaces/<name>]
+ * - 'workspace': [<workspace>/.rrce-workflow]
+ * - 'both': [<workspace>/.rrce-workflow, ~/.rrce-workflow/workspaces/<name>]
+ */
+export function resolveAllDataPaths(mode: StorageMode, workspaceName: string, workspaceRoot: string): string[] {
+  const globalPath = path.join(RRCE_HOME, 'workspaces', workspaceName);
+  const workspacePath = path.join(workspaceRoot, '.rrce-workflow');
+  
+  switch (mode) {
+    case 'global':
+      return [globalPath];
+    case 'workspace':
+      return [workspacePath];
+    case 'both':
+      return [workspacePath, globalPath];
+    default:
+      return [globalPath];
+  }
+}
+
+/**
  * Get RRCE home directory
  */
 export function getRRCEHome(): string {
   return RRCE_HOME;
+}
+
+/**
+ * List all projects in global storage
+ * @param excludeWorkspace - Workspace name to exclude from the list (typically current workspace)
+ * @returns Array of project names found in ~/.rrce-workflow/workspaces/
+ */
+export function listGlobalProjects(excludeWorkspace?: string): string[] {
+  const workspacesDir = path.join(RRCE_HOME, 'workspaces');
+  
+  if (!fs.existsSync(workspacesDir)) {
+    return [];
+  }
+  
+  try {
+    const entries = fs.readdirSync(workspacesDir, { withFileTypes: true });
+    return entries
+      .filter(entry => entry.isDirectory() && entry.name !== excludeWorkspace)
+      .map(entry => entry.name);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get the knowledge path for a global project
+ */
+export function getGlobalProjectKnowledgePath(projectName: string): string {
+  return path.join(RRCE_HOME, 'workspaces', projectName, 'knowledge');
 }
 
 /**
@@ -78,5 +131,73 @@ export function getAgentPromptPath(workspaceRoot: string, tool: 'copilot' | 'ant
     return path.join(workspaceRoot, '.github', 'agents');
   } else {
     return path.join(workspaceRoot, '.agent', 'workflows');
+  }
+}
+
+/**
+ * Copy a file to all storage paths
+ * @param sourceFile - Absolute path to source file
+ * @param relativePath - Relative path within the data directory (e.g., 'knowledge/context.md')
+ * @param dataPaths - Array of data paths from resolveAllDataPaths()
+ */
+export function copyToAllStoragePaths(sourceFile: string, relativePath: string, dataPaths: string[]): void {
+  const content = fs.readFileSync(sourceFile);
+  
+  for (const dataPath of dataPaths) {
+    const targetPath = path.join(dataPath, relativePath);
+    ensureDir(path.dirname(targetPath));
+    fs.writeFileSync(targetPath, content);
+  }
+}
+
+/**
+ * Write content to a file in all storage paths
+ * @param content - Content to write
+ * @param relativePath - Relative path within the data directory
+ * @param dataPaths - Array of data paths from resolveAllDataPaths()
+ */
+export function writeToAllStoragePaths(content: string | Buffer, relativePath: string, dataPaths: string[]): void {
+  for (const dataPath of dataPaths) {
+    const targetPath = path.join(dataPath, relativePath);
+    ensureDir(path.dirname(targetPath));
+    fs.writeFileSync(targetPath, content);
+  }
+}
+
+/**
+ * Copy a directory recursively to all storage paths
+ * @param sourceDir - Absolute path to source directory
+ * @param relativeDir - Relative directory path within the data directory
+ * @param dataPaths - Array of data paths from resolveAllDataPaths()
+ */
+export function copyDirToAllStoragePaths(sourceDir: string, relativeDir: string, dataPaths: string[]): void {
+  if (!fs.existsSync(sourceDir)) {
+    return;
+  }
+
+  const entries = fs.readdirSync(sourceDir, { withFileTypes: true });
+  
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const relativePath = path.join(relativeDir, entry.name);
+    
+    if (entry.isDirectory()) {
+      copyDirToAllStoragePaths(sourcePath, relativePath, dataPaths);
+    } else {
+      copyToAllStoragePaths(sourcePath, relativePath, dataPaths);
+    }
+  }
+}
+
+/**
+ * Sync metadata subdirectories (knowledge, refs, tasks) to all storage paths
+ * Copies from agent-core to all configured storage locations
+ */
+export function syncMetadataToAll(agentCorePath: string, dataPaths: string[]): void {
+  const metadataDirs = ['knowledge', 'refs', 'tasks'];
+  
+  for (const dir of metadataDirs) {
+    const sourceDir = path.join(agentCorePath, dir);
+    copyDirToAllStoragePaths(sourceDir, dir, dataPaths);
   }
 }

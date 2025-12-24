@@ -3,9 +3,9 @@ import pc from 'picocolors';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getGitUser } from '../lib/git';
-import { detectWorkspaceRoot, getWorkspaceName, resolveDataPath, ensureDir, getAgentPromptPath } from '../lib/paths';
+import { detectWorkspaceRoot, getWorkspaceName, resolveAllDataPaths, ensureDir, getAgentPromptPath, syncMetadataToAll, copyDirToAllStoragePaths, listGlobalProjects, getGlobalProjectKnowledgePath, getRRCEHome } from '../lib/paths';
 import type { StorageMode } from '../types/prompt';
-import { loadPromptsFromDir, getAgentCorePromptsDir } from '../lib/prompts';
+import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../lib/prompts';
 
 import type { ParsedPrompt } from '../types/prompt';
 
@@ -28,6 +28,38 @@ Workspace: ${pc.bold(workspaceName)}`,
     'Context'
   );
 
+  // Check for existing projects in global storage
+  const existingProjects = listGlobalProjects(workspaceName);
+  
+  // Check if already configured
+  const configFilePath = path.join(workspacePath, '.rrce-workflow.yaml');
+  const isAlreadyConfigured = fs.existsSync(configFilePath);
+
+  // If already configured and there are other projects, show menu
+  if (isAlreadyConfigured && existingProjects.length > 0) {
+    const action = await select({
+      message: 'This workspace is already configured. What would you like to do?',
+      options: [
+        { value: 'link', label: 'Link other project knowledge', hint: `${existingProjects.length} projects available` },
+        { value: 'reconfigure', label: 'Reconfigure from scratch' },
+        { value: 'exit', label: 'Exit' },
+      ],
+    });
+
+    if (isCancel(action) || action === 'exit') {
+      outro('Exited.');
+      process.exit(0);
+    }
+
+    if (action === 'link') {
+      // Link-only flow
+      await runLinkProjectsFlow(workspacePath, workspaceName, existingProjects);
+      return;
+    }
+    // Otherwise continue to full reconfigure flow
+  }
+
+  // Full setup flow
   const config = await group(
     {
       storageMode: () =>
@@ -49,6 +81,21 @@ Workspace: ${pc.bold(workspaceName)}`,
           ],
           required: false,
         }),
+      linkedProjects: () => {
+        // Only show if there are other projects to link
+        if (existingProjects.length === 0) {
+          return Promise.resolve([]);
+        }
+        return multiselect({
+          message: 'Link knowledge from other projects?',
+          options: existingProjects.map(name => ({
+            value: name,
+            label: name,
+            hint: `~/.rrce-workflow/workspaces/${name}/knowledge`
+          })),
+          required: false,
+        });
+      },
       confirm: () =>
         confirm({
           message: 'Create configuration?',
@@ -71,14 +118,39 @@ Workspace: ${pc.bold(workspaceName)}`,
   s.start('Generating configuration');
 
   try {
-     // Create config file
-    const dataPath = resolveDataPath(config.storageMode as StorageMode, workspaceName, workspacePath);
-    ensureDir(dataPath);
+    // Create data directories in all storage locations
+    const dataPaths = resolveAllDataPaths(config.storageMode as StorageMode, workspaceName, workspacePath);
+    
+    for (const dataPath of dataPaths) {
+      ensureDir(dataPath);
+      // Create agent metadata subdirectories
+      ensureDir(path.join(dataPath, 'knowledge'));
+      ensureDir(path.join(dataPath, 'refs'));
+      ensureDir(path.join(dataPath, 'tasks'));
+      ensureDir(path.join(dataPath, 'templates'));
+      ensureDir(path.join(dataPath, 'prompts'));
+    }
+
+    // Get the agent-core directory path
+    const agentCoreDir = getAgentCoreDir();
+    
+    // Sync metadata (knowledge, refs, tasks) from agent-core to all storage locations
+    syncMetadataToAll(agentCoreDir, dataPaths);
+    
+    // Also copy templates to all storage locations
+    copyDirToAllStoragePaths(path.join(agentCoreDir, 'templates'), 'templates', dataPaths);
 
     // Load prompts
     const prompts = loadPromptsFromDir(getAgentCorePromptsDir());
 
-    // Copy prompts
+    // Copy prompts to all storage locations (for cross-project access)
+    for (const dataPath of dataPaths) {
+      const promptsDir = path.join(dataPath, 'prompts');
+      ensureDir(promptsDir);
+      copyPromptsToDir(prompts, promptsDir, '.md');
+    }
+
+    // Copy prompts to tool-specific locations (for IDE integration)
     const selectedTools = config.tools as string[];
     
     if (selectedTools.includes('copilot')) {
@@ -94,8 +166,9 @@ Workspace: ${pc.bold(workspaceName)}`,
     }
 
     // Create workspace config
+    const linkedProjects = config.linkedProjects as string[];
     const workspaceConfigPath = path.join(workspacePath, '.rrce-workflow.yaml');
-    const configContent = `# RRCE-Workflow Configuration
+    let configContent = `# RRCE-Workflow Configuration
 version: 1
 
 storage:
@@ -103,12 +176,50 @@ storage:
 
 project:
   name: "${workspaceName}"
+
+tools:
+  copilot: ${selectedTools.includes('copilot')}
+  antigravity: ${selectedTools.includes('antigravity')}
 `;
+
+    // Add linked projects if any
+    if (linkedProjects.length > 0) {
+      configContent += `\nlinked_projects:\n`;
+      linkedProjects.forEach(name => {
+        configContent += `  - ${name}\n`;
+      });
+    }
+
     fs.writeFileSync(workspaceConfigPath, configContent);
+
+    // Generate VSCode workspace file if using copilot or has linked projects
+    if (selectedTools.includes('copilot') || linkedProjects.length > 0) {
+      generateVSCodeWorkspace(workspacePath, workspaceName, linkedProjects);
+    }
 
     s.stop('Configuration generated');
     
-    outro(pc.green(`✓ Setup complete! You can now run "rrce-workflow select" to start using agents.`));
+    // Show summary
+    const summary = [
+      `Storage: ${config.storageMode === 'both' ? 'global + workspace' : config.storageMode}`,
+    ];
+    
+    if (dataPaths.length > 0) {
+      summary.push(`Data paths:`);
+      dataPaths.forEach(p => summary.push(`  - ${p}`));
+    }
+    
+    if (selectedTools.length > 0) {
+      summary.push(`Tools: ${selectedTools.join(', ')}`);
+    }
+
+    if (linkedProjects.length > 0) {
+      summary.push(`Linked projects: ${linkedProjects.join(', ')}`);
+    }
+    
+    note(summary.join('\n'), 'Setup Summary');
+    
+    outro(pc.green(`✓ Setup complete! Your agents are ready to use.`));
 
   } catch (error) {
     s.stop('Error occurred');
@@ -127,4 +238,144 @@ function copyPromptsToDir(prompts: ParsedPrompt[], targetDir: string, extension:
     const content = fs.readFileSync(prompt.filePath, 'utf-8');
     fs.writeFileSync(targetPath, content);
   }
+}
+
+interface VSCodeWorkspaceFolder {
+  path: string;
+  name?: string;
+}
+
+interface VSCodeWorkspace {
+  folders: VSCodeWorkspaceFolder[];
+  settings?: Record<string, unknown>;
+}
+
+/**
+ * Generate or update VSCode workspace file with linked project knowledge folders
+ */
+function generateVSCodeWorkspace(workspacePath: string, workspaceName: string, linkedProjects: string[]) {
+  const workspaceFilePath = path.join(workspacePath, `${workspaceName}.code-workspace`);
+  
+  let workspace: VSCodeWorkspace;
+  
+  // Check if workspace file already exists
+  if (fs.existsSync(workspaceFilePath)) {
+    try {
+      const content = fs.readFileSync(workspaceFilePath, 'utf-8');
+      workspace = JSON.parse(content);
+    } catch {
+      // If parse fails, create new
+      workspace = { folders: [] };
+    }
+  } else {
+    workspace = { folders: [] };
+  }
+
+  // Ensure main workspace folder is first
+  const mainFolder: VSCodeWorkspaceFolder = { path: '.' };
+  const existingMainIndex = workspace.folders.findIndex(f => f.path === '.');
+  if (existingMainIndex === -1) {
+    workspace.folders.unshift(mainFolder);
+  }
+
+  // Add linked project knowledge folders
+  const rrceHome = getRRCEHome();
+  for (const projectName of linkedProjects) {
+    const knowledgePath = path.join(rrceHome, 'workspaces', projectName, 'knowledge');
+    const folderEntry: VSCodeWorkspaceFolder = {
+      path: knowledgePath,
+      name: `📚 ${projectName} (knowledge)`
+    };
+
+    // Check if already exists
+    const existingIndex = workspace.folders.findIndex(f => f.path === knowledgePath);
+    if (existingIndex === -1) {
+      workspace.folders.push(folderEntry);
+    }
+  }
+
+  // Write workspace file
+  fs.writeFileSync(workspaceFilePath, JSON.stringify(workspace, null, 2));
+}
+
+/**
+ * Run the link-only flow for adding other project knowledge to an existing workspace
+ */
+async function runLinkProjectsFlow(workspacePath: string, workspaceName: string, existingProjects: string[]) {
+  const linkedProjects = await multiselect({
+    message: 'Select projects to link:',
+    options: existingProjects.map(name => ({
+      value: name,
+      label: name,
+      hint: `~/.rrce-workflow/workspaces/${name}/knowledge`
+    })),
+    required: true,
+  });
+
+  if (isCancel(linkedProjects)) {
+    cancel('Cancelled.');
+    process.exit(0);
+  }
+
+  const selectedProjects = linkedProjects as string[];
+
+  if (selectedProjects.length === 0) {
+    outro('No projects selected.');
+    return;
+  }
+
+  const s = spinner();
+  s.start('Linking projects');
+
+  // Update .rrce-workflow.yaml with linked projects
+  const configFilePath = path.join(workspacePath, '.rrce-workflow.yaml');
+  let configContent = fs.readFileSync(configFilePath, 'utf-8');
+
+  // Check if linked_projects section exists
+  if (configContent.includes('linked_projects:')) {
+    // Append to existing section - find and update
+    const lines = configContent.split('\n');
+    const linkedIndex = lines.findIndex(l => l.trim() === 'linked_projects:');
+    if (linkedIndex !== -1) {
+      // Find where to insert new projects (after existing ones)
+      let insertIndex = linkedIndex + 1;
+      while (insertIndex < lines.length && lines[insertIndex]?.startsWith('  - ')) {
+        insertIndex++;
+      }
+      // Add new projects that aren't already there
+      for (const name of selectedProjects) {
+        if (!configContent.includes(`  - ${name}`)) {
+          lines.splice(insertIndex, 0, `  - ${name}`);
+          insertIndex++;
+        }
+      }
+      configContent = lines.join('\n');
+    }
+  } else {
+    // Add new linked_projects section
+    configContent += `\nlinked_projects:\n`;
+    selectedProjects.forEach(name => {
+      configContent += `  - ${name}\n`;
+    });
+  }
+
+  fs.writeFileSync(configFilePath, configContent);
+
+  // Update VSCode workspace file
+  generateVSCodeWorkspace(workspacePath, workspaceName, selectedProjects);
+
+  s.stop('Projects linked');
+
+  // Show summary
+  const workspaceFile = `${workspaceName}.code-workspace`;
+  const summary = [
+    `Linked projects:`,
+    ...selectedProjects.map(p => `  ✓ ${p}`),
+    ``,
+    `Workspace file: ${pc.cyan(workspaceFile)}`,
+  ];
+
+  note(summary.join('\n'), 'Link Summary');
+
+  outro(pc.green(`✓ Projects linked! Open ${pc.bold(workspaceFile)} in VSCode to access linked knowledge.`));
 }

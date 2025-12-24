@@ -51,9 +51,16 @@ export function loadPromptsFromDir(dirPath: string): ParsedPrompt[] {
 }
 
 /**
+ * Get the agent-core root directory
+ */
+export function getAgentCoreDir(): string {
+  // Relative to the package root
+  return path.join(import.meta.dir, '..', '..', 'agent-core');
+}
+
+/**
  * Get the agent-core prompts directory
  */
 export function getAgentCorePromptsDir(): string {
-  // Relative to the package root
-  return path.join(import.meta.dir, '..', '..', 'agent-core', 'prompts');
+  return path.join(getAgentCoreDir(), 'prompts');
 }

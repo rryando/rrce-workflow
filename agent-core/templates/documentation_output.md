@@ -1,3 +1,13 @@
+<!--
+  RRCE Template Variables:
+  - {{RRCE_DATA}}: Primary storage path (resolves based on storage mode in .rrce-workflow.yaml)
+      - global: ~/.rrce-workflow/workspaces/<workspace-name>/
+      - workspace: <workspace>/.rrce-workflow/
+      - both: <workspace>/.rrce-workflow/ (primary, auto-synced to global)
+  - {{RRCE_HOME}}: Always ~/.rrce-workflow
+  - {{WORKSPACE_ROOT}}: Workspace root directory
+  - {{WORKSPACE_NAME}}: Workspace name from config or directory name
+-->
 # Handover Note – {{task_title}}
 
 - Task ID: `{{task_id}}`

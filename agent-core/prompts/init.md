@@ -32,8 +32,11 @@ Path Resolution
 - Storage mode: Determined by `.rrce-workflow.yaml` → global config → default (`global`)
   - `global`: Data stored in `~/.rrce-workflow/workspaces/<workspace-name>/`
   - `workspace`: Data stored in `<workspace>/.rrce-workflow/`
-  - `both`: Dual storage with sync
-- Data path: `{{RRCE_DATA}}` (resolves based on storage mode)
+  - `both`: **Dual storage** - data stored in BOTH locations simultaneously
+    - Primary (for reads): `<workspace>/.rrce-workflow/`
+    - Secondary (auto-synced): `~/.rrce-workflow/workspaces/<workspace-name>/`
+    - When writing, always write to `{{RRCE_DATA}}` - the system ensures both locations stay in sync
+- Data path: `{{RRCE_DATA}}` (resolves to primary storage based on mode)
 - Global home: `{{RRCE_HOME}}` (always `~/.rrce-workflow`)
 - Workspace root: `{{WORKSPACE_ROOT}}` (auto-detected or via `$RRCE_WORKSPACE`)
 - Workspace name: `{{WORKSPACE_NAME}}` (from config or directory name)
