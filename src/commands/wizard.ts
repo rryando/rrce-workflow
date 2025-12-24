@@ -3,7 +3,7 @@ import pc from 'picocolors';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getGitUser } from '../lib/git';
-import { detectWorkspaceRoot, getWorkspaceName, resolveAllDataPaths, ensureDir, getAgentPromptPath, syncMetadataToAll, copyDirToAllStoragePaths, listGlobalProjects, getGlobalProjectKnowledgePath, getRRCEHome } from '../lib/paths';
+import { detectWorkspaceRoot, getWorkspaceName, resolveAllDataPaths, ensureDir, getAgentPromptPath, syncMetadataToAll, copyDirToAllStoragePaths, listGlobalProjects, getGlobalProjectKnowledgePath, getRRCEHome, getGlobalWorkspacePath, getLocalWorkspacePath } from '../lib/paths';
 import type { StorageMode } from '../types/prompt';
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../lib/prompts';
 
@@ -34,16 +34,51 @@ Workspace: ${pc.bold(workspaceName)}`,
   // Check if already configured
   const configFilePath = path.join(workspacePath, '.rrce-workflow.yaml');
   const isAlreadyConfigured = fs.existsSync(configFilePath);
+  
+  // Check current storage mode from config
+  let currentStorageMode: string | null = null;
+  if (isAlreadyConfigured) {
+    try {
+      const configContent = fs.readFileSync(configFilePath, 'utf-8');
+      const modeMatch = configContent.match(/mode:\s*(global|workspace|both)/);
+      currentStorageMode = modeMatch?.[1] ?? null;
+    } catch {
+      // Ignore parse errors
+    }
+  }
 
-  // If already configured and there are other projects, show menu
-  if (isAlreadyConfigured && existingProjects.length > 0) {
+  // Check if workspace has local data that could be synced
+  const localDataPath = path.join(workspacePath, '.rrce-workflow');
+  const hasLocalData = fs.existsSync(localDataPath);
+
+  // If already configured, show menu
+  if (isAlreadyConfigured) {
+    const menuOptions: { value: string; label: string; hint?: string }[] = [];
+    
+    // Add link option if other projects exist
+    if (existingProjects.length > 0) {
+      menuOptions.push({ 
+        value: 'link', 
+        label: 'Link other project knowledge', 
+        hint: `${existingProjects.length} projects available` 
+      });
+    }
+    
+    // Add sync to global option if using workspace-only mode
+    if (currentStorageMode === 'workspace' && hasLocalData) {
+      menuOptions.push({ 
+        value: 'sync-global', 
+        label: 'Sync to global storage', 
+        hint: 'Share knowledge with other projects' 
+      });
+    }
+    
+    menuOptions.push({ value: 'reconfigure', label: 'Reconfigure from scratch' });
+    menuOptions.push({ value: 'exit', label: 'Exit' });
+
     const action = await select({
       message: 'This workspace is already configured. What would you like to do?',
-      options: [
-        { value: 'link', label: 'Link other project knowledge', hint: `${existingProjects.length} projects available` },
-        { value: 'reconfigure', label: 'Reconfigure from scratch' },
-        { value: 'exit', label: 'Exit' },
-      ],
+      options: menuOptions,
     });
 
     if (isCancel(action) || action === 'exit') {
@@ -52,8 +87,12 @@ Workspace: ${pc.bold(workspaceName)}`,
     }
 
     if (action === 'link') {
-      // Link-only flow
       await runLinkProjectsFlow(workspacePath, workspaceName, existingProjects);
+      return;
+    }
+
+    if (action === 'sync-global') {
+      await runSyncToGlobalFlow(workspacePath, workspaceName);
       return;
     }
     // Otherwise continue to full reconfigure flow
@@ -215,11 +254,17 @@ tools:
 
     if (linkedProjects.length > 0) {
       summary.push(`Linked projects: ${linkedProjects.join(', ')}`);
+      summary.push(`Workspace file: ${pc.cyan(`${workspaceName}.code-workspace`)}`);
     }
     
     note(summary.join('\n'), 'Setup Summary');
     
-    outro(pc.green(`✓ Setup complete! Your agents are ready to use.`));
+    // Show appropriate outro message
+    if (linkedProjects.length > 0) {
+      outro(pc.green(`✓ Setup complete! Open ${pc.bold(`${workspaceName}.code-workspace`)} in VSCode to access linked knowledge.`));
+    } else {
+      outro(pc.green(`✓ Setup complete! Your agents are ready to use.`));
+    }
 
   } catch (error) {
     s.stop('Error occurred');
@@ -378,4 +423,103 @@ async function runLinkProjectsFlow(workspacePath: string, workspaceName: string,
   note(summary.join('\n'), 'Link Summary');
 
   outro(pc.green(`✓ Projects linked! Open ${pc.bold(workspaceFile)} in VSCode to access linked knowledge.`));
+}
+
+/**
+ * Sync workspace knowledge to global storage so other projects can reference it
+ */
+async function runSyncToGlobalFlow(workspacePath: string, workspaceName: string) {
+  const localPath = getLocalWorkspacePath(workspacePath);
+  const globalPath = getGlobalWorkspacePath(workspaceName);
+
+  // Check what exists locally
+  const subdirs = ['knowledge', 'prompts', 'templates', 'tasks', 'refs'];
+  const existingDirs = subdirs.filter(dir => 
+    fs.existsSync(path.join(localPath, dir))
+  );
+
+  if (existingDirs.length === 0) {
+    outro(pc.yellow('No data found in workspace storage to sync.'));
+    return;
+  }
+
+  // Show what will be synced
+  note(
+    `The following will be copied to global storage:\n${existingDirs.map(d => `  • ${d}/`).join('\n')}\n\nDestination: ${pc.cyan(globalPath)}`,
+    'Sync Preview'
+  );
+
+  const shouldSync = await confirm({
+    message: 'Proceed with sync to global storage?',
+    initialValue: true,
+  });
+
+  if (isCancel(shouldSync) || !shouldSync) {
+    outro('Sync cancelled.');
+    return;
+  }
+
+  const s = spinner();
+  s.start('Syncing to global storage');
+
+  try {
+    // Ensure global directory exists
+    ensureDir(globalPath);
+
+    // Copy each directory
+    for (const dir of existingDirs) {
+      const srcDir = path.join(localPath, dir);
+      const destDir = path.join(globalPath, dir);
+      ensureDir(destDir);
+      
+      // Copy files recursively
+      copyDirRecursive(srcDir, destDir);
+    }
+
+    // Update the config to reflect 'both' mode
+    const configFilePath = path.join(workspacePath, '.rrce-workflow.yaml');
+    let configContent = fs.readFileSync(configFilePath, 'utf-8');
+    configContent = configContent.replace(/mode:\s*workspace/, 'mode: both');
+    fs.writeFileSync(configFilePath, configContent);
+
+    s.stop('Sync complete');
+
+    const summary = [
+      `Synced directories:`,
+      ...existingDirs.map(d => `  ✓ ${d}/`),
+      ``,
+      `Global path: ${pc.cyan(globalPath)}`,
+      `Storage mode updated to: ${pc.bold('both')}`,
+      ``,
+      `Other projects can now link this knowledge!`,
+    ];
+
+    note(summary.join('\n'), 'Sync Summary');
+
+    outro(pc.green('✓ Workspace knowledge synced to global storage!'));
+
+  } catch (error) {
+    s.stop('Error occurred');
+    cancel(`Failed to sync: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+}
+
+/**
+ * Recursively copy a directory
+ */
+function copyDirRecursive(src: string, dest: string) {
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    
+    if (entry.isDirectory()) {
+      ensureDir(destPath);
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
 }

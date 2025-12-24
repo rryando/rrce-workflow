@@ -115,6 +115,20 @@ export function getGlobalProjectKnowledgePath(projectName: string): string {
 }
 
 /**
+ * Get the global workspace data path for a project
+ */
+export function getGlobalWorkspacePath(workspaceName: string): string {
+  return path.join(RRCE_HOME, 'workspaces', workspaceName);
+}
+
+/**
+ * Get the local workspace data path
+ */
+export function getLocalWorkspacePath(workspaceRoot: string): string {
+  return path.join(workspaceRoot, '.rrce-workflow');
+}
+
+/**
  * Ensure directory exists
  */
 export function ensureDir(dirPath: string): void {
