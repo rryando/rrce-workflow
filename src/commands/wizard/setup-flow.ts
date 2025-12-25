@@ -8,14 +8,13 @@ import {
   getAgentPromptPath,
   syncMetadataToAll,
   copyDirToAllStoragePaths,
-  checkWriteAccess,
   getDefaultRRCEHome
 } from '../../lib/paths';
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
 import { copyPromptsToDir } from './utils';
 import { generateVSCodeWorkspace } from './vscode';
 import { type DetectedProject } from '../../lib/detection';
-import { directoryPrompt, isCancelled } from '../../lib/autocomplete-prompt';
+import { resolveGlobalPath } from '../../lib/tui-utils';
 
 interface SetupConfig {
   storageMode: StorageMode;
@@ -168,82 +167,6 @@ export async function runSetupFlow(
     cancel(`Failed to setup: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
-}
-
-/**
- * Resolve global path - always prompt user to choose default or custom
- */
-async function resolveGlobalPath(): Promise<string | undefined> {
-  const defaultPath = getDefaultRRCEHome();
-  const isDefaultWritable = checkWriteAccess(defaultPath);
-  
-  // Build options
-  const options: { value: string; label: string; hint?: string }[] = [];
-  
-  // Default option
-  options.push({
-    value: 'default',
-    label: `Default (${defaultPath})`,
-    hint: isDefaultWritable ? pc.green('✓ writable') : pc.red('✗ not writable'),
-  });
-  
-  // Custom option
-  options.push({
-    value: 'custom',
-    label: 'Custom path',
-    hint: 'Specify your own directory',
-  });
-
-  const choice = await select({
-    message: 'Global storage location:',
-    options,
-    initialValue: isDefaultWritable ? 'default' : 'custom',
-  });
-
-  if (isCancel(choice)) {
-    return undefined;
-  }
-
-  if (choice === 'default') {
-    // Verify it's writable
-    if (!isDefaultWritable) {
-      note(
-        `${pc.yellow('⚠')} Cannot write to default path:\n  ${pc.dim(defaultPath)}\n\nThis can happen when running via npx/bunx in restricted environments.\nPlease choose a custom path instead.`,
-        'Write Access Issue'
-      );
-      // Recursively ask again
-      return resolveGlobalPath();
-    }
-    return defaultPath;
-  }
-
-  // Custom path input with bash-like Tab completion
-  const suggestedPath = path.join(process.env.HOME || '~', '.local', 'share', 'rrce-workflow');
-  const customPath = await directoryPrompt({
-    message: 'Enter custom global path (Tab to autocomplete):',
-    defaultValue: suggestedPath,
-    validate: (value) => {
-      if (!value.trim()) {
-        return 'Path cannot be empty';
-      }
-      if (!checkWriteAccess(value)) {
-        return `Cannot write to ${value}. Please choose a writable path.`;
-      }
-      return undefined;
-    },
-  });
-
-  if (isCancelled(customPath)) {
-    return undefined;
-  }
-
-  // Ensure path ends with .rrce-workflow so our tools can detect it
-  let expandedPath = customPath as string;
-  if (!expandedPath.endsWith('.rrce-workflow')) {
-    expandedPath = path.join(expandedPath, '.rrce-workflow');
-  }
-  
-  return expandedPath;
 }
 
 /**
