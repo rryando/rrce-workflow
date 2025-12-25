@@ -14,8 +14,7 @@ import {
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
 import { copyPromptsToDir } from './utils';
 import { generateVSCodeWorkspace } from './vscode';
-import { directoryAutocomplete, isCancel as isAutocompleteCancel } from '../../lib/autocomplete-prompt';
-import { type DetectedProject, getProjectDisplayLabel } from '../../lib/detection';
+import { type DetectedProject } from '../../lib/detection';
 
 interface SetupConfig {
   storageMode: StorageMode;
@@ -211,12 +210,12 @@ async function resolveGlobalPath(): Promise<string | undefined> {
     return defaultPath;
   }
 
-  // Custom path input with Tab autocomplete
+  // Custom path input with pre-filled default
   const suggestedPath = path.join(process.env.HOME || '~', '.local', 'share', 'rrce-workflow');
-  const customPath = await directoryAutocomplete({
+  const customPath = await text({
     message: 'Enter custom global path:',
-    initialValue: suggestedPath,
-    hint: 'Tab to autocomplete',
+    defaultValue: suggestedPath,
+    placeholder: suggestedPath,
     validate: (value) => {
       if (!value.trim()) {
         return 'Path cannot be empty';
@@ -233,12 +232,21 @@ async function resolveGlobalPath(): Promise<string | undefined> {
     },
   });
 
-  if (isAutocompleteCancel(customPath)) {
+  if (isCancel(customPath)) {
     return undefined;
   }
 
-  // Path is already expanded by directoryAutocomplete
-  return customPath as string;
+  // Expand ~ if present
+  let expandedPath = (customPath as string).startsWith('~')
+    ? (customPath as string).replace('~', process.env.HOME || '')
+    : customPath as string;
+  
+  // Ensure path ends with .rrce-workflow so our tools can detect it
+  if (!expandedPath.endsWith('.rrce-workflow')) {
+    expandedPath = path.join(expandedPath, '.rrce-workflow');
+  }
+  
+  return expandedPath;
 }
 
 /**
