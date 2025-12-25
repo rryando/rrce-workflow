@@ -20,16 +20,16 @@
     "tui",
     "cli",
     "code-generation",
-    "agentic",
-    "ink"
+    "agentic"
   ],
   "type": "module",
-  "module": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "rrce-workflow": "bin/rrce-workflow.js"
   },
   "files": [
-    "src",
+    "dist",
     "agent-core",
     "docs",
     "bin"
@@ -38,7 +38,9 @@
     "dev": "npx tsx src/index.ts",
     "wizard": "npx tsx src/index.ts wizard",
     "select": "npx tsx src/index.ts select",
-    "start": "npx tsx src/index.ts"
+    "start": "npx tsx src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --packages=external",
+    "prepublishOnly": "npm run build"
   },
   "engines": {
     "node": ">=18"
@@ -48,11 +50,12 @@
     "@clack/prompts": "^0.11.0",
     "gray-matter": "^4.0.3",
     "picocolors": "^1.1.1",
-    "tsx": "^4.21.0",
     "zod": "^4.2.1"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
+    "esbuild": "^0.27.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }
