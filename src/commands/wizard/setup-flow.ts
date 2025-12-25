@@ -64,9 +64,12 @@ export async function runSetupFlow(
         return multiselect({
           message: 'Link knowledge from other projects?',
           options: existingProjects.map(project => ({
-            value: project.name,
-            label: project.name,
-            hint: pc.dim(getProjectDisplayLabel(project))
+            value: `${project.name}:${project.source}`,  // Unique key
+            label: `${project.name} ${pc.dim(`(${project.source})`)}`,
+            hint: pc.dim(project.source === 'global' 
+              ? `~/.rrce-workflow/workspaces/${project.name}`
+              : project.dataPath
+            ),
           })),
           required: false,
         });
@@ -320,8 +323,10 @@ tools:
 
   // Generate VSCode workspace file if using copilot or has linked projects
   if (config.tools.includes('copilot') || config.linkedProjects.length > 0) {
-    // Look up the full DetectedProject objects for selected project names
-    const selectedProjects = allProjects.filter(p => config.linkedProjects.includes(p.name));
+    // Look up the full DetectedProject objects for selected project keys (format: name:source)
+    const selectedProjects = allProjects.filter(p => 
+      config.linkedProjects.includes(`${p.name}:${p.source}`)
+    );
     generateVSCodeWorkspace(workspacePath, workspaceName, selectedProjects, config.globalPath);
   }
 }

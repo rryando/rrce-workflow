@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getRRCEHome } from '../../lib/paths';
-import { type DetectedProject, getProjectFolders } from '../../lib/detection';
+import { type DetectedProject } from '../../lib/detection';
 
 interface VSCodeWorkspaceFolder {
   path: string;
@@ -13,17 +13,11 @@ interface VSCodeWorkspace {
   settings?: Record<string, unknown>;
 }
 
-// Reference folder group prefix - used to visually group linked folders
-const REFERENCE_GROUP_PREFIX = '📁 References';
-
 /**
  * Generate or update VSCode workspace file with linked project folders
  * 
- * Features:
- * - Main workspace is clearly marked as the primary project
- * - Linked folders are grouped under a "References" section (via naming)
- * - Folders are organized by project with icons for type (📚 📎 📋)
- * - Reference folders are marked as readonly in workspace settings
+ * Now imports the full .rrce-workflow data folder for each linked project
+ * instead of separate knowledge/refs/tasks folders
  */
 export function generateVSCodeWorkspace(
   workspacePath: string, 
@@ -53,52 +47,49 @@ export function generateVSCodeWorkspace(
     workspace.settings = {};
   }
 
-  // Clear existing folders and rebuild (to ensure proper ordering)
-  const existingNonReferencesFolders = workspace.folders.filter(f => 
-    f.path === '.' || (!f.name?.includes(REFERENCE_GROUP_PREFIX) && !f.name?.startsWith('📚') && !f.name?.startsWith('📎') && !f.name?.startsWith('📋'))
+  // Clear existing linked project folders (those with 📁 prefix) and rebuild
+  workspace.folders = workspace.folders.filter(f => 
+    f.path === '.' || (!f.name?.startsWith('📁') && !f.name?.startsWith('📚') && !f.name?.startsWith('📎') && !f.name?.startsWith('📋'))
   );
-  
-  workspace.folders = [];
 
-  // 1. Add main workspace folder first with clear label
-  const mainFolder: VSCodeWorkspaceFolder = { 
-    path: '.', 
-    name: `🏠 ${workspaceName} (workspace)` 
-  };
-  workspace.folders.push(mainFolder);
-
-  // 2. Add any other existing non-references folders
-  for (const folder of existingNonReferencesFolders) {
-    if (folder.path !== '.') {
-      workspace.folders.push(folder);
-    }
+  // Ensure main workspace folder is first with clear label
+  const mainFolderIndex = workspace.folders.findIndex(f => f.path === '.');
+  if (mainFolderIndex === -1) {
+    workspace.folders.unshift({ 
+      path: '.', 
+      name: `🏠 ${workspaceName} (workspace)` 
+    });
+  } else {
+    // Update the name if it exists
+    workspace.folders[mainFolderIndex] = {
+      path: '.',
+      name: `🏠 ${workspaceName} (workspace)`
+    };
   }
 
-  // 3. Add reference folders grouped by project
+  // Add linked project data folders
   const referenceFolderPaths: string[] = [];
   
   // Determine if we're working with DetectedProject[] or string[]
   const isDetectedProjects = linkedProjects.length > 0 && typeof linkedProjects[0] === 'object';
 
   if (isDetectedProjects) {
-    // New behavior: use DetectedProject[] with knowledge, refs, tasks folders
+    // New behavior: use DetectedProject[] - import full data folder
     const projects = linkedProjects as DetectedProject[];
     
     for (const project of projects) {
-      const folders = getProjectFolders(project);
       const sourceLabel = project.source === 'global' ? 'global' : 'local';
       
-      for (const folder of folders) {
-        referenceFolderPaths.push(folder.path);
+      // Import the full .rrce-workflow data folder
+      const folderPath = project.dataPath;
+      
+      if (fs.existsSync(folderPath)) {
+        referenceFolderPaths.push(folderPath);
         
-        // Check if already exists
-        const existingIndex = workspace.folders.findIndex(f => f.path === folder.path);
-        if (existingIndex === -1) {
-          workspace.folders.push({
-            path: folder.path,
-            name: `${folder.displayName} [${sourceLabel}]`,
-          });
-        }
+        workspace.folders.push({
+          path: folderPath,
+          name: `📁 ${project.name} [${sourceLabel}]`,
+        });
       }
     }
   } else {
@@ -107,52 +98,44 @@ export function generateVSCodeWorkspace(
     const rrceHome = customGlobalPath || getRRCEHome();
     
     for (const projectName of projectNames) {
-      const projectDataPath = path.join(rrceHome, 'workspaces', projectName);
+      const folderPath = path.join(rrceHome, 'workspaces', projectName);
       
-      const folderTypes = [
-        { subpath: 'knowledge', icon: '📚', type: 'knowledge' },
-        { subpath: 'refs', icon: '📎', type: 'refs' },
-        { subpath: 'tasks', icon: '📋', type: 'tasks' },
-      ];
-      
-      for (const { subpath, icon, type } of folderTypes) {
-        const folderPath = path.join(projectDataPath, subpath);
-        if (fs.existsSync(folderPath)) {
-          referenceFolderPaths.push(folderPath);
-          
-          const existingIndex = workspace.folders.findIndex(f => f.path === folderPath);
-          if (existingIndex === -1) {
-            workspace.folders.push({
-              path: folderPath,
-              name: `${icon} ${projectName} (${type}) [global]`,
-            });
-          }
-        }
+      if (fs.existsSync(folderPath)) {
+        referenceFolderPaths.push(folderPath);
+        
+        workspace.folders.push({
+          path: folderPath,
+          name: `📁 ${projectName} [global]`,
+        });
       }
     }
   }
 
-  // 4. Add workspace settings to mark reference folders as readonly
-  // This uses files.readonlyInclude to make imported folders read-only
+  // Add workspace settings to mark reference folders as readonly
   if (referenceFolderPaths.length > 0) {
     const readonlyPatterns: Record<string, boolean> = {};
     
     for (const folderPath of referenceFolderPaths) {
-      // Create a pattern that matches all files in this folder
       readonlyPatterns[`${folderPath}/**`] = true;
     }
     
-    // Merge with existing readonly patterns
+    // Merge with existing readonly patterns (clear old linked project patterns first)
     const existingReadonly = (workspace.settings['files.readonlyInclude'] as Record<string, boolean>) || {};
+    const cleanedReadonly: Record<string, boolean> = {};
+    
+    // Keep non-.rrce-workflow patterns
+    for (const [pattern, value] of Object.entries(existingReadonly)) {
+      if (!pattern.includes('.rrce-workflow') && !pattern.includes('rrce-workflow/workspaces')) {
+        cleanedReadonly[pattern] = value;
+      }
+    }
+    
     workspace.settings['files.readonlyInclude'] = {
-      ...existingReadonly,
+      ...cleanedReadonly,
       ...readonlyPatterns,
     };
   }
 
-  // 5. Add helpful workspace settings for multi-root experience
-  workspace.settings['explorer.sortOrder'] = workspace.settings['explorer.sortOrder'] || 'default';
-  
   // Write workspace file with nice formatting
   fs.writeFileSync(workspaceFilePath, JSON.stringify(workspace, null, 2));
 }

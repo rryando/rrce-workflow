@@ -8,6 +8,7 @@ import { scanForProjects, getProjectDisplayLabel, type DetectedProject } from '.
 /**
  * Run the link-only flow for adding other project knowledge to an existing workspace
  * Supports detecting workspace-scoped sibling projects in addition to global storage
+ * Each project source (global/sibling) is shown as a separate option for user to choose
  */
 export async function runLinkProjectsFlow(
   workspacePath: string, 
@@ -27,13 +28,17 @@ export async function runLinkProjectsFlow(
 
   const customGlobalPath = getEffectiveRRCEHome(workspacePath);
   
-  // Build options with source labels
+  // Build options with source labels - use unique key (name:source) as value
+  // This allows user to choose between global and sibling sources for same project
   const linkedProjects = await multiselect({
     message: 'Select projects to link:',
     options: projects.map(project => ({
-      value: project.name,
-      label: project.name,
-      hint: pc.dim(getProjectDisplayLabel(project)),
+      value: `${project.name}:${project.source}`,  // Unique key
+      label: `${project.name} ${pc.dim(`(${project.source})`)}`,
+      hint: pc.dim(project.source === 'global' 
+        ? `~/.rrce-workflow/workspaces/${project.name}`
+        : project.dataPath
+      ),
     })),
     required: true,
   });
@@ -43,20 +48,22 @@ export async function runLinkProjectsFlow(
     process.exit(0);
   }
 
-  const selectedProjectNames = linkedProjects as string[];
+  const selectedKeys = linkedProjects as string[];
 
-  if (selectedProjectNames.length === 0) {
+  if (selectedKeys.length === 0) {
     outro('No projects selected.');
     return;
   }
 
   // Get the full DetectedProject objects for selected projects
-  const selectedProjects = projects.filter(p => selectedProjectNames.includes(p.name));
+  const selectedProjects = projects.filter(p => 
+    selectedKeys.includes(`${p.name}:${p.source}`)
+  );
 
   const s = spinner();
   s.start('Linking projects');
 
-  // Update config.yaml with linked projects
+  // Update config.yaml with linked projects (store as name:source pairs)
   const configFilePath = getConfigPath(workspacePath);
   let configContent = fs.readFileSync(configFilePath, 'utf-8');
 
@@ -72,9 +79,10 @@ export async function runLinkProjectsFlow(
         insertIndex++;
       }
       // Add new projects that aren't already there
-      for (const name of selectedProjectNames) {
-        if (!configContent.includes(`  - ${name}`)) {
-          lines.splice(insertIndex, 0, `  - ${name}`);
+      for (const project of selectedProjects) {
+        const entry = `  - ${project.name}:${project.source}`;
+        if (!configContent.includes(entry)) {
+          lines.splice(insertIndex, 0, entry);
           insertIndex++;
         }
       }
@@ -83,14 +91,14 @@ export async function runLinkProjectsFlow(
   } else {
     // Add new linked_projects section
     configContent += `\nlinked_projects:\n`;
-    selectedProjectNames.forEach(name => {
-      configContent += `  - ${name}\n`;
+    selectedProjects.forEach(project => {
+      configContent += `  - ${project.name}:${project.source}\n`;
     });
   }
 
   fs.writeFileSync(configFilePath, configContent);
 
-  // Update VSCode workspace file with full project info (includes refs, tasks)
+  // Update VSCode workspace file with full project info
   generateVSCodeWorkspace(workspacePath, workspaceName, selectedProjects, customGlobalPath);
 
   s.stop('Projects linked');
@@ -102,11 +110,9 @@ export async function runLinkProjectsFlow(
     ...selectedProjects.map(p => `  ✓ ${p.name} ${pc.dim(`(${p.source})`)}`),
     ``,
     `Workspace file: ${pc.cyan(workspaceFile)}`,
-    ``,
-    pc.dim('Includes: knowledge, refs, tasks folders'),
   ];
 
   note(summary.join('\n'), 'Link Summary');
 
-  outro(pc.green(`✓ Projects linked! Open ${pc.bold(workspaceFile)} in VSCode to access linked knowledge.`));
+  outro(pc.green(`✓ Projects linked! Open ${pc.bold(workspaceFile)} in VSCode to access linked data.`));
 }
