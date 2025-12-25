@@ -7,24 +7,18 @@ import { scanForProjects, getProjectDisplayLabel, type DetectedProject } from '.
 
 /**
  * Run the link-only flow for adding other project knowledge to an existing workspace
- * Now supports detecting workspace-scoped sibling projects, not just global storage
+ * Supports detecting workspace-scoped sibling projects in addition to global storage
  */
 export async function runLinkProjectsFlow(
   workspacePath: string, 
-  workspaceName: string, 
-  existingProjects?: string[]
+  workspaceName: string
 ) {
-  // Scan for projects using the new detection system
-  const detectedProjects = scanForProjects({
+  // Scan for projects (global + workspace-scoped siblings)
+  const projects = scanForProjects({
     excludeWorkspace: workspaceName,
     workspacePath: workspacePath,
     scanSiblings: true,
   });
-  
-  // If legacy string array is passed, use that instead (for backwards compat)
-  const projects = existingProjects 
-    ? existingProjects.map(name => ({ name, source: 'global' as const } as DetectedProject))
-    : detectedProjects;
   
   if (projects.length === 0) {
     outro(pc.yellow('No other projects found. Try setting up another project first.'));

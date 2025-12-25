@@ -5,10 +5,10 @@ import { getGitUser } from '../../lib/git';
 import { 
   detectWorkspaceRoot, 
   getWorkspaceName, 
-  listGlobalProjects, 
   getLocalWorkspacePath,
   getConfigPath
 } from '../../lib/paths';
+import { scanForProjects } from '../../lib/detection';
 
 // Import flows
 import { runSetupFlow } from './setup-flow';
@@ -35,8 +35,12 @@ Workspace: ${pc.bold(workspaceName)}`,
     'Context'
   );
 
-  // Check for existing projects in global storage
-  const existingProjects = listGlobalProjects(workspaceName);
+  // Scan for existing projects (global + workspace-scoped siblings)
+  const detectedProjects = scanForProjects({
+    excludeWorkspace: workspaceName,
+    workspacePath: workspacePath,
+    scanSiblings: true,
+  });
   
   // Check if already configured (using getConfigPath for new/legacy support)
   const configFilePath = getConfigPath(workspacePath);
@@ -63,11 +67,11 @@ Workspace: ${pc.bold(workspaceName)}`,
     const menuOptions: { value: string; label: string; hint?: string }[] = [];
     
     // Add link option if other projects exist
-    if (existingProjects.length > 0) {
+    if (detectedProjects.length > 0) {
       menuOptions.push({ 
         value: 'link', 
         label: 'Link other project knowledge', 
-        hint: `${existingProjects.length} projects available` 
+        hint: `${detectedProjects.length} projects detected (global + sibling)` 
       });
     }
     
@@ -94,7 +98,7 @@ Workspace: ${pc.bold(workspaceName)}`,
     }
 
     if (action === 'link') {
-      await runLinkProjectsFlow(workspacePath, workspaceName, existingProjects);
+      await runLinkProjectsFlow(workspacePath, workspaceName);
       return;
     }
 
@@ -110,5 +114,5 @@ Workspace: ${pc.bold(workspaceName)}`,
   }
 
   // Run full setup flow for new workspaces
-  await runSetupFlow(workspacePath, workspaceName, existingProjects);
+  await runSetupFlow(workspacePath, workspaceName, detectedProjects);
 }

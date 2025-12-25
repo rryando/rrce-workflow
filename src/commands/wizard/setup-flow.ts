@@ -15,6 +15,7 @@ import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../
 import { copyPromptsToDir } from './utils';
 import { generateVSCodeWorkspace } from './vscode';
 import { directoryAutocomplete, isCancel as isAutocompleteCancel } from '../../lib/autocomplete-prompt';
+import { type DetectedProject, getProjectDisplayLabel } from '../../lib/detection';
 
 interface SetupConfig {
   storageMode: StorageMode;
@@ -29,7 +30,7 @@ interface SetupConfig {
 export async function runSetupFlow(
   workspacePath: string,
   workspaceName: string,
-  existingProjects: string[]
+  existingProjects: DetectedProject[]
 ): Promise<void> {
   const s = spinner();
   
@@ -62,10 +63,10 @@ export async function runSetupFlow(
         }
         return multiselect({
           message: 'Link knowledge from other projects?',
-          options: existingProjects.map(name => ({
-            value: name,
-            label: name,
-            hint: `~/.rrce-workflow/workspaces/${name}/knowledge`
+          options: existingProjects.map(project => ({
+            value: project.name,
+            label: project.name,
+            hint: pc.dim(getProjectDisplayLabel(project))
           })),
           required: false,
         });
@@ -108,7 +109,7 @@ export async function runSetupFlow(
       globalPath: customGlobalPath,
       tools: config.tools as string[],
       linkedProjects: config.linkedProjects as string[],
-    }, workspacePath, workspaceName);
+    }, workspacePath, workspaceName, existingProjects);
 
     s.stop('Configuration generated');
     
@@ -243,7 +244,8 @@ async function resolveGlobalPath(): Promise<string | undefined> {
 async function generateConfiguration(
   config: SetupConfig,
   workspacePath: string,
-  workspaceName: string
+  workspaceName: string,
+  allProjects: DetectedProject[] = []
 ): Promise<void> {
   const dataPaths = getDataPaths(config.storageMode, workspaceName, workspacePath, config.globalPath);
   
@@ -318,7 +320,9 @@ tools:
 
   // Generate VSCode workspace file if using copilot or has linked projects
   if (config.tools.includes('copilot') || config.linkedProjects.length > 0) {
-    generateVSCodeWorkspace(workspacePath, workspaceName, config.linkedProjects, config.globalPath);
+    // Look up the full DetectedProject objects for selected project names
+    const selectedProjects = allProjects.filter(p => config.linkedProjects.includes(p.name));
+    generateVSCodeWorkspace(workspacePath, workspaceName, selectedProjects, config.globalPath);
   }
 }
 
