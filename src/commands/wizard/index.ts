@@ -50,7 +50,7 @@ Workspace: ${pc.bold(workspaceName)}`,
   if (isAlreadyConfigured) {
     try {
       const configContent = fs.readFileSync(configFilePath, 'utf-8');
-      const modeMatch = configContent.match(/mode:\s*(global|workspace|both)/);
+      const modeMatch = configContent.match(/mode:\s*(global|workspace)/);
       currentStorageMode = modeMatch?.[1] ?? null;
     } catch {
       // Ignore parse errors

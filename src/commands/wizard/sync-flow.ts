@@ -5,14 +5,13 @@ import * as path from 'path';
 import { 
   ensureDir, 
   getLocalWorkspacePath, 
-  getGlobalWorkspacePath,
-  getEffectiveRRCEHome,
-  getConfigPath
+  getEffectiveRRCEHome
 } from '../../lib/paths';
 import { copyDirRecursive } from './utils';
 
 /**
  * Sync workspace knowledge to global storage so other projects can reference it
+ * Note: This copies the data to global but does NOT change the storage mode
  */
 export async function runSyncToGlobalFlow(workspacePath: string, workspaceName: string) {
   const localPath = getLocalWorkspacePath(workspacePath);
@@ -63,12 +62,6 @@ export async function runSyncToGlobalFlow(workspacePath: string, workspaceName: 
       copyDirRecursive(srcDir, destDir);
     }
 
-    // Update the config to reflect 'both' mode
-    const configFilePath = getConfigPath(workspacePath);
-    let configContent = fs.readFileSync(configFilePath, 'utf-8');
-    configContent = configContent.replace(/mode:\s*workspace/, 'mode: both');
-    fs.writeFileSync(configFilePath, configContent);
-
     s.stop('Sync complete');
 
     const summary = [
@@ -76,7 +69,6 @@ export async function runSyncToGlobalFlow(workspacePath: string, workspaceName: 
       ...existingDirs.map(d => `  ✓ ${d}/`),
       ``,
       `Global path: ${pc.cyan(globalPath)}`,
-      `Storage mode updated to: ${pc.bold('both')}`,
       ``,
       `Other projects can now link this knowledge!`,
     ];

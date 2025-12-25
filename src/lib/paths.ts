@@ -62,16 +62,12 @@ export function getWorkspaceName(workspaceRoot: string): string {
 
 /**
  * Resolve primary data path based on storage mode
- * Note: For 'both' mode, use resolveAllDataPaths() to get all paths
  */
 export function resolveDataPath(mode: StorageMode, workspaceName: string, workspaceRoot: string): string {
   switch (mode) {
     case 'global':
       return path.join(RRCE_HOME, 'workspaces', workspaceName);
     case 'workspace':
-      return path.join(workspaceRoot, '.rrce-workflow');
-    case 'both':
-      // Primary is workspace for 'both' mode
       return path.join(workspaceRoot, '.rrce-workflow');
     default:
       return path.join(RRCE_HOME, 'workspaces', workspaceName);
@@ -83,7 +79,6 @@ export function resolveDataPath(mode: StorageMode, workspaceName: string, worksp
  * Returns array of paths where data should be stored:
  * - 'global': [~/.rrce-workflow/workspaces/<name>]
  * - 'workspace': [<workspace>/.rrce-workflow]
- * - 'both': [<workspace>/.rrce-workflow, ~/.rrce-workflow/workspaces/<name>]
  */
 export function resolveAllDataPaths(mode: StorageMode, workspaceName: string, workspaceRoot: string): string[] {
   const globalPath = path.join(RRCE_HOME, 'workspaces', workspaceName);
@@ -94,8 +89,6 @@ export function resolveAllDataPaths(mode: StorageMode, workspaceName: string, wo
       return [globalPath];
     case 'workspace':
       return [workspacePath];
-    case 'both':
-      return [workspacePath, globalPath];
     default:
       return [globalPath];
   }

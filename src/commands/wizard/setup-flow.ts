@@ -22,6 +22,7 @@ interface SetupConfig {
   globalPath?: string;
   tools: string[];
   linkedProjects: string[];
+  addToGitignore: boolean;
 }
 
 /**
@@ -41,9 +42,8 @@ export async function runSetupFlow(
         select({
           message: 'Where should workflow data be stored?',
           options: [
-            { value: 'global', label: 'Global (~/.rrce-workflow/)' },
-            { value: 'workspace', label: 'Workspace (.rrce-workflow/)' },
-            { value: 'both', label: 'Both' },
+            { value: 'global', label: 'Global (~/.rrce-workflow/)', hint: 'Cross-project access, clean workspace' },
+            { value: 'workspace', label: 'Workspace (.rrce-workflow/)', hint: 'Self-contained, version with repo' },
           ],
           initialValue: 'global',
         }),
@@ -74,6 +74,11 @@ export async function runSetupFlow(
           required: false,
         });
       },
+      addToGitignore: () =>
+        confirm({
+          message: 'Add generated folders to .gitignore?',
+          initialValue: true,
+        }),
       confirm: () =>
         confirm({
           message: 'Create configuration?',
@@ -93,10 +98,10 @@ export async function runSetupFlow(
     process.exit(0);
   }
 
-  // Determine global path for 'global' or 'both' modes
+  // Determine global path for 'global' mode
   let customGlobalPath: string | undefined;
   
-  if (config.storageMode === 'global' || config.storageMode === 'both') {
+  if (config.storageMode === 'global') {
     customGlobalPath = await resolveGlobalPath();
     if (!customGlobalPath) {
       cancel('Setup cancelled - no writable global path available.');
@@ -112,6 +117,7 @@ export async function runSetupFlow(
       globalPath: customGlobalPath,
       tools: config.tools as string[],
       linkedProjects: config.linkedProjects as string[],
+      addToGitignore: config.addToGitignore as boolean,
     }, workspacePath, workspaceName, existingProjects);
 
     s.stop('Configuration generated');
@@ -125,7 +131,7 @@ export async function runSetupFlow(
     );
     
     const summary = [
-      `Storage: ${config.storageMode === 'both' ? 'global + workspace' : config.storageMode}`,
+      `Storage: ${config.storageMode}`,
     ];
     
     if (customGlobalPath && customGlobalPath !== getDefaultRRCEHome()) {
@@ -320,6 +326,11 @@ tools:
 
   fs.writeFileSync(workspaceConfigPath, configContent);
 
+  // Add generated folders to .gitignore if user opted in
+  if (config.addToGitignore) {
+    updateGitignore(workspacePath, config.storageMode, config.tools);
+  }
+
   // Generate VSCode workspace file if using copilot or has linked projects
   if (config.tools.includes('copilot') || config.linkedProjects.length > 0) {
     // Look up the full DetectedProject objects for selected project keys (format: name:source)
@@ -347,9 +358,74 @@ function getDataPaths(
       return [globalPath];
     case 'workspace':
       return [workspacePath];
-    case 'both':
-      return [workspacePath, globalPath];
     default:
       return [globalPath];
+  }
+}
+
+/**
+ * Add generated folders to .gitignore based on storage mode and selected tools
+ */
+export function updateGitignore(workspacePath: string, storageMode: StorageMode, tools: string[]): boolean {
+  const gitignorePath = path.join(workspacePath, '.gitignore');
+  
+  // Determine which entries to add based on config
+  const entries: string[] = [];
+  
+  // Always add .rrce-workflow/ for workspace mode (data folder)
+  if (storageMode === 'workspace') {
+    entries.push('.rrce-workflow/');
+  }
+  
+  // Add IDE-specific folders based on selected tools
+  if (tools.includes('copilot')) {
+    entries.push('.github/agents/');
+  }
+  if (tools.includes('antigravity')) {
+    entries.push('.agent/');
+  }
+  
+  if (entries.length === 0) {
+    return false; // Nothing to add
+  }
+  
+  try {
+    let content = '';
+    if (fs.existsSync(gitignorePath)) {
+      content = fs.readFileSync(gitignorePath, 'utf-8');
+    }
+    
+    const lines = content.split('\n').map(line => line.trim());
+    const newEntries: string[] = [];
+    
+    for (const entry of entries) {
+      // Check if entry already exists (with or without trailing slash)
+      const entryWithoutSlash = entry.replace(/\/$/, '');
+      if (!lines.some(line => line === entry || line === entryWithoutSlash)) {
+        newEntries.push(entry);
+      }
+    }
+    
+    if (newEntries.length === 0) {
+      return false; // All entries already present
+    }
+    
+    // Add entries to gitignore
+    let newContent = content;
+    if (!newContent.endsWith('\n') && newContent !== '') {
+      newContent += '\n';
+    }
+    
+    // Add a comment if adding new entries
+    if (newContent === '' || !content.includes('# rrce-workflow')) {
+      newContent += '\n# rrce-workflow generated folders\n';
+    }
+    
+    newContent += newEntries.join('\n') + '\n';
+    
+    fs.writeFileSync(gitignorePath, newContent);
+    return true;
+  } catch {
+    return false;
   }
 }

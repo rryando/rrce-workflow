@@ -116,8 +116,6 @@ function resolveAllDataPathsWithCustomGlobal(
       return [globalPath];
     case 'workspace':
       return [workspacePath];
-    case 'both':
-      return [workspacePath, globalPath];
     default:
       return [globalPath];
   }

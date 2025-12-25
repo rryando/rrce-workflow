@@ -195,7 +195,7 @@ export function parseWorkspaceConfig(configPath: string): {
     
     // Simple YAML parsing (we don't want to add a full YAML library)
     const nameMatch = content.match(/name:\s*["']?([^"'\n]+)["']?/);
-    const modeMatch = content.match(/mode:\s*(global|workspace|both)/);
+    const modeMatch = content.match(/mode:\s*(global|workspace)/);
     
     // Parse linked projects
     const linkedProjects: string[] = [];

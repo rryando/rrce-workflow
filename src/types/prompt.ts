@@ -34,7 +34,7 @@ export interface ParsedPrompt {
 }
 
 // Storage mode options
-export type StorageMode = 'global' | 'workspace' | 'both';
+export type StorageMode = 'global' | 'workspace';
 
 // Config schema
 export interface RRCEConfig {
