@@ -2,9 +2,9 @@
  * MCP Hub TUI - Interactive menu for managing MCP
  */
 
-import { intro, outro, select, multiselect, confirm, spinner, note, cancel, isCancel } from '@clack/prompts';
+import { intro, outro, select, multiselect, confirm, spinner, note, cancel, isCancel, text } from '@clack/prompts';
 import pc from 'picocolors';
-import { loadMCPConfig, saveMCPConfig, setProjectConfig, getMCPConfigPath } from './config';
+import { loadMCPConfig, saveMCPConfig, setProjectConfig, getMCPConfigPath, ensureMCPGlobalPath } from './config';
 import type { MCPConfig, MCPProjectConfig } from './types';
 import { scanForProjects, type DetectedProject } from '../lib/detection';
 import { startMCPServer, stopMCPServer, getMCPServerStatus } from './server';
@@ -38,6 +38,17 @@ export async function runMCP(subcommand?: string): Promise<void> {
 
   // Show interactive menu
   intro(pc.bgCyan(pc.black(' RRCE MCP Hub ')));
+
+  // Check if global path is configured (MCP needs global storage)
+  const globalPathCheck = await ensureMCPGlobalPath();
+  if (!globalPathCheck.configured) {
+    // Prompt user to configure global path
+    const configured = await handleConfigureGlobalPath();
+    if (!configured) {
+      outro(pc.yellow('MCP requires a global storage path. Setup cancelled.'));
+      return;
+    }
+  }
 
   let running = true;
   while (running) {
@@ -82,6 +93,122 @@ export async function runMCP(subcommand?: string): Promise<void> {
   }
 
   outro(pc.green('MCP Hub closed.'));
+}
+
+/**
+ * Prompt user to configure a global path for MCP
+ * Returns true if configured successfully
+ * Uses the same bash-like Tab completion and permission checking as the wizard
+ */
+async function handleConfigureGlobalPath(): Promise<boolean> {
+  const { checkWriteAccess, getDefaultRRCEHome } = await import('../lib/paths');
+  const { directoryPrompt, isCancelled } = await import('../lib/autocomplete-prompt');
+  const path = await import('path');
+
+  const defaultPath = getDefaultRRCEHome();
+  const isDefaultWritable = checkWriteAccess(defaultPath);
+
+  note(
+    `MCP Hub requires a ${pc.bold('global storage path')} to store its configuration
+and coordinate across projects.
+
+Your current setup uses ${pc.cyan('workspace')} mode, which stores data
+locally in each project. MCP needs a central location.`,
+    'Global Path Required'
+  );
+
+  // Build options like the wizard
+  const options: { value: string; label: string; hint?: string }[] = [
+    {
+      value: 'default',
+      label: `Default (${defaultPath})`,
+      hint: isDefaultWritable ? pc.green('✓ writable') : pc.red('✗ not writable'),
+    },
+    {
+      value: 'custom',
+      label: 'Custom path',
+      hint: 'Specify your own directory',
+    },
+  ];
+
+  const choice = await select({
+    message: 'Global storage location:',
+    options,
+    initialValue: isDefaultWritable ? 'default' : 'custom',
+  });
+
+  if (isCancel(choice)) {
+    return false;
+  }
+
+  let resolvedPath: string;
+
+  if (choice === 'default') {
+    if (!isDefaultWritable) {
+      note(
+        `${pc.yellow('⚠')} Cannot write to default path:\n  ${pc.dim(defaultPath)}\n\nThis can happen when running via npx/bunx in restricted environments.\nPlease choose a custom path instead.`,
+        'Write Access Issue'
+      );
+      // Try again with custom path
+      return handleConfigureGlobalPath();
+    }
+    resolvedPath = defaultPath;
+  } else {
+    // Custom path with bash-like Tab completion
+    const suggestedPath = path.join(process.env.HOME || '~', '.local', 'share', 'rrce-workflow');
+    const customPath = await directoryPrompt({
+      message: 'Enter custom global path (Tab to autocomplete):',
+      defaultValue: suggestedPath,
+      validate: (value) => {
+        if (!value.trim()) {
+          return 'Path cannot be empty';
+        }
+        if (!checkWriteAccess(value)) {
+          return `Cannot write to ${value}. Please choose a writable path.`;
+        }
+        return undefined;
+      },
+    });
+
+    if (isCancelled(customPath)) {
+      return false;
+    }
+
+    // Ensure path ends with .rrce-workflow so our tools can detect it
+    let expandedPath = customPath as string;
+    if (!expandedPath.endsWith('.rrce-workflow')) {
+      expandedPath = path.join(expandedPath, '.rrce-workflow');
+    }
+    resolvedPath = expandedPath;
+  }
+
+  // Create the directory if it doesn't exist
+  const fs = await import('fs');
+  
+  try {
+    if (!fs.existsSync(resolvedPath)) {
+      fs.mkdirSync(resolvedPath, { recursive: true });
+    }
+    
+    // Save the MCP config to the resolved path
+    const configPath = path.join(resolvedPath, 'mcp.yaml');
+    const config = loadMCPConfig();
+    saveMCPConfig(config);
+    
+    note(
+      `${pc.green('✓')} Global path configured: ${pc.cyan(resolvedPath)}\n\n` +
+      `MCP config will be stored at:\n${configPath}`,
+      'Configuration Saved'
+    );
+    
+    return true;
+  } catch (error) {
+    note(
+      `${pc.red('✗')} Failed to create directory: ${error instanceof Error ? error.message : String(error)}`,
+      'Error'
+    );
+    return false;
+  }
 }
 
 /**

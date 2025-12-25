@@ -1,19 +1,71 @@
 /**
  * MCP Configuration Parser/Writer
- * Manages ~/.rrce-workflow/mcp.yaml
+ * Manages mcp.yaml in the effective RRCE home directory
+ * Respects custom globalPath set by the wizard
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { getDefaultRRCEHome } from '../lib/paths';
+import { getEffectiveRRCEHome, detectWorkspaceRoot } from '../lib/paths';
 import type { MCPConfig, MCPProjectConfig, MCPPermissions } from './types';
 import { DEFAULT_MCP_CONFIG, DEFAULT_PERMISSIONS } from './types';
 
 /**
  * Get path to MCP config file
+ * Uses effective RRCE home (respects custom globalPath from workspace config)
  */
 export function getMCPConfigPath(): string {
-  return path.join(getDefaultRRCEHome(), 'mcp.yaml');
+  const workspaceRoot = detectWorkspaceRoot();
+  const rrceHome = getEffectiveRRCEHome(workspaceRoot);
+  return path.join(rrceHome, 'mcp.yaml');
+}
+
+/**
+ * Extended result type for global path check
+ */
+export interface GlobalPathCheckResult {
+  configured: boolean;
+  path: string;
+  reason?: string;
+}
+
+/**
+ * Check if a valid global path is configured for MCP
+ * MCP needs a global location to store its config and coordinate across projects
+ * 
+ * Returns:
+ * - configured: true if a valid global path exists
+ * - path: the resolved path
+ * - reason: why it's not configured (if applicable)
+ */
+export function ensureMCPGlobalPath(): GlobalPathCheckResult {
+  const workspaceRoot = detectWorkspaceRoot();
+  const rrceHome = getEffectiveRRCEHome(workspaceRoot);
+  
+  // Check if the path is valid (not just workspace-local)
+  // Workspace-local paths like ".rrce-workflow" don't work for cross-project MCP
+  if (rrceHome.startsWith('.') || rrceHome.includes('.rrce-workflow/')) {
+    // Check if this is a relative/workspace path
+    const configPath = path.join(workspaceRoot, '.rrce-workflow', 'config.yaml');
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf-8');
+      const modeMatch = content.match(/mode:\s*(global|workspace)/);
+      if (modeMatch?.[1] === 'workspace') {
+        // Workspace mode - no global path configured
+        return {
+          configured: false,
+          path: rrceHome,
+          reason: 'Workspace mode configured. MCP requires a global storage path.',
+        };
+      }
+    }
+  }
+  
+  // Global path exists
+  return {
+    configured: true,
+    path: rrceHome,
+  };
 }
 
 /**
