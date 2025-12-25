@@ -10,10 +10,13 @@ import {
   ListResourcesRequestSchema,
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { loadMCPConfig, isProjectExposed, getProjectPermissions } from './config';
 import { scanForProjects, type DetectedProject } from '../lib/detection';
+import { getAgentCorePromptsDir } from '../lib/prompts';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -43,6 +46,7 @@ export async function startMCPServer(): Promise<{ port: number; pid: number }> {
       capabilities: {
         resources: {},
         tools: {},
+        prompts: {},
       },
     }
   );
@@ -52,6 +56,9 @@ export async function startMCPServer(): Promise<{ port: number; pid: number }> {
   
   // Register tool handlers
   registerToolHandlers(mcpServer);
+
+  // Register prompt handlers
+  registerPromptHandlers(mcpServer);
 
   // Connect via stdio transport
   const transport = new StdioServerTransport();
@@ -285,6 +292,127 @@ function registerToolHandlers(server: Server): void {
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
+  });
+}
+
+/**
+ * Agent prompt definitions for MCP
+ */
+const AGENT_PROMPTS = [
+  {
+    name: 'init',
+    description: 'Initialize project context by analyzing codebase structure, tech stack, and conventions',
+    file: 'init.md',
+    arguments: [
+      { name: 'PROJECT_NAME', description: 'Project name (optional, auto-detected if omitted)', required: false },
+    ],
+  },
+  {
+    name: 'research',
+    description: 'Research and clarify requirements for a new task',
+    file: 'research_discussion.md',
+    arguments: [
+      { name: 'REQUEST', description: 'Description of the task or feature to research', required: true },
+      { name: 'TASK_SLUG', description: 'Kebab-case identifier for the task', required: true },
+      { name: 'TITLE', description: 'Human-readable title for the task', required: false },
+    ],
+  },
+  {
+    name: 'plan',
+    description: 'Create an actionable execution plan from research findings',
+    file: 'planning_orchestrator.md',
+    arguments: [
+      { name: 'TASK_SLUG', description: 'Task slug to create plan for', required: true },
+    ],
+  },
+  {
+    name: 'execute',
+    description: 'Implement the planned work with code and tests',
+    file: 'executor.md',
+    arguments: [
+      { name: 'TASK_SLUG', description: 'Task slug to execute', required: true },
+      { name: 'BRANCH', description: 'Git branch reference (optional)', required: false },
+    ],
+  },
+  {
+    name: 'docs',
+    description: 'Generate documentation for completed work',
+    file: 'documentation.md',
+    arguments: [
+      { name: 'DOC_TYPE', description: 'Type of documentation (api, architecture, runbook, changelog)', required: true },
+      { name: 'TASK_SLUG', description: 'Task slug if documenting specific task', required: false },
+    ],
+  },
+  {
+    name: 'sync',
+    description: 'Reconcile knowledge base with actual codebase state',
+    file: 'sync.md',
+    arguments: [
+      { name: 'SCOPE', description: 'Specific path or module to sync (optional)', required: false },
+    ],
+  },
+];
+
+/**
+ * Register MCP prompt handlers
+ */
+function registerPromptHandlers(server: Server): void {
+  // List available prompts
+  server.setRequestHandler(ListPromptsRequestSchema, async () => {
+    return {
+      prompts: AGENT_PROMPTS.map(p => ({
+        name: p.name,
+        description: p.description,
+        arguments: p.arguments.map(a => ({
+          name: a.name,
+          description: a.description,
+          required: a.required,
+        })),
+      })),
+    };
+  });
+
+  // Get a specific prompt
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    
+    const promptDef = AGENT_PROMPTS.find(p => p.name === name);
+    if (!promptDef) {
+      throw new Error(`Unknown prompt: ${name}`);
+    }
+
+    // Load the prompt file
+    const promptsDir = getAgentCorePromptsDir();
+    const promptPath = path.join(promptsDir, promptDef.file);
+    
+    if (!fs.existsSync(promptPath)) {
+      throw new Error(`Prompt file not found: ${promptDef.file}`);
+    }
+
+    let promptContent = fs.readFileSync(promptPath, 'utf-8');
+
+    // Replace argument placeholders if provided
+    if (args) {
+      for (const [key, value] of Object.entries(args)) {
+        promptContent = promptContent.replace(
+          new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
+          String(value)
+        );
+      }
+    }
+
+    return {
+      description: promptDef.description,
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: promptContent,
+          },
+        },
+      ],
+    };
   });
 }
 

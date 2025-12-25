@@ -284,6 +284,14 @@ ${pc.bold('RESOURCES EXPOSED')}
   ${pc.cyan('rrce://projects')}              List all exposed projects
   ${pc.cyan('rrce://projects/{name}/context')}  Get project context
   ${pc.cyan('rrce://projects/{name}/tasks')}    Get project tasks
+
+${pc.bold('PROMPTS (Agent Commands)')}
+  ${pc.cyan('init')}      Initialize project context
+  ${pc.cyan('research')}  Research requirements for a task
+  ${pc.cyan('plan')}      Create execution plan
+  ${pc.cyan('execute')}   Implement planned work
+  ${pc.cyan('docs')}      Generate documentation
+  ${pc.cyan('sync')}      Sync knowledge with codebase
 `;
 
   note(help.trim(), 'Help');
