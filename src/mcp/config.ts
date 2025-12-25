@@ -1,0 +1,208 @@
+/**
+ * MCP Configuration Parser/Writer
+ * Manages ~/.rrce-workflow/mcp.yaml
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { getDefaultRRCEHome } from '../lib/paths';
+import type { MCPConfig, MCPProjectConfig, MCPPermissions } from './types';
+import { DEFAULT_MCP_CONFIG, DEFAULT_PERMISSIONS } from './types';
+
+/**
+ * Get path to MCP config file
+ */
+export function getMCPConfigPath(): string {
+  return path.join(getDefaultRRCEHome(), 'mcp.yaml');
+}
+
+/**
+ * Load MCP configuration from disk
+ * Returns default config if file doesn't exist
+ */
+export function loadMCPConfig(): MCPConfig {
+  const configPath = getMCPConfigPath();
+  
+  if (!fs.existsSync(configPath)) {
+    return { ...DEFAULT_MCP_CONFIG };
+  }
+
+  try {
+    const content = fs.readFileSync(configPath, 'utf-8');
+    return parseMCPConfig(content);
+  } catch {
+    return { ...DEFAULT_MCP_CONFIG };
+  }
+}
+
+/**
+ * Save MCP configuration to disk
+ */
+export function saveMCPConfig(config: MCPConfig): void {
+  const configPath = getMCPConfigPath();
+  const dir = path.dirname(configPath);
+  
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  const content = serializeMCPConfig(config);
+  fs.writeFileSync(configPath, content);
+}
+
+/**
+ * Parse MCP config from YAML string
+ * Simple parser without external dependencies
+ */
+function parseMCPConfig(content: string): MCPConfig {
+  const config: MCPConfig = { ...DEFAULT_MCP_CONFIG, projects: [] };
+
+  // Parse server section
+  const portMatch = content.match(/port:\s*(\d+)/);
+  if (portMatch?.[1]) config.server.port = parseInt(portMatch[1], 10);
+
+  const autoStartMatch = content.match(/autoStart:\s*(true|false)/);
+  if (autoStartMatch) config.server.autoStart = autoStartMatch[1] === 'true';
+
+  // Parse defaults section
+  const includeNewMatch = content.match(/includeNew:\s*(true|false)/);
+  if (includeNewMatch) config.defaults.includeNew = includeNewMatch[1] === 'true';
+
+  // Parse projects section
+  const projectsMatch = content.match(/projects:\s*\n((?:\s+-[\s\S]*?(?=\n\w|\n*$))+)/);
+  if (projectsMatch?.[1]) {
+    const projectsContent = projectsMatch[1];
+    const projectBlocks = projectsContent.split(/\n\s+-\s+name:/).filter(Boolean);
+    
+    for (const block of projectBlocks) {
+      const nameMatch = block.match(/(?:^|\n\s*)name:\s*[\"']?([^\"'\n]+)[\"']?/) || 
+                        block.match(/^[\"']?([^\"'\n:]+)[\"']?/);
+      const exposeMatch = block.match(/expose:\s*(true|false)/);
+      
+      if (nameMatch?.[1]) {
+        const permissions = parsePermissions(block);
+        config.projects.push({
+          name: nameMatch[1].trim(),
+          expose: exposeMatch ? exposeMatch[1] === 'true' : true,
+          permissions,
+        });
+      }
+    }
+  }
+
+  return config;
+}
+
+/**
+ * Parse permissions from a project block
+ */
+function parsePermissions(block: string): MCPPermissions {
+  const permissions = { ...DEFAULT_PERMISSIONS };
+  
+  const knowledgeMatch = block.match(/knowledge:\s*(true|false)/);
+  if (knowledgeMatch) permissions.knowledge = knowledgeMatch[1] === 'true';
+  
+  const tasksMatch = block.match(/tasks:\s*(true|false)/);
+  if (tasksMatch) permissions.tasks = tasksMatch[1] === 'true';
+  
+  const refsMatch = block.match(/refs:\s*(true|false)/);
+  if (refsMatch) permissions.refs = refsMatch[1] === 'true';
+  
+  return permissions;
+}
+
+/**
+ * Serialize MCP config to YAML string
+ */
+function serializeMCPConfig(config: MCPConfig): string {
+  let content = `# RRCE MCP Hub Configuration
+# Manages which projects are exposed via MCP
+
+server:
+  port: ${config.server.port}
+  autoStart: ${config.server.autoStart}
+
+defaults:
+  includeNew: ${config.defaults.includeNew}
+  permissions:
+    knowledge: ${config.defaults.permissions.knowledge}
+    tasks: ${config.defaults.permissions.tasks}
+    refs: ${config.defaults.permissions.refs}
+
+projects:
+`;
+
+  if (config.projects.length === 0) {
+    content += '  # No projects configured yet. Run "rrce-workflow mcp" to add projects.\n';
+  } else {
+    for (const project of config.projects) {
+      content += `  - name: "${project.name}"
+    expose: ${project.expose}
+    permissions:
+      knowledge: ${project.permissions.knowledge}
+      tasks: ${project.permissions.tasks}
+      refs: ${project.permissions.refs}
+`;
+    }
+  }
+
+  return content;
+}
+
+/**
+ * Add or update a project in the config
+ */
+export function setProjectConfig(
+  config: MCPConfig, 
+  name: string, 
+  expose: boolean,
+  permissions?: Partial<MCPPermissions>
+): MCPConfig {
+  const existing = config.projects.find(p => p.name === name);
+  
+  if (existing) {
+    existing.expose = expose;
+    if (permissions) {
+      existing.permissions = { ...existing.permissions, ...permissions };
+    }
+  } else {
+    config.projects.push({
+      name,
+      expose,
+      permissions: permissions ? { ...DEFAULT_PERMISSIONS, ...permissions } : { ...DEFAULT_PERMISSIONS },
+    });
+  }
+
+  return config;
+}
+
+/**
+ * Remove a project from the config
+ */
+export function removeProjectConfig(config: MCPConfig, name: string): MCPConfig {
+  config.projects = config.projects.filter(p => p.name !== name);
+  return config;
+}
+
+/**
+ * Check if a project is exposed via MCP
+ */
+export function isProjectExposed(config: MCPConfig, name: string): boolean {
+  const project = config.projects.find(p => p.name === name);
+  
+  // If explicitly configured, use that
+  if (project) {
+    return project.expose;
+  }
+  
+  // Otherwise use default
+  return config.defaults.includeNew;
+}
+
+/**
+ * Get permissions for a project
+ */
+export function getProjectPermissions(config: MCPConfig, name: string): MCPPermissions {
+  const project = config.projects.find(p => p.name === name);
+  return project?.permissions ?? config.defaults.permissions;
+}
