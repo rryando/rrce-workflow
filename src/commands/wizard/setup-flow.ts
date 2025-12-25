@@ -76,7 +76,7 @@ export async function runSetupFlow(
       },
       addToGitignore: () =>
         confirm({
-          message: 'Add generated folders to .gitignore?',
+          message: 'Add generated folders to .gitignore? (as comments - uncomment if needed)',
           initialValue: true,
         }),
       confirm: () =>
@@ -399,9 +399,16 @@ export function updateGitignore(workspacePath: string, storageMode: StorageMode,
     const newEntries: string[] = [];
     
     for (const entry of entries) {
-      // Check if entry already exists (with or without trailing slash)
+      // Check if entry already exists (active or commented)
       const entryWithoutSlash = entry.replace(/\/$/, '');
-      if (!lines.some(line => line === entry || line === entryWithoutSlash)) {
+      const commentedEntry = `# ${entry}`;
+      const commentedEntryNoSlash = `# ${entryWithoutSlash}`;
+      if (!lines.some(line => 
+        line === entry || 
+        line === entryWithoutSlash ||
+        line === commentedEntry ||
+        line === commentedEntryNoSlash
+      )) {
         newEntries.push(entry);
       }
     }
@@ -410,18 +417,19 @@ export function updateGitignore(workspacePath: string, storageMode: StorageMode,
       return false; // All entries already present
     }
     
-    // Add entries to gitignore
+    // Add entries to gitignore as comments
     let newContent = content;
     if (!newContent.endsWith('\n') && newContent !== '') {
       newContent += '\n';
     }
     
-    // Add a comment if adding new entries
+    // Add a comment header if not present
     if (newContent === '' || !content.includes('# rrce-workflow')) {
-      newContent += '\n# rrce-workflow generated folders\n';
+      newContent += '\n# rrce-workflow generated folders (uncomment to ignore)\n';
     }
     
-    newContent += newEntries.join('\n') + '\n';
+    // Add entries as comments so IDEs can still read them
+    newContent += newEntries.map(e => `# ${e}`).join('\n') + '\n';
     
     fs.writeFileSync(gitignorePath, newContent);
     return true;
