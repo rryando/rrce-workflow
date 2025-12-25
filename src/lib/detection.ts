@@ -10,7 +10,7 @@ export interface DetectedProject {
   name: string;
   path: string;           // Absolute path to project root
   dataPath: string;       // Path to .rrce-workflow data directory
-  source: 'global' | 'sibling' | 'parent';
+  source: 'global' | 'local';
   storageMode?: StorageMode;
   knowledgePath?: string;
   refsPath?: string;
@@ -19,35 +19,54 @@ export interface DetectedProject {
 
 interface ScanOptions {
   excludeWorkspace?: string;  // Current workspace name to exclude
-  workspacePath?: string;     // Current workspace path for sibling detection
-  scanSiblings?: boolean;     // Whether to scan sibling directories (default: true)
+  workspacePath?: string;     // Current workspace path to exclude
 }
 
+// Directories to skip during home scan (for performance)
+const SKIP_DIRECTORIES = new Set([
+  'node_modules',
+  '.git',
+  '.cache',
+  '.npm',
+  '.yarn',
+  '.pnpm',
+  '.local',
+  '.config',
+  '.vscode',
+  '.vscode-server',
+  'Library',
+  'Applications',
+  '.Trash',
+  'snap',
+  '.cargo',
+  '.rustup',
+  '.go',
+  '.docker',
+]);
+
 /**
- * Scan for rrce-workflow projects in various locations
+ * Scan for rrce-workflow projects in global storage and home directory
  */
 export function scanForProjects(options: ScanOptions = {}): DetectedProject[] {
-  const { excludeWorkspace, workspacePath, scanSiblings = true } = options;
+  const { excludeWorkspace, workspacePath } = options;
   const projects: DetectedProject[] = [];
   const seenPaths = new Set<string>();
 
   // 1. Scan global storage (~/.rrce-workflow/workspaces/)
   const globalProjects = scanGlobalStorage(excludeWorkspace);
   for (const project of globalProjects) {
-    if (!seenPaths.has(project.path)) {
-      seenPaths.add(project.path);
+    if (!seenPaths.has(project.dataPath)) {
+      seenPaths.add(project.dataPath);
       projects.push(project);
     }
   }
 
-  // 2. Scan sibling directories (same parent as current workspace)
-  if (scanSiblings && workspacePath) {
-    const siblingProjects = scanSiblingDirectories(workspacePath, excludeWorkspace);
-    for (const project of siblingProjects) {
-      if (!seenPaths.has(project.path)) {
-        seenPaths.add(project.path);
-        projects.push(project);
-      }
+  // 2. Scan home directory for .rrce-workflow folders
+  const homeProjects = scanHomeDirectory(workspacePath);
+  for (const project of homeProjects) {
+    if (!seenPaths.has(project.dataPath)) {
+      seenPaths.add(project.dataPath);
+      projects.push(project);
     }
   }
 
@@ -96,52 +115,70 @@ function scanGlobalStorage(excludeWorkspace?: string): DetectedProject[] {
 }
 
 /**
- * Scan sibling directories for workspace-scoped projects
+ * Recursively scan home directory for .rrce-workflow folders
+ * Efficiently skips heavy directories like node_modules, .git, etc.
  */
-function scanSiblingDirectories(workspacePath: string, excludeWorkspace?: string): DetectedProject[] {
-  const parentDir = path.dirname(workspacePath);
+function scanHomeDirectory(excludePath?: string): DetectedProject[] {
+  const home = process.env.HOME;
+  if (!home) return [];
+
   const projects: DetectedProject[] = [];
+  const maxDepth = 5; // Limit depth to avoid scanning too deep
 
-  try {
-    const entries = fs.readdirSync(parentDir, { withFileTypes: true });
-    
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+  function scanDir(dirPath: string, depth: number) {
+    if (depth > maxDepth) return;
+
+    try {
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
       
-      const projectPath = path.join(parentDir, entry.name);
-      
-      // Skip current workspace
-      if (projectPath === workspacePath) continue;
-      if (entry.name === excludeWorkspace) continue;
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        
+        const fullPath = path.join(dirPath, entry.name);
+        
+        // Skip if this is the excluded workspace
+        if (excludePath && fullPath === excludePath) continue;
+        
+        // Check if this is a .rrce-workflow folder with config
+        if (entry.name === '.rrce-workflow') {
+          const configPath = path.join(fullPath, 'config.yaml');
+          if (fs.existsSync(configPath)) {
+            const projectPath = dirPath; // Parent of .rrce-workflow
+            const projectName = path.basename(projectPath);
+            const config = parseWorkspaceConfig(configPath);
+            
+            const knowledgePath = path.join(fullPath, 'knowledge');
+            const refsPath = path.join(fullPath, 'refs');
+            const tasksPath = path.join(fullPath, 'tasks');
 
-      // Check for .rrce-workflow/config.yaml
-      const configPath = path.join(projectPath, '.rrce-workflow', 'config.yaml');
-      if (!fs.existsSync(configPath)) continue;
-
-      // Parse config to get project details
-      const config = parseWorkspaceConfig(configPath);
-      if (!config) continue;
-
-      const dataPath = path.join(projectPath, '.rrce-workflow');
-      const knowledgePath = path.join(dataPath, 'knowledge');
-      const refsPath = path.join(dataPath, 'refs');
-      const tasksPath = path.join(dataPath, 'tasks');
-
-      projects.push({
-        name: config.name || entry.name,
-        path: projectPath,
-        dataPath,
-        source: 'sibling',
-        storageMode: config.storageMode,
-        knowledgePath: fs.existsSync(knowledgePath) ? knowledgePath : undefined,
-        refsPath: fs.existsSync(refsPath) ? refsPath : undefined,
-        tasksPath: fs.existsSync(tasksPath) ? tasksPath : undefined,
-      });
+            projects.push({
+              name: config?.name || projectName,
+              path: projectPath,
+              dataPath: fullPath,
+              source: 'local',
+              storageMode: config?.storageMode,
+              knowledgePath: fs.existsSync(knowledgePath) ? knowledgePath : undefined,
+              refsPath: fs.existsSync(refsPath) ? refsPath : undefined,
+              tasksPath: fs.existsSync(tasksPath) ? tasksPath : undefined,
+            });
+          }
+          // Don't recurse into .rrce-workflow
+          continue;
+        }
+        
+        // Skip directories that shouldn't be scanned
+        if (SKIP_DIRECTORIES.has(entry.name)) continue;
+        if (entry.name.startsWith('.') && entry.name !== '.rrce-workflow') continue;
+        
+        // Recurse into subdirectories
+        scanDir(fullPath, depth + 1);
+      }
+    } catch {
+      // Ignore permission errors and other issues
     }
-  } catch {
-    // Ignore errors
   }
 
+  scanDir(home, 0);
   return projects;
 }
 
@@ -187,14 +224,10 @@ export function parseWorkspaceConfig(configPath: string): {
  * Get display label for a detected project
  */
 export function getProjectDisplayLabel(project: DetectedProject): string {
-  switch (project.source) {
-    case 'global':
-      return `global: ~/.rrce-workflow/workspaces/${project.name}`;
-    case 'sibling':
-      return `sibling: ${project.path}/.rrce-workflow`;
-    default:
-      return project.dataPath;
+  if (project.source === 'global') {
+    return `~/.rrce-workflow/workspaces/${project.name}`;
   }
+  return project.dataPath;
 }
 
 /**

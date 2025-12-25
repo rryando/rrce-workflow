@@ -7,18 +7,16 @@ import { scanForProjects, getProjectDisplayLabel, type DetectedProject } from '.
 
 /**
  * Run the link-only flow for adding other project knowledge to an existing workspace
- * Supports detecting workspace-scoped sibling projects in addition to global storage
- * Each project source (global/sibling) is shown as a separate option for user to choose
+ * Scans global storage and home directory for .rrce-workflow projects
  */
 export async function runLinkProjectsFlow(
   workspacePath: string, 
   workspaceName: string
 ) {
-  // Scan for projects (global + workspace-scoped siblings)
+  // Scan for projects (global storage + home directory)
   const projects = scanForProjects({
     excludeWorkspace: workspaceName,
     workspacePath: workspacePath,
-    scanSiblings: true,
   });
   
   if (projects.length === 0) {

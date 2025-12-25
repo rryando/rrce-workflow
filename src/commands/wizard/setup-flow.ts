@@ -15,6 +15,7 @@ import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../
 import { copyPromptsToDir } from './utils';
 import { generateVSCodeWorkspace } from './vscode';
 import { type DetectedProject } from '../../lib/detection';
+import { directoryPrompt, isCancelled } from '../../lib/autocomplete-prompt';
 
 interface SetupConfig {
   storageMode: StorageMode;
@@ -210,38 +211,28 @@ async function resolveGlobalPath(): Promise<string | undefined> {
     return defaultPath;
   }
 
-  // Custom path input with pre-filled default
+  // Custom path input with bash-like Tab completion
   const suggestedPath = path.join(process.env.HOME || '~', '.local', 'share', 'rrce-workflow');
-  const customPath = await text({
-    message: 'Enter custom global path:',
+  const customPath = await directoryPrompt({
+    message: 'Enter custom global path (Tab to autocomplete):',
     defaultValue: suggestedPath,
-    placeholder: suggestedPath,
     validate: (value) => {
       if (!value.trim()) {
         return 'Path cannot be empty';
       }
-      // Expand ~ to home directory
-      const expandedPath = value.startsWith('~') 
-        ? value.replace('~', process.env.HOME || '') 
-        : value;
-      
-      if (!checkWriteAccess(expandedPath)) {
-        return `Cannot write to ${expandedPath}. Please choose a writable path.`;
+      if (!checkWriteAccess(value)) {
+        return `Cannot write to ${value}. Please choose a writable path.`;
       }
       return undefined;
     },
   });
 
-  if (isCancel(customPath)) {
+  if (isCancelled(customPath)) {
     return undefined;
   }
 
-  // Expand ~ if present
-  let expandedPath = (customPath as string).startsWith('~')
-    ? (customPath as string).replace('~', process.env.HOME || '')
-    : customPath as string;
-  
   // Ensure path ends with .rrce-workflow so our tools can detect it
+  let expandedPath = customPath as string;
   if (!expandedPath.endsWith('.rrce-workflow')) {
     expandedPath = path.join(expandedPath, '.rrce-workflow');
   }

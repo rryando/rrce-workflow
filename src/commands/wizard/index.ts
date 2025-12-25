@@ -35,11 +35,10 @@ Workspace: ${pc.bold(workspaceName)}`,
     'Context'
   );
 
-  // Scan for existing projects (global + workspace-scoped siblings)
+  // Scan for existing projects (global storage + home directory)
   const detectedProjects = scanForProjects({
     excludeWorkspace: workspaceName,
     workspacePath: workspacePath,
-    scanSiblings: true,
   });
   
   // Check if already configured (using getConfigPath for new/legacy support)
