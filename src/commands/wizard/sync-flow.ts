@@ -6,7 +6,8 @@ import {
   ensureDir, 
   getLocalWorkspacePath, 
   getGlobalWorkspacePath,
-  getEffectiveRRCEHome
+  getEffectiveRRCEHome,
+  getConfigPath
 } from '../../lib/paths';
 import { copyDirRecursive } from './utils';
 
@@ -63,7 +64,7 @@ export async function runSyncToGlobalFlow(workspacePath: string, workspaceName: 
     }
 
     // Update the config to reflect 'both' mode
-    const configFilePath = path.join(workspacePath, '.rrce-workflow.yaml');
+    const configFilePath = getConfigPath(workspacePath);
     let configContent = fs.readFileSync(configFilePath, 'utf-8');
     configContent = configContent.replace(/mode:\s*workspace/, 'mode: both');
     fs.writeFileSync(configFilePath, configContent);

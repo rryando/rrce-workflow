@@ -1,13 +1,13 @@
 import { intro, select, spinner, note, outro, cancel, isCancel } from '@clack/prompts';
 import pc from 'picocolors';
 import * as fs from 'fs';
-import * as path from 'path';
 import { getGitUser } from '../../lib/git';
 import { 
   detectWorkspaceRoot, 
   getWorkspaceName, 
   listGlobalProjects, 
-  getLocalWorkspacePath 
+  getLocalWorkspacePath,
+  getConfigPath
 } from '../../lib/paths';
 
 // Import flows
@@ -38,8 +38,8 @@ Workspace: ${pc.bold(workspaceName)}`,
   // Check for existing projects in global storage
   const existingProjects = listGlobalProjects(workspaceName);
   
-  // Check if already configured
-  const configFilePath = path.join(workspacePath, '.rrce-workflow.yaml');
+  // Check if already configured (using getConfigPath for new/legacy support)
+  const configFilePath = getConfigPath(workspacePath);
   const isAlreadyConfigured = fs.existsSync(configFilePath);
   
   // Check current storage mode from config

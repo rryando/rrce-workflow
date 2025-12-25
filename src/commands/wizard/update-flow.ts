@@ -8,7 +8,8 @@ import {
   resolveAllDataPaths, 
   getAgentPromptPath,
   copyDirToAllStoragePaths,
-  getEffectiveRRCEHome 
+  getEffectiveRRCEHome,
+  getConfigPath
 } from '../../lib/paths';
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
 import { copyPromptsToDir } from './utils';
@@ -55,19 +56,14 @@ export async function runUpdateFlow(
 
     s.start('Updating from package');
 
-    // Update prompts and templates in all storage locations
+    // Update templates in all storage locations (no prompts in data paths)
     for (const dataPath of dataPaths) {
-      // Update prompts
-      const promptsDir = path.join(dataPath, 'prompts');
-      ensureDir(promptsDir);
-      copyPromptsToDir(prompts, promptsDir, '.md');
-
-      // Update templates
+      // Update templates only
       copyDirToAllStoragePaths(path.join(agentCoreDir, 'templates'), 'templates', [dataPath]);
     }
 
     // Also update tool-specific locations if configured
-    const configFilePath = path.join(workspacePath, '.rrce-workflow.yaml');
+    const configFilePath = getConfigPath(workspacePath);
     const configContent = fs.readFileSync(configFilePath, 'utf-8');
 
     if (configContent.includes('copilot: true')) {

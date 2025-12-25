@@ -18,8 +18,10 @@ export function detectWorkspaceRoot(): string {
   let current = process.cwd();
   
   while (current !== '/') {
-    // Check for .git or .rrce-workflow.yaml
+    // Check for .git or .rrce-workflow/config.yaml (new location)
+    // Also check legacy .rrce-workflow.yaml for backwards compatibility
     if (fs.existsSync(path.join(current, '.git')) || 
+        fs.existsSync(path.join(current, '.rrce-workflow', 'config.yaml')) ||
         fs.existsSync(path.join(current, '.rrce-workflow.yaml'))) {
       return current;
     }
@@ -27,6 +29,27 @@ export function detectWorkspaceRoot(): string {
   }
   
   return process.cwd();
+}
+
+/**
+ * Get the config file path for a workspace
+ * New location: .rrce-workflow/config.yaml
+ * Legacy location: .rrce-workflow.yaml (for backwards compatibility)
+ */
+export function getConfigPath(workspaceRoot: string): string {
+  const newPath = path.join(workspaceRoot, '.rrce-workflow', 'config.yaml');
+  const legacyPath = path.join(workspaceRoot, '.rrce-workflow.yaml');
+  
+  // Prefer new location, fall back to legacy
+  if (fs.existsSync(newPath)) {
+    return newPath;
+  }
+  if (fs.existsSync(legacyPath)) {
+    return legacyPath;
+  }
+  
+  // Default to new location for new configs
+  return newPath;
 }
 
 /**
@@ -139,6 +162,7 @@ export function ensureDir(dirPath: string): void {
 
 /**
  * Get path for agent prompts based on tool
+ * IDE-specific locations so IDEs can auto-discover prompts
  */
 export function getAgentPromptPath(workspaceRoot: string, tool: 'copilot' | 'antigravity'): string {
   if (tool === 'copilot') {
@@ -289,7 +313,7 @@ export function getSuggestedGlobalPaths(): Array<{ path: string; label: string; 
 export function getEffectiveRRCEHome(workspaceRoot?: string): string {
   // Check workspace config for custom globalPath
   if (workspaceRoot) {
-    const configPath = path.join(workspaceRoot, '.rrce-workflow.yaml');
+    const configPath = getConfigPath(workspaceRoot);
     if (fs.existsSync(configPath)) {
       try {
         const content = fs.readFileSync(configPath, 'utf-8');

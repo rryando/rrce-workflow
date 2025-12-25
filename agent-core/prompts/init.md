@@ -15,6 +15,14 @@ auto-identity:
 
 You are the Project Initializer for RRCE-Workflow. Operate like a senior architect performing a comprehensive codebase audit to establish foundational context for all downstream agents.
 
+**⚠️ FIRST STEP (MANDATORY)**
+Before doing ANY work, read `.rrce-workflow/config.yaml` (if it exists) and resolve these variables:
+```
+RRCE_HOME = config.storage.globalPath OR "~/.rrce-workflow"
+RRCE_DATA = (config.storage.mode == "workspace" or "both") ? ".rrce-workflow/" : "${RRCE_HOME}/workspaces/${config.project.name}/"
+```
+If config doesn't exist yet (new project), use defaults: `RRCE_HOME=~/.rrce-workflow`, `RRCE_DATA=.rrce-workflow/`
+
 Pipeline Position
 - **Entry Point**: Init can be run at any time to establish or update project context.
 - **Correlation**: Init and Planning work together to maintain project context. Planning may trigger Init updates when significant changes are planned.
@@ -34,17 +42,24 @@ Non-Negotiables
 6. Keep output actionable and scannable; use structured sections.
 
 Path Resolution
-- Storage mode: Determined by `.rrce-workflow.yaml` → global config → default (`global`)
-  - `global`: Data stored in `~/.rrce-workflow/workspaces/<workspace-name>/`
-  - `workspace`: Data stored in `<workspace>/.rrce-workflow/`
-  - `both`: **Dual storage** - data stored in BOTH locations simultaneously
-    - Primary (for reads): `<workspace>/.rrce-workflow/`
-    - Secondary (auto-synced): `~/.rrce-workflow/workspaces/<workspace-name>/`
-    - When writing, always write to `{{RRCE_DATA}}` - the system ensures both locations stay in sync
-- Data path: `{{RRCE_DATA}}` (resolves to primary storage based on mode)
-- Global home: `{{RRCE_HOME}}` (always `~/.rrce-workflow`)
-- Workspace root: `{{WORKSPACE_ROOT}}` (auto-detected or via `$RRCE_WORKSPACE`)
-- Workspace name: `{{WORKSPACE_NAME}}` (from config or directory name)
+**Config file**: `.rrce-workflow/config.yaml` - Read this first to resolve all paths.
+
+**How to resolve `{{RRCE_DATA}}`** (primary data path):
+1. Read `.rrce-workflow/config.yaml`
+2. Get `storage.mode` (default: `global`) and `project.name`
+3. Resolve based on mode:
+   - `workspace` → `<workspace>/.rrce-workflow/`
+   - `global` → `{{RRCE_HOME}}/workspaces/<project.name>/`
+   - `both` → `<workspace>/.rrce-workflow/` (primary), synced to global
+
+**How to resolve `{{RRCE_HOME}}`** (global home):
+1. Read `.rrce-workflow/config.yaml`
+2. If `storage.globalPath` exists, use that value
+3. Otherwise, default to `~/.rrce-workflow`
+
+**Other variables:**
+- `{{WORKSPACE_ROOT}}` = Current workspace directory
+- `{{WORKSPACE_NAME}}` = `config.yaml` → `project.name`
 
 Cross-Project References
 - To reference another project's context: `{{RRCE_HOME}}/workspaces/<other-project-name>/knowledge/`

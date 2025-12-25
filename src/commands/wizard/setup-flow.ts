@@ -250,12 +250,11 @@ async function generateConfiguration(
   
   for (const dataPath of dataPaths) {
     ensureDir(dataPath);
-    // Create agent metadata subdirectories
+    // Create agent metadata subdirectories (data only, no prompts)
     ensureDir(path.join(dataPath, 'knowledge'));
     ensureDir(path.join(dataPath, 'refs'));
     ensureDir(path.join(dataPath, 'tasks'));
     ensureDir(path.join(dataPath, 'templates'));
-    ensureDir(path.join(dataPath, 'prompts'));
   }
 
   // Get the agent-core directory path
@@ -267,15 +266,8 @@ async function generateConfiguration(
   // Also copy templates to all storage locations
   copyDirToAllStoragePaths(path.join(agentCoreDir, 'templates'), 'templates', dataPaths);
 
-  // Load prompts
+  // Load prompts for IDE-specific locations
   const prompts = loadPromptsFromDir(getAgentCorePromptsDir());
-
-  // Copy prompts to all storage locations (for cross-project access)
-  for (const dataPath of dataPaths) {
-    const promptsDir = path.join(dataPath, 'prompts');
-    ensureDir(promptsDir);
-    copyPromptsToDir(prompts, promptsDir, '.md');
-  }
 
   // Copy prompts to tool-specific locations (for IDE integration)
   if (config.tools.includes('copilot')) {
@@ -290,8 +282,10 @@ async function generateConfiguration(
     copyPromptsToDir(prompts, antigravityPath, '.md');
   }
 
-  // Create workspace config
-  const workspaceConfigPath = path.join(workspacePath, '.rrce-workflow.yaml');
+  // Create workspace config (inside .rrce-workflow folder)
+  const workspaceConfigPath = path.join(workspacePath, '.rrce-workflow', 'config.yaml');
+  ensureDir(path.dirname(workspaceConfigPath));
+  
   let configContent = `# RRCE-Workflow Configuration
 version: 1
 

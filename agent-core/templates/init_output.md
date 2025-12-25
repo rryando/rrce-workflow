@@ -1,10 +1,10 @@
 <!--
   RRCE Template Variables:
-  - {{RRCE_DATA}}: Primary storage path (resolves based on storage mode in .rrce-workflow.yaml)
-      - global: ~/.rrce-workflow/workspaces/<workspace-name>/
+  - {{RRCE_DATA}}: Primary storage path (resolves based on storage mode in .rrce-workflow/config.yaml)
+      - global: {{RRCE_HOME}}/workspaces/<workspace-name>/
       - workspace: <workspace>/.rrce-workflow/
       - both: <workspace>/.rrce-workflow/ (primary, auto-synced to global)
-  - {{RRCE_HOME}}: Always ~/.rrce-workflow
+  - {{RRCE_HOME}}: Global home (default: ~/.rrce-workflow, customizable via storage.globalPath in config)
   - {{WORKSPACE_ROOT}}: Workspace root directory
   - {{WORKSPACE_NAME}}: Workspace name from config or directory name
 -->

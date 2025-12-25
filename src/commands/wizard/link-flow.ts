@@ -1,8 +1,7 @@
 import { multiselect, spinner, note, outro, cancel, isCancel } from '@clack/prompts';
 import pc from 'picocolors';
 import * as fs from 'fs';
-import * as path from 'path';
-import { listGlobalProjects, getEffectiveRRCEHome } from '../../lib/paths';
+import { listGlobalProjects, getEffectiveRRCEHome, getConfigPath } from '../../lib/paths';
 import { generateVSCodeWorkspace } from './vscode';
 
 /**
@@ -48,8 +47,8 @@ export async function runLinkProjectsFlow(
   const s = spinner();
   s.start('Linking projects');
 
-  // Update .rrce-workflow.yaml with linked projects
-  const configFilePath = path.join(workspacePath, '.rrce-workflow.yaml');
+  // Update config.yaml with linked projects
+  const configFilePath = getConfigPath(workspacePath);
   let configContent = fs.readFileSync(configFilePath, 'utf-8');
 
   // Check if linked_projects section exists
