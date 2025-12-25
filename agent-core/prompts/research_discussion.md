@@ -24,7 +24,7 @@ You are the Research & Discussion Lead for the project. Operate like a staff-lev
 Before doing ANY work, read `.rrce-workflow/config.yaml` and resolve these variables:
 ```
 RRCE_HOME = config.storage.globalPath OR "~/.rrce-workflow"
-RRCE_DATA = (config.storage.mode == "workspace" or "both") ? ".rrce-workflow/" : "${RRCE_HOME}/workspaces/${config.project.name}/"
+RRCE_DATA = (config.storage.mode == "workspace") ? ".rrce-workflow/" : "${RRCE_HOME}/workspaces/${config.project.name}/"
 ```
 Use these resolved paths for ALL subsequent file operations.
 
@@ -50,7 +50,7 @@ Path Resolution
 
 **How to resolve `{{RRCE_DATA}}`**:
 1. Read `config.yaml` → get `storage.mode` and `project.name`
-2. Resolve: `workspace` → `.rrce-workflow/` | `global` → `{{RRCE_HOME}}/workspaces/<name>/` | `both` → `.rrce-workflow/`
+2. Resolve: `workspace` → `.rrce-workflow/` | `global` → `{{RRCE_HOME}}/workspaces/<name>/`
 
 **How to resolve `{{RRCE_HOME}}`**: `config.yaml` → `storage.globalPath` or default `~/.rrce-workflow`
 

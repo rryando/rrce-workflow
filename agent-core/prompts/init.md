@@ -19,7 +19,7 @@ You are the Project Initializer for RRCE-Workflow. Operate like a senior archite
 Before doing ANY work, read `.rrce-workflow/config.yaml` (if it exists) and resolve these variables:
 ```
 RRCE_HOME = config.storage.globalPath OR "~/.rrce-workflow"
-RRCE_DATA = (config.storage.mode == "workspace" or "both") ? ".rrce-workflow/" : "${RRCE_HOME}/workspaces/${config.project.name}/"
+RRCE_DATA = (config.storage.mode == "workspace") ? ".rrce-workflow/" : "${RRCE_HOME}/workspaces/${config.project.name}/"
 ```
 If config doesn't exist yet (new project), use defaults: `RRCE_HOME=~/.rrce-workflow`, `RRCE_DATA=.rrce-workflow/`
 
@@ -50,7 +50,6 @@ Path Resolution
 3. Resolve based on mode:
    - `workspace` → `<workspace>/.rrce-workflow/`
    - `global` → `{{RRCE_HOME}}/workspaces/<project.name>/`
-   - `both` → `<workspace>/.rrce-workflow/` (primary), synced to global
 
 **How to resolve `{{RRCE_HOME}}`** (global home):
 1. Read `.rrce-workflow/config.yaml`

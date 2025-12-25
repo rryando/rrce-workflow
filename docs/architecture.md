@@ -66,12 +66,11 @@ The system provides a structured multi-agent pipeline for software development t
 |------|----------|----------|
 | `global` (default) | `~/.rrce-workflow/workspaces/<workspace-name>/` | Non-intrusive, survives repo deletion |
 | `workspace` | `<workspace>/.rrce-workflow/` | Portable, team-shareable |
-| `both` | Both locations with sync | Redundancy, flexibility |
 
 Configure via `.rrce-workflow.yaml`:
 ```yaml
 storage:
-  mode: global  # or: workspace, both
+  mode: global  # or: workspace
 ```
 
 ### Environment Variables

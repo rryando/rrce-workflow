@@ -58,10 +58,12 @@ export function loadPromptsFromDir(dirPath: string): ParsedPrompt[] {
 /**
  * Get the agent-core root directory
  * Works with both npm/tsx and Bun
+ * When bundled: dist/index.js -> go up one level to project root -> agent-core
  */
 export function getAgentCoreDir(): string {
-  // Relative to this file: src/lib/prompts.ts -> ../../agent-core
-  return path.join(__dirname, '..', '..', 'agent-core');
+  // After esbuild bundling, the file is at dist/index.js
+  // We need to go up one level to project root, then into agent-core
+  return path.join(__dirname, '..', 'agent-core');
 }
 
 /**

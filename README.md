@@ -31,7 +31,7 @@ npx rrce-workflow
 ```
 
 The wizard will:
-1. Ask where to store workflow data (global, workspace, or both)
+1. Ask where to store workflow data (global or workspace)
 2. Let you choose a custom global path if the default isn't writable
 3. Ask which AI tools you use (GitHub Copilot, Antigravity)
 4. Set up prompts and knowledge folders
@@ -89,7 +89,7 @@ All agents read `.rrce-workflow/config.yaml` to resolve paths:
 
 ```yaml
 storage:
-  mode: workspace        # or: global, both
+  mode: workspace        # or: global
   globalPath: "~/.rrce-workflow"  # optional custom path
 
 project:
@@ -97,13 +97,11 @@ project:
 ```
 
 Agents resolve `{{RRCE_DATA}}` based on storage mode:
-- `workspace` → `.rrce-workflow/`
 - `global` → `~/.rrce-workflow/workspaces/my-project/`
-- `both` → `.rrce-workflow/` (primary, synced to global)
 
 ### Cross-Project References
 
-When using `global` or `both` mode, you can reference other projects:
+When using `global` mode, you can reference other projects:
 
 ```
 ~/.rrce-workflow/workspaces/other-project/knowledge/project-context.md
@@ -151,7 +149,6 @@ When you run the wizard on an already-configured project, you'll see:
 |------|----------|----------|
 | `global` | `~/.rrce-workflow/workspaces/<name>/` | Clean workspace, cross-project references |
 | `workspace` | `.rrce-workflow/` | Team sharing, portable with repo |
-| `both` | Both locations (synced) | Full redundancy + cross-project access |
 
 ---
 
