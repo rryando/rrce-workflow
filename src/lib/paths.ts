@@ -215,3 +215,94 @@ export function syncMetadataToAll(agentCorePath: string, dataPaths: string[]): v
     copyDirToAllStoragePaths(sourceDir, dir, dataPaths);
   }
 }
+
+/**
+ * Check if a directory path is writable
+ * Creates a test file and removes it to verify write access
+ */
+export function checkWriteAccess(dirPath: string): boolean {
+  const testFile = path.join(dirPath, '.rrce-write-test');
+  
+  try {
+    // Ensure directory exists first
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+    
+    // Try to write and delete a test file
+    fs.writeFileSync(testFile, 'write-test');
+    fs.unlinkSync(testFile);
+    return true;
+  } catch {
+    // Clean up if test file was created but couldn't be deleted
+    try {
+      if (fs.existsSync(testFile)) {
+        fs.unlinkSync(testFile);
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+    return false;
+  }
+}
+
+/**
+ * Get the default RRCE_HOME path (from env or ~/.rrce-workflow)
+ */
+export function getDefaultRRCEHome(): string {
+  return process.env.RRCE_HOME || path.join(process.env.HOME || '~', '.rrce-workflow');
+}
+
+/**
+ * Get suggested global paths for user selection
+ * Returns array of { path, label, isWritable } objects
+ */
+export function getSuggestedGlobalPaths(): Array<{ path: string; label: string; isWritable: boolean }> {
+  const suggestions: Array<{ path: string; label: string; isWritable: boolean }> = [];
+  
+  // Option 1: RRCE_HOME environment variable (if explicitly set)
+  if (process.env.RRCE_HOME) {
+    suggestions.push({
+      path: process.env.RRCE_HOME,
+      label: 'RRCE_HOME (environment)',
+      isWritable: checkWriteAccess(process.env.RRCE_HOME),
+    });
+  }
+  
+  // Option 2: Standard ~/.rrce-workflow
+  const homeDefault = path.join(process.env.HOME || '~', '.rrce-workflow');
+  if (!process.env.RRCE_HOME || process.env.RRCE_HOME !== homeDefault) {
+    suggestions.push({
+      path: homeDefault,
+      label: '~/.rrce-workflow (default)',
+      isWritable: checkWriteAccess(homeDefault),
+    });
+  }
+  
+  return suggestions;
+}
+
+/**
+ * Get effective RRCE_HOME by reading from workspace config if available
+ * Falls back to default RRCE_HOME if no custom path is configured
+ */
+export function getEffectiveRRCEHome(workspaceRoot?: string): string {
+  // Check workspace config for custom globalPath
+  if (workspaceRoot) {
+    const configPath = path.join(workspaceRoot, '.rrce-workflow.yaml');
+    if (fs.existsSync(configPath)) {
+      try {
+        const content = fs.readFileSync(configPath, 'utf-8');
+        const globalPathMatch = content.match(/globalPath:\s*["']?([^"'\n]+)["']?/);
+        if (globalPathMatch?.[1]) {
+          return globalPathMatch[1].trim();
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }
+  
+  // Fall back to default
+  return getDefaultRRCEHome();
+}

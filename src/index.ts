@@ -1,4 +1,4 @@
-import { runWizard } from './commands/wizard';
+import { runWizard } from './commands/wizard/index';
 import { runSelector } from './commands/selector';
 
 // Get command from args

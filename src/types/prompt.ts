@@ -41,13 +41,14 @@ export interface RRCEConfig {
   version: number;
   storage: {
     mode: StorageMode;
+    globalPath?: string;  // Custom global storage path (when not using default ~/.rrce-workflow)
   };
-  workspace: {
+  project: {
     name: string;
-    path: string;
   };
   tools: {
     copilot: boolean;
     antigravity: boolean;
   };
+  linked_projects?: string[];
 }
