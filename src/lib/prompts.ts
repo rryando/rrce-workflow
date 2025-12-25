@@ -1,7 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import matter from 'gray-matter';
 import { PromptFrontmatterSchema, type ParsedPrompt } from '../types/prompt';
+
+// Get __dirname equivalent for ESM (works with both npm/tsx and Bun)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Parse a prompt file and extract frontmatter + content
@@ -52,10 +57,11 @@ export function loadPromptsFromDir(dirPath: string): ParsedPrompt[] {
 
 /**
  * Get the agent-core root directory
+ * Works with both npm/tsx and Bun
  */
 export function getAgentCoreDir(): string {
-  // Relative to the package root
-  return path.join(import.meta.dir, '..', '..', 'agent-core');
+  // Relative to this file: src/lib/prompts.ts -> ../../agent-core
+  return path.join(__dirname, '..', '..', 'agent-core');
 }
 
 /**
@@ -64,3 +70,4 @@ export function getAgentCoreDir(): string {
 export function getAgentCorePromptsDir(): string {
   return path.join(getAgentCoreDir(), 'prompts');
 }
+
