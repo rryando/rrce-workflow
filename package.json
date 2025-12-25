@@ -1,6 +1,6 @@
 {
   "name": "rrce-workflow",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "RRCE-Workflow TUI - Agentic code workflow generator for AI-assisted development",
   "author": "RRCE Team",
   "license": "MIT",
@@ -35,22 +35,23 @@
     "bin"
   ],
   "scripts": {
-    "dev": "bun run src/index.ts",
-    "wizard": "bun run src/index.ts wizard",
-    "select": "bun run src/index.ts select",
-    "start": "bun run src/index.ts"
+    "dev": "npx tsx src/index.ts",
+    "wizard": "npx tsx src/index.ts wizard",
+    "select": "npx tsx src/index.ts select",
+    "start": "npx tsx src/index.ts"
   },
   "engines": {
-    "node": ">=18",
-    "bun": ">=1.0"
+    "node": ">=18"
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
     "gray-matter": "^4.0.3",
     "picocolors": "^1.1.1",
+    "tsx": "^4.21.0",
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/node": "^25.0.3",
+    "typescript": "^5.9.3"
   }
 }
