@@ -8,7 +8,8 @@ import { loadMCPConfig, saveMCPConfig, setProjectConfig, getMCPConfigPath, ensur
 import type { MCPConfig, MCPProjectConfig } from './types';
 import { scanForProjects, type DetectedProject } from '../lib/detection';
 import { startMCPServer, stopMCPServer, getMCPServerStatus } from './server';
-import { checkInstallStatus, installToConfig } from './install';
+import { checkInstallStatus, installToConfig, isInstalledAnywhere, getTargetLabel, type InstallTarget, type InstallStatus } from './install';
+import { detectWorkspaceRoot } from '../lib/paths';
 
 /**
  * Run the MCP TUI
@@ -40,6 +41,9 @@ export async function runMCP(subcommand?: string): Promise<void> {
   // Show interactive menu
   intro(pc.bgCyan(pc.black(' RRCE MCP Hub ')));
 
+  // Get workspace path for workspace-specific checks
+  const workspacePath = detectWorkspaceRoot();
+
   // 1. Check Global Path (Required)
   const globalPathCheck = await ensureMCPGlobalPath();
   if (!globalPathCheck.configured) {
@@ -50,30 +54,70 @@ export async function runMCP(subcommand?: string): Promise<void> {
     }
   }
 
-  // 2. Check Installation Status (Wizard)
-  const status = checkInstallStatus();
-  if (!status.antigravity && !status.claude) {
+  // 2. Check Installation Status - Improved Flow
+  const status = checkInstallStatus(workspacePath);
+  const installed = isInstalledAnywhere(workspacePath);
+  
+  if (!installed) {
+    // Not installed anywhere → Install → Configure → Start Server
+    note(
+      `${pc.bold('Welcome to RRCE MCP Hub!')}
+
+MCP (Model Context Protocol) allows AI assistants to access your 
+project knowledge in real-time. Let's get you set up.`,
+      'Getting Started'
+    );
+
     const shouldInstall = await confirm({
-      message: 'MCP server is not installed in your IDEs. Install now?',
+      message: 'Install MCP server to your IDE(s)?',
       initialValue: true,
     });
 
     if (shouldInstall && !isCancel(shouldInstall)) {
-      await handleInstallWizard();
+      await handleInstallWizard(workspacePath);
+      
+      // After install, configure projects
+      await handleConfigure();
+      
+      // Then start server
+      const shouldStart = await confirm({
+        message: 'Start the MCP server now?',
+        initialValue: true,
+      });
+      
+      if (shouldStart && !isCancel(shouldStart)) {
+        await handleStartServer();
+      }
     }
+    
+    outro(pc.green('MCP Hub setup complete!'));
+    return;
   }
 
+  // 3. Check if projects are configured
+  const config = loadMCPConfig();
+  const exposedCount = config.projects.filter(p => p.expose).length;
+  
+  if (exposedCount === 0 && !config.defaults.includeNew) {
+    // Installed but no projects configured
+    note('MCP is installed but no projects are exposed. Let\'s configure that.', 'Configuration Needed');
+    await handleConfigure();
+  }
+
+  // Main Menu Loop
   let running = true;
   while (running) {
     const serverStatus = getMCPServerStatus();
-    const serverLabel = serverStatus.running ? pc.green('Running') : pc.dim('Stopped');
+    const serverLabel = serverStatus.running ? pc.green('● Running') : pc.dim('○ Stopped');
+    const currentStatus = checkInstallStatus(workspacePath);
+    const installedCount = [currentStatus.antigravity, currentStatus.claude, currentStatus.vscodeGlobal, currentStatus.vscodeWorkspace].filter(Boolean).length;
 
     const action = await select({
       message: 'What would you like to do?',
       options: [
-        { value: 'start', label: `▶️  Start MCP server`, hint: `Current status: ${serverLabel}` },
+        { value: 'start', label: `▶️  Start MCP server`, hint: serverLabel },
         { value: 'configure', label: '⚙️  Configure projects', hint: 'Choose which projects to expose' },
-        { value: 'install', label: '📥 Install to IDE', hint: 'Add to Antigravity or Claude Desktop' },
+        { value: 'install', label: '📥 Install to IDE', hint: `${installedCount} IDE(s) configured` },
         { value: 'status', label: '📋 View status', hint: 'See details' },
         { value: 'help', label: '❓ Help', hint: 'Learn about MCP Hub' },
         { value: 'exit', label: '↩  Exit', hint: 'Return to shell' },
@@ -88,13 +132,12 @@ export async function runMCP(subcommand?: string): Promise<void> {
     switch (action) {
       case 'start':
         await handleStartServer();
-        // After start returns (user stopped it), we loop back to menu
         break;
       case 'configure':
         await handleConfigure();
         break;
       case 'install':
-        await handleInstallWizard();
+        await handleInstallWizard(workspacePath);
         break;
       case 'status':
         await handleShowStatus();
@@ -111,12 +154,33 @@ export async function runMCP(subcommand?: string): Promise<void> {
   outro(pc.green('MCP Hub closed.'));
 }
 
-async function handleInstallWizard(): Promise<void> {
-  const status = checkInstallStatus();
+/**
+ * Install Wizard with VSCode support
+ */
+async function handleInstallWizard(workspacePath?: string): Promise<void> {
+  const status = checkInstallStatus(workspacePath);
   
-  const options = [
-    { value: 'antigravity', label: 'Antigravity IDE', hint: status.antigravity ? 'Installed' : 'Not installed' },
-    { value: 'claude', label: 'Claude Desktop', hint: status.claude ? 'Installed' : 'Not installed' },
+  const options: { value: string; label: string; hint: string }[] = [
+    { 
+      value: 'antigravity', 
+      label: 'Antigravity IDE', 
+      hint: status.antigravity ? pc.green('✓ Installed') : pc.dim('Not installed'),
+    },
+    { 
+      value: 'vscode-global', 
+      label: 'VSCode (Global)', 
+      hint: status.vscodeGlobal ? pc.green('✓ Installed') : pc.dim('Not installed'),
+    },
+    { 
+      value: 'vscode-workspace', 
+      label: 'VSCode (This Workspace)', 
+      hint: status.vscodeWorkspace ? pc.green('✓ Installed') : pc.dim('Not installed'),
+    },
+    { 
+      value: 'claude', 
+      label: 'Claude Desktop', 
+      hint: status.claude ? pc.green('✓ Installed') : pc.dim('Not installed'),
+    },
   ];
 
   const selected = await multiselect({
@@ -124,6 +188,8 @@ async function handleInstallWizard(): Promise<void> {
     options,
     initialValues: [
       ...(status.antigravity ? ['antigravity'] : []),
+      ...(status.vscodeGlobal ? ['vscode-global'] : []),
+      ...(status.vscodeWorkspace ? ['vscode-workspace'] : []),
       ...(status.claude ? ['claude'] : []),
     ],
     required: false,
@@ -131,12 +197,13 @@ async function handleInstallWizard(): Promise<void> {
 
   if (isCancel(selected)) return;
 
-  const targets = selected as string[];
-  const results = [];
+  const targets = selected as InstallTarget[];
+  const results: string[] = [];
 
   for (const target of targets) {
-    const success = installToConfig(target as 'antigravity' | 'claude');
-    results.push(`${target}: ${success ? pc.green('Success') : pc.red('Failed')}`);
+    const success = installToConfig(target, workspacePath);
+    const label = getTargetLabel(target);
+    results.push(`${label}: ${success ? pc.green('✓ Success') : pc.red('✗ Failed')}`);
   }
 
   if (results.length > 0) {
@@ -145,8 +212,7 @@ async function handleInstallWizard(): Promise<void> {
 }
 
 /**
- * Start the MCP server - Interactive Mode
- * Starts the server and streams logs to the console
+ * Start the MCP server - Interactive Mode with enhanced TUI
  */
 async function handleStartServer(): Promise<void> {
   const fs = await import('fs');
@@ -154,16 +220,21 @@ async function handleStartServer(): Promise<void> {
 
   // Check if projects are configured
   const config = loadMCPConfig();
-  const exposedCount = config.projects.filter(p => p.expose).length;
-  // If no projects explicitly exposed, check default policy? 
-  // Actually, we should warn if NO projects are exposed.
-  if (exposedCount === 0 && !config.defaults.includeNew) {
+  const projects = scanForProjects();
+  const exposedProjects = projects.filter(p => {
+    const cfg = config.projects.find(c => c.name === p.name);
+    return cfg?.expose ?? config.defaults.includeNew;
+  });
+  
+  if (exposedProjects.length === 0) {
     const shouldConfig = await confirm({
       message: 'No projects are currently exposed. Configure now?',
       initialValue: true,
     });
     if (shouldConfig && !isCancel(shouldConfig)) {
       await handleConfigure();
+      // Reload after config
+      return handleStartServer();
     }
   }
 
@@ -179,42 +250,60 @@ async function handleStartServer(): Promise<void> {
 
   if (isCancel(portInput)) return;
 
-  // Save port to config (in memory for now, or persist?)
-  // Let's persist it if changed
   const newPort = parseInt(portInput as string, 10);
   if (newPort !== config.server.port) {
     config.server.port = newPort;
     saveMCPConfig(config);
   }
 
-  // Clear screen for server view
   console.clear();
   
   const logPath = getLogFilePath();
+  const workspacePath = detectWorkspaceRoot();
   
-  // Render function for the TUI
-  const renderHeader = () => {
+  // Build exposed project names for sticky display
+  const exposedNames = exposedProjects.map(p => p.name).slice(0, 5);
+  const exposedLabel = exposedNames.length > 0 
+    ? exposedNames.join(', ') + (exposedProjects.length > 5 ? ` (+${exposedProjects.length - 5} more)` : '')
+    : pc.dim('(none)');
+
+  // Render function for the enhanced TUI
+  const render = (logs: string[] = []) => {
     console.clear();
-    console.log(pc.cyan('╔═══════════════════════════════════════════╗'));
-    console.log(pc.cyan('║           RRCE MCP Hub Running            ║'));
-    console.log(pc.cyan('╚═══════════════════════════════════════════╝'));
-    console.log(pc.dim('Server is running in Stdio mode (JSON-RPC).'));
-    console.log(pc.dim(`Port: ${newPort} | PID: ${process.pid}`));
-    console.log(pc.dim(`Logging to: ${logPath}`));
-    console.log(pc.dim('---------------------------------------------'));
+    
+    // Header
+    console.log(pc.cyan('╔═══════════════════════════════════════════════════════════════╗'));
+    console.log(pc.cyan('║') + pc.bold(pc.white('                    RRCE MCP Hub Running                      ')) + pc.cyan('║'));
+    console.log(pc.cyan('╠═══════════════════════════════════════════════════════════════╣'));
+    
+    // Log area (show last 10 lines)
+    const logLines = logs.slice(-10);
+    const emptyLines = 10 - logLines.length;
+    
+    for (let i = 0; i < emptyLines; i++) {
+      console.log(pc.cyan('║') + ' '.repeat(63) + pc.cyan('║'));
+    }
+    for (const line of logLines) {
+      const truncated = line.substring(0, 61).padEnd(61);
+      console.log(pc.cyan('║') + ' ' + pc.dim(truncated) + ' ' + pc.cyan('║'));
+    }
+    
+    // Sticky info bar (2nd from bottom)
+    console.log(pc.cyan('╠═══════════════════════════════════════════════════════════════╣'));
+    const infoLine = ` 📋 ${exposedLabel} │ Port: ${newPort} │ PID: ${process.pid}`.substring(0, 61).padEnd(61);
+    console.log(pc.cyan('║') + pc.yellow(infoLine) + ' ' + pc.cyan('║'));
+    
+    // Command bar (bottom)
+    console.log(pc.cyan('╠═══════════════════════════════════════════════════════════════╣'));
+    const cmdLine = ` q:Quit  p:Projects  i:Install  r:Reload  c:Clear  ?:Help`;
+    console.log(pc.cyan('║') + pc.dim(cmdLine.padEnd(63)) + pc.cyan('║'));
+    console.log(pc.cyan('╚═══════════════════════════════════════════════════════════════╝'));
   };
 
-  const renderFooter = () => {
-    console.log(pc.dim('---------------------------------------------'));
-    console.log(pc.bgBlue(pc.white(pc.bold(' COMMANDS '))));
-    console.log(`${pc.bold('q')}: Stop & Quit   ${pc.bold('g')}: Configure Projects   ${pc.bold('p')}: Change Port`);
-  };
-
-  renderHeader();
-  renderFooter(); // Initial render
+  let logBuffer: string[] = [];
+  render(logBuffer);
 
   try {
-    // Start server (hooks up Stdio transport)
     await startMCPServer();
     
     // Tail logs setup
@@ -226,8 +315,6 @@ async function handleStartServer(): Promise<void> {
 
     let isRunning = true;
 
-    // Loop for TUI
-    // We need raw mode to capture keys without Enter
     if (process.stdin.setRawMode) {
       process.stdin.setRawMode(true);
       process.stdin.resume();
@@ -235,24 +322,71 @@ async function handleStartServer(): Promise<void> {
     }
 
     return new Promise<void>((resolve) => {
-      // Key handler
+      const cleanup = () => {
+        isRunning = false;
+        clearInterval(interval);
+        if (process.stdin.setRawMode) {
+          process.stdin.setRawMode(false);
+        }
+        process.stdin.removeListener('data', onKey);
+        process.stdin.pause();
+        stopMCPServer();
+        console.log('');
+      };
+
       const onKey = async (key: string) => {
-        // Ctrl+C or q
+        // Ctrl+C or q - Quit
         if (key === '\u0003' || key.toLowerCase() === 'q') {
           cleanup();
-          resolve(); 
+          resolve();
+          return;
         }
         
-        // p - Change Port (Stop, loop back to menu implies resolve)
-        // g - Configure (Stop, loop back)
-        if (key.toLowerCase() === 'p' || key.toLowerCase() === 'g') {
+        // p - Reconfigure projects
+        if (key.toLowerCase() === 'p') {
           cleanup();
-          // We need to signal what to do next?
-          // Actually, handleStartServer just returns. The main loop will show menu.
-          // User has to click 'configure' manually.
-          // To auto-jump, I'd need to return an action.
-          // But 'Return to menu' is good enough for now.
-          resolve(); 
+          console.clear();
+          await handleConfigure();
+          resolve();
+          return;
+        }
+        
+        // i - Install to additional IDEs
+        if (key.toLowerCase() === 'i') {
+          cleanup();
+          console.clear();
+          await handleInstallWizard(workspacePath);
+          resolve();
+          return;
+        }
+        
+        // r - Reload config
+        if (key.toLowerCase() === 'r') {
+          logBuffer.push('[INFO] Reloading configuration...');
+          render(logBuffer);
+          return;
+        }
+        
+        // c - Clear logs
+        if (key.toLowerCase() === 'c') {
+          logBuffer = [];
+          render(logBuffer);
+          return;
+        }
+        
+        // ? - Show help
+        if (key === '?') {
+          logBuffer.push('─'.repeat(40));
+          logBuffer.push('Commands:');
+          logBuffer.push('  q - Stop server and return to menu');
+          logBuffer.push('  p - Reconfigure exposed projects');
+          logBuffer.push('  i - Install to additional IDEs');
+          logBuffer.push('  r - Reload configuration');
+          logBuffer.push('  c - Clear log display');
+          logBuffer.push('  ? - Show this help');
+          logBuffer.push('─'.repeat(40));
+          render(logBuffer);
+          return;
         }
       };
 
@@ -265,33 +399,25 @@ async function handleStartServer(): Promise<void> {
         if (fs.existsSync(logPath)) {
           const stats = fs.statSync(logPath);
           if (stats.size > lastSize) {
-            const stream = fs.createReadStream(logPath, {
-              start: lastSize,
-              end: stats.size,
-              encoding: 'utf-8',
-            });
+            const buffer = Buffer.alloc(stats.size - lastSize);
+            const fd = fs.openSync(logPath, 'r');
+            fs.readSync(fd, buffer, 0, buffer.length, lastSize);
+            fs.closeSync(fd);
             
-            stream.on('data', (chunk) => {
-              // Just write to stderr/stdout
-              process.stderr.write(chunk);
-            });
+            const newContent = buffer.toString('utf-8');
+            const newLines = newContent.split('\n').filter(l => l.trim());
+            logBuffer.push(...newLines);
+            
+            // Keep only last 100 lines in buffer
+            if (logBuffer.length > 100) {
+              logBuffer = logBuffer.slice(-100);
+            }
             
             lastSize = stats.size;
+            render(logBuffer);
           }
         }
       }, 500);
-
-      const cleanup = () => {
-        isRunning = false;
-        clearInterval(interval);
-        if (process.stdin.setRawMode) {
-          process.stdin.setRawMode(false);
-        }
-        process.stdin.removeListener('data', onKey);
-        process.stdin.pause();
-        stopMCPServer();
-        console.log('');
-      };
     });
 
   } catch (error) {
@@ -360,6 +486,8 @@ async function handleShowStatus(): Promise<void> {
 
   const config = loadMCPConfig();
   const projects = scanForProjects();
+  const workspacePath = detectWorkspaceRoot();
+  const installStatus = checkInstallStatus(workspacePath);
   
   s.stop('Projects loaded');
 
@@ -369,6 +497,13 @@ async function handleShowStatus(): Promise<void> {
   }
 
   const lines: string[] = [
+    `${pc.bold('Installation Status')}`,
+    '',
+    `  Antigravity:      ${installStatus.antigravity ? pc.green('✓ Installed') : pc.dim('Not installed')}`,
+    `  VSCode (Global):  ${installStatus.vscodeGlobal ? pc.green('✓ Installed') : pc.dim('Not installed')}`,
+    `  VSCode (Workspace): ${installStatus.vscodeWorkspace ? pc.green('✓ Installed') : pc.dim('Not installed')}`,
+    `  Claude Desktop:   ${installStatus.claude ? pc.green('✓ Installed') : pc.dim('Not installed')}`,
+    '',
     `${pc.bold('Project Status')}`,
     '',
   ];
@@ -503,10 +638,10 @@ access your project knowledge in real-time. The RRCE MCP Hub
 provides a central server that exposes selected projects.
 
 ${pc.bold('MENU OPTIONS')}
-  ${pc.cyan('View project status')}   See which projects are exposed
-  ${pc.cyan('Configure projects')}    Choose which projects to expose
   ${pc.cyan('Start MCP server')}      Start the server for AI access
-  ${pc.cyan('Stop MCP server')}       Stop the running server
+  ${pc.cyan('Configure projects')}    Choose which projects to expose
+  ${pc.cyan('Install to IDE')}        Add to Antigravity, VSCode, or Claude
+  ${pc.cyan('View status')}           See which projects are exposed
 
 ${pc.bold('DIRECT COMMANDS')}
   ${pc.dim('rrce-workflow mcp start')}    Start server directly
@@ -514,29 +649,21 @@ ${pc.bold('DIRECT COMMANDS')}
   ${pc.dim('rrce-workflow mcp status')}   Show status directly
   ${pc.dim('rrce-workflow mcp help')}     Show this help
 
-${pc.bold('CLAUDE DESKTOP SETUP')}
-Add to ${pc.cyan('~/.config/claude/claude_desktop_config.json')}:
-${pc.dim(`{
-  "mcpServers": {
-    "rrce": {
-      "command": "npx",
-      "args": ["rrce-workflow", "mcp", "start"]
-    }
-  }
-}`)}
+${pc.bold('IDE INSTALLATION')}
+  ${pc.cyan('Antigravity')}    ~/.gemini/antigravity/mcp_config.json
+  ${pc.cyan('VSCode Global')} ~/.config/Code/User/settings.json
+  ${pc.cyan('VSCode Workspace')} .vscode/mcp.json
+  ${pc.cyan('Claude Desktop')} ~/.config/claude/claude_desktop_config.json
+
+${pc.bold('SERVER COMMANDS')} (while running)
+  ${pc.cyan('q')} Stop and quit       ${pc.cyan('p')} Reconfigure projects
+  ${pc.cyan('i')} Install to IDE      ${pc.cyan('r')} Reload config
+  ${pc.cyan('c')} Clear logs          ${pc.cyan('?')} Show help
 
 ${pc.bold('RESOURCES EXPOSED')}
   ${pc.cyan('rrce://projects')}              List all exposed projects
   ${pc.cyan('rrce://projects/{name}/context')}  Get project context
   ${pc.cyan('rrce://projects/{name}/tasks')}    Get project tasks
-
-${pc.bold('PROMPTS (Agent Commands)')}
-  ${pc.cyan('init')}      Initialize project context
-  ${pc.cyan('research')}  Research requirements for a task
-  ${pc.cyan('plan')}      Create execution plan
-  ${pc.cyan('execute')}   Implement planned work
-  ${pc.cyan('docs')}      Generate documentation
-  ${pc.cyan('sync')}      Sync knowledge with codebase
 `;
 
   note(help.trim(), 'Help');
