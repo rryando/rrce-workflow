@@ -10,15 +10,23 @@ interface DashboardProps {
   exposedLabel: string;
   port: number;
   pid: number;
+  running: boolean;
   logHeight: number;
+  showHelp: boolean;
 }
 
-export const Dashboard = ({ logs, exposedLabel, port, pid, logHeight }: DashboardProps) => {
+import { HelpModal } from './HelpModal';
+
+export const Dashboard = ({ logs, exposedLabel, port, pid, running, logHeight, showHelp }: DashboardProps) => {
   return (
     <Box flexDirection="column" padding={0}>
       <Header />
-      <LogViewer logs={logs} height={logHeight} />
-      <StatusBoard exposedLabel={exposedLabel} port={port} pid={pid} />
+      {showHelp ? (
+          <HelpModal onClose={() => {}} />
+      ) : (
+          <LogViewer logs={logs} height={logHeight} />
+      )}
+      <StatusBoard exposedLabel={exposedLabel} port={port} pid={pid} running={running} />
       <CommandBar />
     </Box>
   );

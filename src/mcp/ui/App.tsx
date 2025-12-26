@@ -22,12 +22,15 @@ export const App = ({ onExit, onConfigure, onInstall, initialPort }: AppProps) =
     pid: process.pid,
     running: false 
   });
+  const [showHelp, setShowHelp] = useState(false);
   
   // Load config for display
   const config = loadMCPConfig();
   const projects = scanForProjects();
   const exposedProjects = projects.filter(p => {
-    const cfg = config.projects.find(c => c.name === p.name);
+    const cfg = config.projects.find(c => 
+      (c.path && c.path === p.dataPath) || (!c.path && c.name === p.name)
+    );
     return cfg?.expose ?? config.defaults.includeNew;
   });
   
@@ -106,11 +109,14 @@ export const App = ({ onExit, onConfigure, onInstall, initialPort }: AppProps) =
     }
     
     if (input === 'p') {
+      setLogs(prev => [...prev, 'Switching to configuration wizard...']);
+      // Small delay to let user see message? No, just go.
       onConfigure();
       exit();
     }
     
     if (input === 'i') {
+      setLogs(prev => [...prev, 'Switching to install wizard...']);
       onInstall();
       exit();
     }
@@ -121,6 +127,10 @@ export const App = ({ onExit, onConfigure, onInstall, initialPort }: AppProps) =
     
     if (input === 'r') {
        setLogs(prev => [...prev, '[INFO] Config reload requested...']);
+    }
+
+    if (input === '?') {
+       setShowHelp(prev => !prev);
     }
   }, { isActive: true }); // Ensure we only capture when active
 
@@ -136,7 +146,9 @@ export const App = ({ onExit, onConfigure, onInstall, initialPort }: AppProps) =
       exposedLabel={exposedLabel}
       port={serverInfo.port}
       pid={serverInfo.pid}
+      running={serverInfo.running}
       logHeight={logHeight}
+      showHelp={showHelp}
     />
   );
 };
