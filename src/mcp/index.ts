@@ -20,10 +20,15 @@ export async function runMCP(subcommand?: string): Promise<void> {
   if (subcommand) {
     switch (subcommand) {
       case 'start':
-        // When called directly (e.g., from VSCode), run in stdio mode
-        // This keeps the process alive for MCP communication
-        await startMCPServer();
-        await new Promise(() => {}); // Never resolves
+        // Check if running interactively (TTY)
+        if (process.stdout.isTTY) {
+            // User manually running "mcp start" -> Show TUI
+            await handleStartServer();
+        } else {
+            // IDE spawning process (non-interactive) -> Headless StdIO
+            await startMCPServer();
+            await new Promise(() => {}); // Never resolves
+        }
         return;
       case 'stop':
         await handleStopServer();
@@ -215,11 +220,13 @@ async function handleInstallWizard(workspacePath?: string): Promise<void> {
 }
 
 /**
- * Start the MCP server - Interactive Mode with enhanced TUI
+ * Start the MCP server - Interactive Mode with Ink
  */
 async function handleStartServer(): Promise<void> {
-  const fs = await import('fs');
-  const { getLogFilePath } = await import('./logger');
+  const React = await import('react');
+  const { render } = await import('ink');
+  const { App } = await import('./ui/App');
+  const { loadMCPConfig, saveMCPConfig } = await import('./config');
 
   // Check if projects are configured
   const config = loadMCPConfig();
@@ -243,7 +250,7 @@ async function handleStartServer(): Promise<void> {
 
   // Allow port selection if not running
   const status = getMCPServerStatus();
-  let newPort = config.server.port;
+  let initialPort = config.server.port;
 
   if (!status.running) {
     const portInput = await text({
@@ -257,198 +264,52 @@ async function handleStartServer(): Promise<void> {
 
     if (isCancel(portInput)) return;
 
-    newPort = parseInt(portInput as string, 10);
+    const newPort = parseInt(portInput as string, 10);
     if (newPort !== config.server.port) {
       config.server.port = newPort;
       saveMCPConfig(config);
+      initialPort = newPort;
     }
-  } else {
-      newPort = status.port || newPort;
-      note(`Server is already running on port ${newPort}`, 'Info');
   }
-
+  
   console.clear();
   
-  const logPath = getLogFilePath();
+  // We need a loop to handle reconfigurations that return to the server view
+  let keepRunning = true;
   
-  // Build exposed project names for sticky display
-  const exposedNames = exposedProjects.map(p => p.name).slice(0, 5);
-  const exposedLabel = exposedNames.length > 0 
-    ? exposedNames.join(', ') + (exposedProjects.length > 5 ? ` (+${exposedProjects.length - 5} more)` : '')
-    : pc.dim('(none)');
-
-  // Render function for the enhanced TUI
-  const render = (logs: string[] = []) => {
-    console.clear();
+  while (keepRunning) {
+    // Determine what to do next based on exit reason
+    let nextAction: 'exit' | 'configure' | 'install' | 'restart' = 'exit';
     
-    // Header
-    console.log(pc.cyan('╔═══════════════════════════════════════════════════════════════╗'));
-    console.log(pc.cyan('║') + pc.bold(pc.white('                    RRCE MCP Hub Running                      ')) + pc.cyan('║'));
-    console.log(pc.cyan('╠═══════════════════════════════════════════════════════════════╣'));
+    // Render Ink App
+    const app = render(React.createElement(App, {
+      initialPort,
+      onExit: () => {
+        nextAction = 'exit';
+      },
+      onConfigure: () => {
+        nextAction = 'configure';
+      },
+      onInstall: () => {
+        nextAction = 'install';
+      }
+    }));
+
+    await app.waitUntilExit();
     
-    // Log area (show last 10 lines)
-    const logLines = logs.slice(-10);
-    const emptyLines = 10 - logLines.length;
-    
-    for (let i = 0; i < emptyLines; i++) {
-        console.log(pc.cyan('║') + ' '.repeat(63) + pc.cyan('║'));
+    // Handle next action
+    if (nextAction === 'exit') {
+      keepRunning = false;
+    } else if (nextAction === 'configure') {
+      console.clear();
+      await handleConfigure();
+      // Loop continues, restarting server view
+    } else if (nextAction === 'install') {
+       console.clear();
+       const workspacePath = detectWorkspaceRoot();
+       await handleInstallWizard(workspacePath);
+       // Loop continues
     }
-    for (const line of logLines) {
-        // Strip ANSI codes for length calculation
-        const cleanLine = line.replace(/\u001b\[\d+m/g, '');
-        const truncated = cleanLine.substring(0, 61).padEnd(61);
-        // We print the original line if short enough, otherwise truncated (simple version)
-        // For accurate TUI, we'd need better length calc, but this is okay for now.
-        // Let's us just print the truncated content to be safe and clean.
-        console.log(pc.cyan('║') + ' ' + pc.dim(truncated) + ' ' + pc.cyan('║'));
-    }
-    
-    // Sticky info bar (2nd from bottom)
-    console.log(pc.cyan('╠═══════════════════════════════════════════════════════════════╣'));
-    const infoLine = ` 📋 ${exposedLabel} │ Port: ${newPort} │ PID: ${process.pid || '?'}`.substring(0, 61).padEnd(61);
-    console.log(pc.cyan('║') + pc.yellow(infoLine) + ' ' + pc.cyan('║'));
-    
-    // Command bar (bottom)
-    console.log(pc.cyan('╠═══════════════════════════════════════════════════════════════╣'));
-    const cmdLine = ` q:Quit  p:Projects  i:Install  r:Reload  c:Clear  ?:Help`;
-    console.log(pc.cyan('║') + pc.dim(cmdLine.padEnd(63)) + pc.cyan('║'));
-    console.log(pc.cyan('╚═══════════════════════════════════════════════════════════════╝'));
-  };
-
-  let logBuffer: string[] = [];
-  render(logBuffer);
-
-  try {
-    if (!status.running) {
-      await startMCPServer();
-    }
-    
-    // Tail logs setup
-    let lastSize = 0;
-    if (fs.existsSync(logPath)) {
-      const stats = fs.statSync(logPath);
-      lastSize = stats.size;
-    }
-
-    let isRunning = true;
-    let interval: NodeJS.Timeout;
-
-    // Enable raw mode for input
-    if (process.stdin.setRawMode) {
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-      process.stdin.setEncoding('utf8');
-    }
-
-    return new Promise<void>((resolve) => {
-      const cleanup = (shouldStopServer: boolean) => {
-        isRunning = false;
-        clearInterval(interval);
-        if (process.stdin.setRawMode) {
-          process.stdin.setRawMode(false);
-        }
-        process.stdin.removeListener('data', onKey);
-        process.stdin.pause();
-        if (shouldStopServer) {
-            stopMCPServer();
-        }
-        console.log(''); // New line
-      };
-
-      const onKey = async (key: string) => {
-        // Ctrl+C or q - Quit
-        if (key === '\u0003' || key.toLowerCase() === 'q') {
-          cleanup(true);
-          resolve();
-          return;
-        }
-        
-        // p - Reconfigure projects
-        if (key.toLowerCase() === 'p') {
-          cleanup(false); // Don't stop server, just exit TUI loop
-          console.clear();
-          await handleConfigure();
-          await handleStartServer(); // Recursively restart TUI
-          resolve();
-          return;
-        }
-        
-        // i - Install to additional IDEs
-        if (key.toLowerCase() === 'i') {
-          cleanup(false);
-          console.clear();
-          await handleInstallWizard(detectWorkspaceRoot()); // Use fresh root check
-          await handleStartServer();
-          resolve();
-          return;
-        }
-        
-        // r - Reload config
-        if (key.toLowerCase() === 'r') {
-          logBuffer.push('[INFO] Reloading configuration...');
-          render(logBuffer);
-          return;
-        }
-        
-        // c - Clear logs
-        if (key.toLowerCase() === 'c') {
-          logBuffer = [];
-          render(logBuffer);
-          return;
-        }
-        
-        // ? - Show help
-        if (key === '?') {
-          logBuffer.push('─'.repeat(40));
-          logBuffer.push('Commands:');
-          logBuffer.push('  q - Stop server and return to menu');
-          logBuffer.push('  p - Reconfigure exposed projects');
-          logBuffer.push('  i - Install to additional IDEs');
-          logBuffer.push('  r - Reload configuration');
-          logBuffer.push('  c - Clear log display');
-          logBuffer.push('  ? - Show this help');
-          logBuffer.push('─'.repeat(40));
-          render(logBuffer);
-          return;
-        }
-      };
-
-      process.stdin.on('data', onKey);
-
-      // Log poller
-      interval = setInterval(() => {
-        if (!isRunning) return;
-
-        if (fs.existsSync(logPath)) {
-          const stats = fs.statSync(logPath);
-          if (stats.size > lastSize) {
-            const buffer = Buffer.alloc(stats.size - lastSize);
-            const fd = fs.openSync(logPath, 'r');
-            fs.readSync(fd, buffer, 0, buffer.length, lastSize);
-            fs.closeSync(fd);
-            
-            const newContent = buffer.toString('utf-8');
-            const newLines = newContent.split('\n').filter(l => l.trim());
-            logBuffer.push(...newLines);
-            
-            // Keep only last 100 lines in buffer
-            if (logBuffer.length > 100) {
-              logBuffer = logBuffer.slice(-100);
-            }
-            
-            lastSize = stats.size;
-            render(logBuffer);
-          }
-        }
-      }, 500);
-    });
-
-  } catch (error) {
-    if (process.stdin.setRawMode) {
-      process.stdin.setRawMode(false);
-    }
-    console.error(pc.red('\nFailed to start/monitor server:'));
-    console.error(error);
   }
 }
 
