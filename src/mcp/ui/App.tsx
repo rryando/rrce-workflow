@@ -9,13 +9,15 @@ import fs from 'fs';
 
 interface AppProps {
   onExit: () => void;
-  onConfigure: () => void;
-  onInstall: () => void;
   initialPort: number;
 }
 
-export const App = ({ onExit, onConfigure, onInstall, initialPort }: AppProps) => {
+import { ConfigModal } from './ConfigModal';
+import { InstallModal } from './InstallModal';
+
+export const App = ({ onExit, initialPort }: AppProps) => {
   const { exit } = useApp();
+  const [view, setView] = useState<'dashboard' | 'config' | 'install'>('dashboard');
   const [logs, setLogs] = useState<string[]>([]);
   const [serverInfo, setServerInfo] = useState({ 
     port: initialPort, 
@@ -109,16 +111,11 @@ export const App = ({ onExit, onConfigure, onInstall, initialPort }: AppProps) =
     }
     
     if (input === 'p') {
-      setLogs(prev => [...prev, 'Switching to configuration wizard...']);
-      // Small delay to let user see message? No, just go.
-      onConfigure();
-      exit();
+      setView('config');
     }
     
     if (input === 'i') {
-      setLogs(prev => [...prev, 'Switching to install wizard...']);
-      onInstall();
-      exit();
+      setView('install');
     }
 
     if (input === 'c') {
@@ -135,10 +132,16 @@ export const App = ({ onExit, onConfigure, onInstall, initialPort }: AppProps) =
   }, { isActive: true }); // Ensure we only capture when active
 
   // Calculate layout
-  // Header (~5 lines) + Status (~3 lines) + Command (~3 lines) = ~11 lines overhead
-  // We use process.stdout.rows to get terminal height
   const termHeight = process.stdout.rows || 24;
   const logHeight = Math.max(5, termHeight - 12);
+
+  if (view === 'config') {
+      return <ConfigModal onBack={() => setView('dashboard')} />;
+  }
+  
+  if (view === 'install') {
+      return <InstallModal onBack={() => setView('dashboard')} />;
+  }
 
   return (
     <Dashboard 

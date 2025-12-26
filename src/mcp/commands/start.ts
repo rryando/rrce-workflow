@@ -60,48 +60,23 @@ export async function handleStartServer(): Promise<void> {
     }
   }
   
-  console.clear();
   
-  // We need a loop to handle reconfigurations that return to the server view
-  let keepRunning = true;
+  // Render Ink App
+  // App handles its own views, we just wait for it to fully exit.
   
-  while (keepRunning) {
-    // Determine what to do next based on exit reason
-    let nextAction: 'exit' | 'configure' | 'install' | 'restart' = 'exit';
-    
-    // Force stdin to resume
-    process.stdin.resume();
-    
-    // Render Ink App
-    const app = render(React.createElement(App, {
-      initialPort,
-      onExit: () => {
-        nextAction = 'exit';
-      },
-      onConfigure: () => {
-        nextAction = 'configure';
-      },
-      onInstall: () => {
-        nextAction = 'install';
-      }
-    }), { 
-        exitOnCtrlC: false // We handle this in App
-    });
+  process.stdin.resume(); // Ensure stdin is alive
 
-    await app.waitUntilExit();
-    
-    // Handle next action
-    if (nextAction === 'exit') {
-      keepRunning = false;
-    } else if (nextAction === 'configure') {
-      console.clear();
-      await handleConfigure();
-      // Loop continues, restarting server view
-    } else if (nextAction === 'install') {
-       console.clear();
-       const workspacePath = detectWorkspaceRoot();
-       await runInstallWizard(workspacePath);
-       // Loop continues
+  const app = render(React.createElement(App, {
+    initialPort,
+    onExit: () => {
+        // App requested exit
     }
-  }
+  }), { 
+      exitOnCtrlC: false 
+  });
+
+  await app.waitUntilExit();
+  
+  // Cleanup if needed
+  console.clear();
 }
