@@ -144,8 +144,10 @@ function registerResourceHandlers(server: Server): void {
       }
 
       const projectMatch = uri.match(/^rrce:\/\/projects\/([^/]+)\/(.+)$/);
-      if (projectMatch) {
-        const [, projectName, resourceType] = projectMatch;
+      if (projectMatch && projectMatch[1] && projectMatch[2]) {
+        const projectName = projectMatch[1];
+        const resourceType = projectMatch[2];
+        
         const content = resourceType === 'context' 
           ? getProjectContext(projectName)
           : JSON.stringify(getProjectTasks(projectName), null, 2);

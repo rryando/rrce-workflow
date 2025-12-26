@@ -23,7 +23,6 @@ export async function runMCP(subcommand?: string): Promise<void> {
         // When called directly (e.g., from VSCode), run in stdio mode
         // This keeps the process alive for MCP communication
         await startMCPServer();
-        // Keep process alive - the MCP server runs until killed
         await new Promise(() => {}); // Never resolves
         return;
       case 'stop':
@@ -54,8 +53,7 @@ export async function runMCP(subcommand?: string): Promise<void> {
     }
   }
 
-  // 2. Check Installation Status - Improved Flow
-  const status = checkInstallStatus(workspacePath);
+  // 2. Check Installation Status - Enforce Flow
   const installed = isInstalledAnywhere(workspacePath);
   
   if (!installed) {
@@ -74,12 +72,17 @@ project knowledge in real-time. Let's get you set up.`,
     });
 
     if (shouldInstall && !isCancel(shouldInstall)) {
+      // Step 1: Install
       await handleInstallWizard(workspacePath);
       
-      // After install, configure projects
-      await handleConfigure();
+      // Step 2: Configure Projects
+      const config = loadMCPConfig();
+      const exposedCount = config.projects.filter(p => p.expose).length;
+      if (exposedCount === 0) {
+        await handleConfigure();
+      }
       
-      // Then start server
+      // Step 3: Start Server
       const shouldStart = await confirm({
         message: 'Start the MCP server now?',
         initialValue: true,
@@ -168,12 +171,12 @@ async function handleInstallWizard(workspacePath?: string): Promise<void> {
     },
     { 
       value: 'vscode-global', 
-      label: 'VSCode (Global)', 
+      label: 'VSCode (Global Settings)', 
       hint: status.vscodeGlobal ? pc.green('✓ Installed') : pc.dim('Not installed'),
     },
     { 
       value: 'vscode-workspace', 
-      label: 'VSCode (This Workspace)', 
+      label: 'VSCode (Workspace Config)', 
       hint: status.vscodeWorkspace ? pc.green('✓ Installed') : pc.dim('Not installed'),
     },
     { 
@@ -238,28 +241,35 @@ async function handleStartServer(): Promise<void> {
     }
   }
 
-  // Allow port selection
-  const portInput = await text({
-    message: 'Select port for MCP Server',
-    initialValue: config.server.port.toString(),
-    placeholder: '3200',
-    validate(value) {
-      if (isNaN(Number(value))) return 'Port must be a number';
-    },
-  });
+  // Allow port selection if not running
+  const status = getMCPServerStatus();
+  let newPort = config.server.port;
 
-  if (isCancel(portInput)) return;
+  if (!status.running) {
+    const portInput = await text({
+      message: 'Select port for MCP Server',
+      initialValue: config.server.port.toString(),
+      placeholder: '3200',
+      validate(value) {
+        if (isNaN(Number(value))) return 'Port must be a number';
+      },
+    });
 
-  const newPort = parseInt(portInput as string, 10);
-  if (newPort !== config.server.port) {
-    config.server.port = newPort;
-    saveMCPConfig(config);
+    if (isCancel(portInput)) return;
+
+    newPort = parseInt(portInput as string, 10);
+    if (newPort !== config.server.port) {
+      config.server.port = newPort;
+      saveMCPConfig(config);
+    }
+  } else {
+      newPort = status.port || newPort;
+      note(`Server is already running on port ${newPort}`, 'Info');
   }
 
   console.clear();
   
   const logPath = getLogFilePath();
-  const workspacePath = detectWorkspaceRoot();
   
   // Build exposed project names for sticky display
   const exposedNames = exposedProjects.map(p => p.name).slice(0, 5);
@@ -281,16 +291,21 @@ async function handleStartServer(): Promise<void> {
     const emptyLines = 10 - logLines.length;
     
     for (let i = 0; i < emptyLines; i++) {
-      console.log(pc.cyan('║') + ' '.repeat(63) + pc.cyan('║'));
+        console.log(pc.cyan('║') + ' '.repeat(63) + pc.cyan('║'));
     }
     for (const line of logLines) {
-      const truncated = line.substring(0, 61).padEnd(61);
-      console.log(pc.cyan('║') + ' ' + pc.dim(truncated) + ' ' + pc.cyan('║'));
+        // Strip ANSI codes for length calculation
+        const cleanLine = line.replace(/\u001b\[\d+m/g, '');
+        const truncated = cleanLine.substring(0, 61).padEnd(61);
+        // We print the original line if short enough, otherwise truncated (simple version)
+        // For accurate TUI, we'd need better length calc, but this is okay for now.
+        // Let's us just print the truncated content to be safe and clean.
+        console.log(pc.cyan('║') + ' ' + pc.dim(truncated) + ' ' + pc.cyan('║'));
     }
     
     // Sticky info bar (2nd from bottom)
     console.log(pc.cyan('╠═══════════════════════════════════════════════════════════════╣'));
-    const infoLine = ` 📋 ${exposedLabel} │ Port: ${newPort} │ PID: ${process.pid}`.substring(0, 61).padEnd(61);
+    const infoLine = ` 📋 ${exposedLabel} │ Port: ${newPort} │ PID: ${process.pid || '?'}`.substring(0, 61).padEnd(61);
     console.log(pc.cyan('║') + pc.yellow(infoLine) + ' ' + pc.cyan('║'));
     
     // Command bar (bottom)
@@ -304,7 +319,9 @@ async function handleStartServer(): Promise<void> {
   render(logBuffer);
 
   try {
-    await startMCPServer();
+    if (!status.running) {
+      await startMCPServer();
+    }
     
     // Tail logs setup
     let lastSize = 0;
@@ -314,7 +331,9 @@ async function handleStartServer(): Promise<void> {
     }
 
     let isRunning = true;
+    let interval: NodeJS.Timeout;
 
+    // Enable raw mode for input
     if (process.stdin.setRawMode) {
       process.stdin.setRawMode(true);
       process.stdin.resume();
@@ -322,7 +341,7 @@ async function handleStartServer(): Promise<void> {
     }
 
     return new Promise<void>((resolve) => {
-      const cleanup = () => {
+      const cleanup = (shouldStopServer: boolean) => {
         isRunning = false;
         clearInterval(interval);
         if (process.stdin.setRawMode) {
@@ -330,32 +349,36 @@ async function handleStartServer(): Promise<void> {
         }
         process.stdin.removeListener('data', onKey);
         process.stdin.pause();
-        stopMCPServer();
-        console.log('');
+        if (shouldStopServer) {
+            stopMCPServer();
+        }
+        console.log(''); // New line
       };
 
       const onKey = async (key: string) => {
         // Ctrl+C or q - Quit
         if (key === '\u0003' || key.toLowerCase() === 'q') {
-          cleanup();
+          cleanup(true);
           resolve();
           return;
         }
         
         // p - Reconfigure projects
         if (key.toLowerCase() === 'p') {
-          cleanup();
+          cleanup(false); // Don't stop server, just exit TUI loop
           console.clear();
           await handleConfigure();
+          await handleStartServer(); // Recursively restart TUI
           resolve();
           return;
         }
         
         // i - Install to additional IDEs
         if (key.toLowerCase() === 'i') {
-          cleanup();
+          cleanup(false);
           console.clear();
-          await handleInstallWizard(workspacePath);
+          await handleInstallWizard(detectWorkspaceRoot()); // Use fresh root check
+          await handleStartServer();
           resolve();
           return;
         }
@@ -393,7 +416,7 @@ async function handleStartServer(): Promise<void> {
       process.stdin.on('data', onKey);
 
       // Log poller
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         if (!isRunning) return;
 
         if (fs.existsSync(logPath)) {
@@ -424,7 +447,7 @@ async function handleStartServer(): Promise<void> {
     if (process.stdin.setRawMode) {
       process.stdin.setRawMode(false);
     }
-    console.error(pc.red('\nFailed to start server:'));
+    console.error(pc.red('\nFailed to start/monitor server:'));
     console.error(error);
   }
 }

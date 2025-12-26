@@ -155,11 +155,22 @@ export async function runSetupFlow(
     
     note(summary.join('\n'), 'Setup Summary');
     
-    // Show appropriate outro message
-    if (linkedProjects.length > 0) {
-      outro(pc.green(`✓ Setup complete! Open ${pc.bold(`${workspaceName}.code-workspace`)} in VSCode to access linked knowledge.`));
+    // Gateway to MCP Setup
+    const shouldConfigureMCP = await confirm({
+      message: 'Would you like to configure the MCP server now?',
+      initialValue: true,
+    });
+
+    if (shouldConfigureMCP && !isCancel(shouldConfigureMCP)) {
+      const { runMCP } = await import('../../mcp/index');
+      await runMCP();
     } else {
-      outro(pc.green(`✓ Setup complete! Your agents are ready to use.`));
+      // Show appropriate outro message
+      if (linkedProjects.length > 0) {
+        outro(pc.green(`✓ Setup complete! Open ${pc.bold(`${workspaceName}.code-workspace`)} in VSCode to access linked knowledge.`));
+      } else {
+        outro(pc.green(`✓ Setup complete! Your agents are ready to use.`));
+      }
     }
 
   } catch (error) {

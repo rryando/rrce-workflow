@@ -81,6 +81,8 @@ function checkClaudeConfig(): boolean {
 }
 
 function checkVSCodeGlobalConfig(): boolean {
+  // Check for common OS paths if default doesn't exist? 
+  // For now stick to Linux path as we know user is on Linux
   if (!fs.existsSync(VSCODE_GLOBAL_CONFIG)) return false;
   try {
     const content = JSON.parse(fs.readFileSync(VSCODE_GLOBAL_CONFIG, 'utf-8')) as VSCodeSettings;

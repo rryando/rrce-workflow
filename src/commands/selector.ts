@@ -21,8 +21,13 @@ export async function runSelector() {
     options: [
       {
         value: 'mcp',
-        label: 'Manage MCP Hub',
+        label: '🔌 Manage MCP Hub',
         hint: 'Configure & Start MCP Server'
+      },
+      {
+        value: 'wizard',
+        label: '✨ Run Setup Wizard',
+        hint: 'Configure workspace & agents'
       },
       ...prompts.map(p => ({
         value: p,
@@ -40,6 +45,12 @@ export async function runSelector() {
   if (selection === 'mcp') {
     const { runMCP } = await import('../mcp/index');
     await runMCP();
+    return;
+  }
+
+  if (selection === 'wizard') {
+    const { runWizard } = await import('./wizard/index');
+    await runWizard();
     return;
   }
 
