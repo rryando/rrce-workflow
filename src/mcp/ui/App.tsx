@@ -96,6 +96,9 @@ export const App = ({ onExit, onConfigure, onInstall, initialPort }: AppProps) =
 
   // Input Handling
   useInput((input, key) => {
+    // Debug logging
+    // fs.appendFileSync('input_debug.log', `Input: ${input}, Key: ${JSON.stringify(key)}\n`);
+
     if (input === 'q' || (key.ctrl && input === 'c')) {
       stopMCPServer();
       onExit(); // This triggers unmount/cleanup in index.ts
@@ -116,7 +119,7 @@ export const App = ({ onExit, onConfigure, onInstall, initialPort }: AppProps) =
     if (input === 'r') {
        setLogs(prev => [...prev, '[INFO] Config reload requested...']);
     }
-  });
+  }, { isActive: true }); // Ensure we only capture when active
 
   // Calculate layout
   // Header (~5 lines) + Status (~3 lines) + Command (~3 lines) = ~11 lines overhead
