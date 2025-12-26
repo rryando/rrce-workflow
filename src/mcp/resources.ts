@@ -14,19 +14,94 @@ import { scanForProjects, type DetectedProject } from '../lib/detection';
 export function getExposedProjects(): DetectedProject[] {
   const config = loadMCPConfig();
   const allProjects = scanForProjects();
-  return allProjects.filter(project => isProjectExposed(config, project.name, project.dataPath));
+  
+  // 1. Get globally exposed projects
+  const globalProjects = allProjects.filter(project => isProjectExposed(config, project.name, project.dataPath));
+  
+  // 2. Get locally linked projects (smart resolution)
+  const activeProject = detectActiveProject(globalProjects); // Pass preliminary list
+  let linkedProjects: DetectedProject[] = [];
+
+  if (activeProject) {
+    const localConfigPath = path.join(activeProject.dataPath, 'config.yaml'); // New config location
+    // Also check legacy .rrce-workflow.yaml? 'paths.ts' handles that, but here we need quick read.
+    // Let's rely on standard paths.
+    
+    // We need to resolve the path properly. Let's use getConfigPath helper if we can, but 
+    // we need to import it. Since we can't easily import circular deps or new deps without checking,
+    // let's stick to reading the config file found in the active project path.
+    
+    // Check both locations just to be safe/compliant with paths.ts logic
+    let cfgContent: string | null = null;
+    if (fs.existsSync(path.join(activeProject.dataPath, '.rrce-workflow', 'config.yaml'))) {
+       cfgContent = fs.readFileSync(path.join(activeProject.dataPath, '.rrce-workflow', 'config.yaml'), 'utf-8');
+    } else if (fs.existsSync(path.join(activeProject.dataPath, '.rrce-workflow.yaml'))) {
+       cfgContent = fs.readFileSync(path.join(activeProject.dataPath, '.rrce-workflow.yaml'), 'utf-8');
+    }
+
+    if (cfgContent) {
+      if (cfgContent.includes('linked_projects:')) { // Simple check
+         // Parse linked projects manually to avoid heavy yaml parser dep if not already present?
+         // config.ts uses simple regex/line parsing. Let's do similar.
+         const lines = cfgContent.split('\n');
+         let inLinked = false;
+         for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('linked_projects:')) {
+                inLinked = true;
+                continue;
+            }
+            if (inLinked) {
+                if (trimmed.startsWith('-') || trimmed.startsWith('linked_projects')) { 
+                    // continue parsing 
+                } else if (trimmed !== '' && !trimmed.startsWith('#')) {
+                    // exited section
+                    inLinked = false;
+                }
+                
+                if (inLinked && trimmed.startsWith('-')) {
+                    // Extract name. format: "- name" or "- name:source"
+                    const val = trimmed.replace(/^-\s*/, '').trim();
+                    const [pName] = val.split(':'); // Take name part
+                    
+                    // Find this project in allProjects
+                    // Avoid duplicates
+                    if (!globalProjects.some(p => p.name === pName) && 
+                        !linkedProjects.some(p => p.name === pName)) {
+                        const found = allProjects.find(p => p.name === pName);
+                        if (found) {
+                            // Mark as linked for context clarity? DetectedProject doesn't have a 'linked' flag.
+                            // We return it as is.
+                            linkedProjects.push(found);
+                        }
+                    }
+                }
+            }
+         }
+      }
+    }
+  }
+
+  return [...globalProjects, ...linkedProjects];
 }
 
 /**
  * Detect the active project based on the current working directory (CWD)
  */
-export function detectActiveProject(): DetectedProject | undefined {
-  const exposed = getExposedProjects();
+export function detectActiveProject(knownProjects?: DetectedProject[]): DetectedProject | undefined {
+  // If no projects provided, scan mostly-global ones (avoid recursion loop by NOT calling getExposedProjects)
+  let scanList = knownProjects;
+  if (!scanList) {
+     const config = loadMCPConfig();
+     const all = scanForProjects();
+     // Only consider global ones for base detection to start with
+     scanList = all.filter(project => isProjectExposed(config, project.name, project.dataPath));
+  }
+  
   const cwd = process.cwd();
   
   // Find project where CWD starts with project path (closest match)
-  // Sort by path length descending to find most specific match
-  const matches = exposed.filter(p => cwd.startsWith(p.path));
+  const matches = scanList.filter(p => cwd.startsWith(p.path));
   matches.sort((a, b) => b.path.length - a.path.length);
   
   return matches[0];

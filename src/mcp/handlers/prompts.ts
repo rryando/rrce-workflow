@@ -64,6 +64,12 @@ export function registerPromptHandlers(server: Server): void {
       
       const projectList = projects.map(p => {
         const isActive = activeProject && p.dataPath === activeProject.dataPath;
+        // Check if project is globally exposed or just linked
+        // Actually, we can check source property or check if it's in config
+        // But simply showing the source attribute is enough? p.source should tell us.
+        // Wait, scanForProjects sets source to 'global' or 'workspace'.
+        // If it's linked, it might still have source='global' if it lives in global folder.
+        // But for context, we want to know if it's available.
         return `- ${p.name} (${p.source}) ${isActive ? '**[ACTIVE]**' : ''}`;
       }).join('\n');
       

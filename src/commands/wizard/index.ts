@@ -92,6 +92,7 @@ Workspace: ${pc.bold(workspaceName)}`,
     }
     
     menuOptions.push({ value: 'update', label: '📦 Update from package', hint: 'Get latest prompts & templates' });
+    menuOptions.push({ value: 'reconfigure', label: '🔧 Reconfigure project', hint: 'Change storage mode, tools, etc.' });
     menuOptions.push({ value: 'exit', label: '↩  Exit' });
 
     const action = await select({
@@ -122,6 +123,10 @@ Workspace: ${pc.bold(workspaceName)}`,
     if (action === 'update') {
       await runUpdateFlow(workspacePath, workspaceName, currentStorageMode);
       return;
+    }
+
+    if (action === 'reconfigure') {
+      // Fall through to runSetupFlow
     }
   }
 
