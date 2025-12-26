@@ -1,6 +1,6 @@
 {
   "name": "rrce-workflow",
-  "version": "0.2.25",
+  "version": "0.2.26",
   "description": "RRCE-Workflow TUI - Agentic code workflow generator for AI-assisted development",
   "author": "RRCE Team",
   "license": "MIT",
