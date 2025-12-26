@@ -1,7 +1,4 @@
-/**
- * Agent Prompt Definitions
- * Shared between MCP server and other modules
- */
+import { loadPromptsFromDir, getAgentCorePromptsDir } from '../lib/prompts';
 
 export interface PromptArgument {
   name: string;
@@ -12,71 +9,70 @@ export interface PromptArgument {
 export interface AgentPromptDef {
   name: string;
   description: string;
-  file: string;
   arguments: PromptArgument[];
+  content: string; // The raw template
 }
 
 /**
- * RRCE Agent prompts for MCP
+ * Get all available agent prompts from the file system
  */
-export const AGENT_PROMPTS: AgentPromptDef[] = [
-  {
-    name: 'init',
-    description: 'Initialize project context by analyzing codebase structure, tech stack, and conventions',
-    file: 'init.md',
-    arguments: [
-      { name: 'PROJECT_NAME', description: 'Project name (optional, auto-detected if omitted)', required: false },
-    ],
-  },
-  {
-    name: 'research',
-    description: 'Research and clarify requirements for a new task',
-    file: 'research_discussion.md',
-    arguments: [
-      { name: 'REQUEST', description: 'Description of the task or feature to research', required: true },
-      { name: 'TASK_SLUG', description: 'Kebab-case identifier for the task', required: true },
-      { name: 'TITLE', description: 'Human-readable title for the task', required: false },
-    ],
-  },
-  {
-    name: 'plan',
-    description: 'Create an actionable execution plan from research findings',
-    file: 'planning_orchestrator.md',
-    arguments: [
-      { name: 'TASK_SLUG', description: 'Task slug to create plan for', required: true },
-    ],
-  },
-  {
-    name: 'execute',
-    description: 'Implement the planned work with code and tests',
-    file: 'executor.md',
-    arguments: [
-      { name: 'TASK_SLUG', description: 'Task slug to execute', required: true },
-      { name: 'BRANCH', description: 'Git branch reference (optional)', required: false },
-    ],
-  },
-  {
-    name: 'docs',
-    description: 'Generate documentation for completed work',
-    file: 'documentation.md',
-    arguments: [
-      { name: 'DOC_TYPE', description: 'Type of documentation (api, architecture, runbook, changelog)', required: true },
-      { name: 'TASK_SLUG', description: 'Task slug if documenting specific task', required: false },
-    ],
-  },
-  {
-    name: 'sync',
-    description: 'Reconcile knowledge base with actual codebase state',
-    file: 'sync.md',
-    arguments: [
-      { name: 'SCOPE', description: 'Specific path or module to sync (optional)', required: false },
-    ],
-  },
-];
+export function getAllPrompts(): AgentPromptDef[] {
+  const prompts = loadPromptsFromDir(getAgentCorePromptsDir());
+  
+  return prompts.map(p => {
+    const args: PromptArgument[] = [];
+    
+    // Process required args
+    if (p.frontmatter['required-args']) {
+      args.push(...p.frontmatter['required-args'].map(a => ({
+        name: a.name,
+        description: a.prompt || a.name,
+        required: true
+      })));
+    }
+    
+    // Process optional args
+    if (p.frontmatter['optional-args']) {
+      args.push(...p.frontmatter['optional-args'].map(a => ({
+        name: a.name,
+        description: a.prompt || a.name,
+        required: false
+      })));
+    }
+
+    return {
+      name: p.frontmatter.name,
+      description: p.frontmatter.description,
+      arguments: args,
+      content: p.content
+    };
+  });
+}
 
 /**
  * Get prompt definition by name
  */
 export function getPromptDef(name: string): AgentPromptDef | undefined {
-  return AGENT_PROMPTS.find(p => p.name === name);
+  return getAllPrompts().find(p => p.name === name);
+}
+
+/**
+ * Render a prompt template with arguments
+ */
+export function renderPrompt(content: string, args: Record<string, string>): string {
+  let rendered = content;
+  
+  // Replace all provided arguments
+  for (const [key, val] of Object.entries(args)) {
+    // Replace {{KEY}} global case-insensitive? Convention is usually exact match or UPPERCASE.
+    // The prompts usually use {{VAR_NAME}}.
+    // We'll replace exact matches of {{key}}
+    rendered = rendered.replace(new RegExp(`{{${key}}}`, 'g'), val);
+  }
+
+  // TODO: Handling missing required arguments? 
+  // MCP server should validate requiredness before calling this if possible,
+  // or we leave unreplaced tags.
+  
+  return rendered;
 }

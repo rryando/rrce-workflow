@@ -18,6 +18,21 @@ export function getExposedProjects(): DetectedProject[] {
 }
 
 /**
+ * Detect the active project based on the current working directory (CWD)
+ */
+export function detectActiveProject(): DetectedProject | undefined {
+  const exposed = getExposedProjects();
+  const cwd = process.cwd();
+  
+  // Find project where CWD starts with project path (closest match)
+  // Sort by path length descending to find most specific match
+  const matches = exposed.filter(p => cwd.startsWith(p.path));
+  matches.sort((a, b) => b.path.length - a.path.length);
+  
+  return matches[0];
+}
+
+/**
  * Get project context (project-context.md)
  */
 export function getProjectContext(projectName: string): string | null {
