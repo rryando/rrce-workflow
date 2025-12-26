@@ -2,12 +2,13 @@
  * MCP Hub TUI - Interactive menu for managing MCP
  */
 
-import { intro, outro, select, multiselect, confirm, spinner, note, cancel, isCancel } from '@clack/prompts';
+import { intro, outro, select, multiselect, confirm, spinner, note, cancel, isCancel, text } from '@clack/prompts';
 import pc from 'picocolors';
 import { loadMCPConfig, saveMCPConfig, setProjectConfig, getMCPConfigPath, ensureMCPGlobalPath } from './config';
 import type { MCPConfig, MCPProjectConfig } from './types';
 import { scanForProjects, type DetectedProject } from '../lib/detection';
 import { startMCPServer, stopMCPServer, getMCPServerStatus } from './server';
+import { checkInstallStatus, installToConfig } from './install';
 
 /**
  * Run the MCP TUI
@@ -39,10 +40,9 @@ export async function runMCP(subcommand?: string): Promise<void> {
   // Show interactive menu
   intro(pc.bgCyan(pc.black(' RRCE MCP Hub ')));
 
-  // Check if global path is configured (MCP needs global storage)
+  // 1. Check Global Path (Required)
   const globalPathCheck = await ensureMCPGlobalPath();
   if (!globalPathCheck.configured) {
-    // Prompt user to configure global path
     const configured = await handleConfigureGlobalPath();
     if (!configured) {
       outro(pc.yellow('MCP requires a global storage path. Setup cancelled.'));
@@ -50,15 +50,31 @@ export async function runMCP(subcommand?: string): Promise<void> {
     }
   }
 
+  // 2. Check Installation Status (Wizard)
+  const status = checkInstallStatus();
+  if (!status.antigravity && !status.claude) {
+    const shouldInstall = await confirm({
+      message: 'MCP server is not installed in your IDEs. Install now?',
+      initialValue: true,
+    });
+
+    if (shouldInstall && !isCancel(shouldInstall)) {
+      await handleInstallWizard();
+    }
+  }
+
   let running = true;
   while (running) {
+    const serverStatus = getMCPServerStatus();
+    const serverLabel = serverStatus.running ? pc.green('Running') : pc.dim('Stopped');
+
     const action = await select({
       message: 'What would you like to do?',
       options: [
-        { value: 'status', label: '📋 View project status', hint: 'See which projects are exposed' },
+        { value: 'start', label: `▶️  Start MCP server`, hint: `Current status: ${serverLabel}` },
         { value: 'configure', label: '⚙️  Configure projects', hint: 'Choose which projects to expose' },
-        { value: 'start', label: '▶️  Start MCP server', hint: 'Start the MCP server' },
-        { value: 'stop', label: '⏹️  Stop MCP server', hint: 'Stop the running server' },
+        { value: 'install', label: '📥 Install to IDE', hint: 'Add to Antigravity or Claude Desktop' },
+        { value: 'status', label: '📋 View status', hint: 'See details' },
         { value: 'help', label: '❓ Help', hint: 'Learn about MCP Hub' },
         { value: 'exit', label: '↩  Exit', hint: 'Return to shell' },
       ],
@@ -70,18 +86,18 @@ export async function runMCP(subcommand?: string): Promise<void> {
     }
 
     switch (action) {
-      case 'status':
-        await handleShowStatus();
+      case 'start':
+        await handleStartServer();
+        // After start returns (user stopped it), we loop back to menu
         break;
       case 'configure':
         await handleConfigure();
         break;
-      case 'start':
-        await handleStartServer();
-        running = false; // Exit after starting server
+      case 'install':
+        await handleInstallWizard();
         break;
-      case 'stop':
-        await handleStopServer();
+      case 'status':
+        await handleShowStatus();
         break;
       case 'help':
         showHelp();
@@ -93,6 +109,198 @@ export async function runMCP(subcommand?: string): Promise<void> {
   }
 
   outro(pc.green('MCP Hub closed.'));
+}
+
+async function handleInstallWizard(): Promise<void> {
+  const status = checkInstallStatus();
+  
+  const options = [
+    { value: 'antigravity', label: 'Antigravity IDE', hint: status.antigravity ? 'Installed' : 'Not installed' },
+    { value: 'claude', label: 'Claude Desktop', hint: status.claude ? 'Installed' : 'Not installed' },
+  ];
+
+  const selected = await multiselect({
+    message: 'Select where to install RRCE MCP Server:',
+    options,
+    initialValues: [
+      ...(status.antigravity ? ['antigravity'] : []),
+      ...(status.claude ? ['claude'] : []),
+    ],
+    required: false,
+  });
+
+  if (isCancel(selected)) return;
+
+  const targets = selected as string[];
+  const results = [];
+
+  for (const target of targets) {
+    const success = installToConfig(target as 'antigravity' | 'claude');
+    results.push(`${target}: ${success ? pc.green('Success') : pc.red('Failed')}`);
+  }
+
+  if (results.length > 0) {
+    note(results.join('\n'), 'Installation Results');
+  }
+}
+
+/**
+ * Start the MCP server - Interactive Mode
+ * Starts the server and streams logs to the console
+ */
+async function handleStartServer(): Promise<void> {
+  const fs = await import('fs');
+  const { getLogFilePath } = await import('./logger');
+
+  // Check if projects are configured
+  const config = loadMCPConfig();
+  const exposedCount = config.projects.filter(p => p.expose).length;
+  // If no projects explicitly exposed, check default policy? 
+  // Actually, we should warn if NO projects are exposed.
+  if (exposedCount === 0 && !config.defaults.includeNew) {
+    const shouldConfig = await confirm({
+      message: 'No projects are currently exposed. Configure now?',
+      initialValue: true,
+    });
+    if (shouldConfig && !isCancel(shouldConfig)) {
+      await handleConfigure();
+    }
+  }
+
+  // Allow port selection
+  const portInput = await text({
+    message: 'Select port for MCP Server',
+    initialValue: config.server.port.toString(),
+    placeholder: '3200',
+    validate(value) {
+      if (isNaN(Number(value))) return 'Port must be a number';
+    },
+  });
+
+  if (isCancel(portInput)) return;
+
+  // Save port to config (in memory for now, or persist?)
+  // Let's persist it if changed
+  const newPort = parseInt(portInput as string, 10);
+  if (newPort !== config.server.port) {
+    config.server.port = newPort;
+    saveMCPConfig(config);
+  }
+
+  // Clear screen for server view
+  console.clear();
+  
+  const logPath = getLogFilePath();
+  
+  // Render function for the TUI
+  const renderHeader = () => {
+    console.clear();
+    console.log(pc.cyan('╔═══════════════════════════════════════════╗'));
+    console.log(pc.cyan('║           RRCE MCP Hub Running            ║'));
+    console.log(pc.cyan('╚═══════════════════════════════════════════╝'));
+    console.log(pc.dim('Server is running in Stdio mode (JSON-RPC).'));
+    console.log(pc.dim(`Port: ${newPort} | PID: ${process.pid}`));
+    console.log(pc.dim(`Logging to: ${logPath}`));
+    console.log(pc.dim('---------------------------------------------'));
+  };
+
+  const renderFooter = () => {
+    console.log(pc.dim('---------------------------------------------'));
+    console.log(pc.bgBlue(pc.white(pc.bold(' COMMANDS '))));
+    console.log(`${pc.bold('q')}: Stop & Quit   ${pc.bold('g')}: Configure Projects   ${pc.bold('p')}: Change Port`);
+  };
+
+  renderHeader();
+  renderFooter(); // Initial render
+
+  try {
+    // Start server (hooks up Stdio transport)
+    await startMCPServer();
+    
+    // Tail logs setup
+    let lastSize = 0;
+    if (fs.existsSync(logPath)) {
+      const stats = fs.statSync(logPath);
+      lastSize = stats.size;
+    }
+
+    let isRunning = true;
+
+    // Loop for TUI
+    // We need raw mode to capture keys without Enter
+    if (process.stdin.setRawMode) {
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.setEncoding('utf8');
+    }
+
+    return new Promise<void>((resolve) => {
+      // Key handler
+      const onKey = async (key: string) => {
+        // Ctrl+C or q
+        if (key === '\u0003' || key.toLowerCase() === 'q') {
+          cleanup();
+          resolve(); 
+        }
+        
+        // p - Change Port (Stop, loop back to menu implies resolve)
+        // g - Configure (Stop, loop back)
+        if (key.toLowerCase() === 'p' || key.toLowerCase() === 'g') {
+          cleanup();
+          // We need to signal what to do next?
+          // Actually, handleStartServer just returns. The main loop will show menu.
+          // User has to click 'configure' manually.
+          // To auto-jump, I'd need to return an action.
+          // But 'Return to menu' is good enough for now.
+          resolve(); 
+        }
+      };
+
+      process.stdin.on('data', onKey);
+
+      // Log poller
+      const interval = setInterval(() => {
+        if (!isRunning) return;
+
+        if (fs.existsSync(logPath)) {
+          const stats = fs.statSync(logPath);
+          if (stats.size > lastSize) {
+            const stream = fs.createReadStream(logPath, {
+              start: lastSize,
+              end: stats.size,
+              encoding: 'utf-8',
+            });
+            
+            stream.on('data', (chunk) => {
+              // Just write to stderr/stdout
+              process.stderr.write(chunk);
+            });
+            
+            lastSize = stats.size;
+          }
+        }
+      }, 500);
+
+      const cleanup = () => {
+        isRunning = false;
+        clearInterval(interval);
+        if (process.stdin.setRawMode) {
+          process.stdin.setRawMode(false);
+        }
+        process.stdin.removeListener('data', onKey);
+        process.stdin.pause();
+        stopMCPServer();
+        console.log('');
+      };
+    });
+
+  } catch (error) {
+    if (process.stdin.setRawMode) {
+      process.stdin.setRawMode(false);
+    }
+    console.error(pc.red('\nFailed to start server:'));
+    console.error(error);
+  }
 }
 
 /**
@@ -256,88 +464,6 @@ async function handleConfigure(): Promise<void> {
     `Hidden projects: ${projects.length - exposedCount}`,
     'Configuration Updated'
   );
-}
-
-/**
- * Start the MCP server
- */
-/**
- * Start the MCP server - Interactive Mode
- * Starts the server and streams logs to the console
- */
-async function handleStartServer(): Promise<void> {
-  const fs = await import('fs');
-  const { getLogFilePath } = await import('./logger');
-
-  // Clear screen for server view
-  console.clear();
-  
-  const logPath = getLogFilePath();
-  
-  console.log(pc.cyan('╔═══════════════════════════════════════════╗'));
-  console.log(pc.cyan('║           RRCE MCP Hub Running            ║'));
-  console.log(pc.cyan('╚═══════════════════════════════════════════╝'));
-  console.log('');
-  console.log(pc.dim('Server is running in Stdio mode (JSON-RPC).'));
-  console.log(pc.dim('Do not type in this console as it may interfere with the protocol.'));
-  console.log(pc.dim(`Logging to: ${logPath}`));
-  console.log(pc.yellow('Press Ctrl+C to stop the server'));
-  console.log('');
-  console.log(pc.bold('Server Logs:'));
-  console.log(pc.dim('---------------------------------------------'));
-
-  try {
-    // Start server (hooks up Stdio transport)
-    await startMCPServer();
-    
-    // Tail the log file and print to stderr to avoid polluting stdout (which is used for JSON-RPC)
-    // We use a simple polling approach for tailing
-    let lastSize = 0;
-    
-    // Check if file exists first
-    if (fs.existsSync(logPath)) {
-      const stats = fs.statSync(logPath);
-      lastSize = stats.size;
-    }
-
-    // Keep process alive and poll for logs
-    setInterval(() => {
-      if (fs.existsSync(logPath)) {
-        const stats = fs.statSync(logPath);
-        if (stats.size > lastSize) {
-          const stream = fs.createReadStream(logPath, {
-            start: lastSize,
-            end: stats.size,
-            encoding: 'utf-8',
-          });
-          
-          stream.on('data', (chunk) => {
-            process.stderr.write(chunk); // Write to stderr!
-          });
-          
-          lastSize = stats.size;
-        }
-      }
-    }, 500);
-
-    // Handle shutdown
-    const cleanup = () => {
-      stopMCPServer();
-      console.log(pc.yellow('\nMCP Server caught signal, stopping...'));
-      process.exit(0);
-    };
-
-    process.on('SIGINT', cleanup);
-    process.on('SIGTERM', cleanup);
-
-    // Keep promise from resolving to hold the TUI loop (though we effectively exit the loop visually)
-    await new Promise(() => {});
-
-  } catch (error) {
-    console.error(pc.red('\nFailed to start server:'));
-    console.error(error);
-    process.exit(1);
-  }
 }
 
 /**
