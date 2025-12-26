@@ -82,8 +82,11 @@ export async function startMCPServer(options: { interactive?: boolean } = {}): P
 
     const exposed = getExposedProjects().map(p => p.name).join(', ');
     logger.info(`RRCE MCP Hub started (pid: ${process.pid})`, { exposedProjects: exposed });
-    console.error(`RRCE MCP Hub started (pid: ${process.pid})`);
-    console.error(`Exposed projects: ${exposed}`);
+    
+    if (!options.interactive) {
+        console.error(`RRCE MCP Hub started (pid: ${process.pid})`);
+        console.error(`Exposed projects: ${exposed}`);
+    }
 
     return { port: config.server.port, pid: process.pid };
   } catch (error) {
@@ -470,7 +473,7 @@ export function stopMCPServer(): void {
   }
   serverState = { running: false };
   logger.info('RRCE MCP Hub stopped');
-  console.error('RRCE MCP Hub stopped');
+  // console.error('RRCE MCP Hub stopped'); // Suppress for TUI cleanliness
 }
 
 /**
