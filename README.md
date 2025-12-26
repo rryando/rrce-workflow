@@ -140,6 +140,7 @@ When you run the wizard on an already-configured project, you'll see:
 | **Link other project knowledge** | Reference knowledge from other projects in global storage |
 | **Sync to global storage** | Copy workspace data to global (enables cross-project access) |
 | **Update from package** | Get latest prompts and templates |
+| **Reconfigure project** | Change storage mode, selected tools, or linked projects without resetting |
 
 ---
 
@@ -291,9 +292,19 @@ Most MCP clients follow similar patterns:
 Configure which projects to expose:
 
 ```bash
-npx rrce-workflow mcp           # Interactive TUI
+npx rrce-workflow mcp           # Interactive TUI Dashboard
 npx rrce-workflow mcp status    # View current status
 ```
+
+**Interactive Dashboard Controls:**
+- `p`: Open **Project Configuration** modal (Toggle exposed projects)
+- `i`: Open **IDE Installation** modal (Auto-configure VSCode/Claude)
+- `r`: Reload configuration
+- `c`: Clear logs
+- `?`: Toggle Help & Shortcuts
+
+**Unified Context:**
+Projects linked via the main wizard (`Link other project knowledge`) are automatically detected and exposed by the MCP server alongside globally configured projects.
 
 Config stored at `~/.rrce-workflow/mcp.yaml`
 
