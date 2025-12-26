@@ -281,6 +281,9 @@ async function handleStartServer(): Promise<void> {
     // Determine what to do next based on exit reason
     let nextAction: 'exit' | 'configure' | 'install' | 'restart' = 'exit';
     
+    // Force stdin to resume
+    process.stdin.resume();
+    
     // Render Ink App
     const app = render(React.createElement(App, {
       initialPort,
@@ -293,7 +296,9 @@ async function handleStartServer(): Promise<void> {
       onInstall: () => {
         nextAction = 'install';
       }
-    }));
+    }), { 
+        exitOnCtrlC: false // We handle this in App
+    });
 
     await app.waitUntilExit();
     
