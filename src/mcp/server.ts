@@ -182,8 +182,8 @@ function registerResourceHandlers(server: Server): void {
  * Register MCP tool handlers
  */
 function registerToolHandlers(server: Server): void {
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    const tools = [
       {
         name: 'search_knowledge',
         description: 'Search across all exposed project knowledge bases',
@@ -224,8 +224,21 @@ function registerToolHandlers(server: Server): void {
           required: ['agent'],
         },
       },
-    ],
-  }));
+    ];
+
+    // Check if any projects are exposed. If not, add a help setup tool.
+    const projects = getExposedProjects();
+    if (projects.length === 0) {
+        // @ts-ignore - Dynamic tool addition
+        tools.push({
+            name: 'help_setup',
+            description: 'Get help on how to configure projects for the RRCE MCP Server',
+            inputSchema: { type: 'object', properties: {} },
+        });
+    }
+
+    return { tools };
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
@@ -322,6 +335,19 @@ Note: If the user's request refers to a project not listed here, ask them to exp
           return { content: [{ type: 'text', text: contextPreamble + content }] };
         }
 
+        case 'help_setup': {
+            const msg = `
+RRCE MCP Server is running, but no projects are configured/exposed.
+
+To fix this:
+1. Open a terminal.
+2. Run: npx rrce-workflow mcp configure
+3. Select the projects you want to expose to the AI.
+4. Restart the MCP server (or it may pick up changes automatically).
+`;
+            return { content: [{ type: 'text', text: msg }] };
+        }
+
         default:
           throw new Error(`Unknown tool: ${name}`);
       }
@@ -396,6 +422,13 @@ function registerPromptHandlers(server: Server): void {
 Context - Available Projects (MCP Hub):
 ${projectList}
 `;
+      if (projects.length === 0) {
+        contextPreamble += `
+WARNING: No projects are currently exposed to the MCP server.
+The user needs to run 'npx rrce-workflow mcp configure' in their terminal to select projects to expose.
+Please advise the user to do this if they expect to see project context.
+`;
+      }
 
       if (activeProject) {
         contextPreamble += `\nCurrent Active Workspace: ${activeProject.name} (${activeProject.path})\n`;

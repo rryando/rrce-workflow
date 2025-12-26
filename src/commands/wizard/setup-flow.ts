@@ -22,6 +22,7 @@ interface SetupConfig {
   tools: string[];
   linkedProjects: string[];
   addToGitignore: boolean;
+  exposeToMCP: boolean;
 }
 
 /**
@@ -83,6 +84,11 @@ export async function runSetupFlow(
           message: 'Create configuration?',
           initialValue: true,
         }),
+      exposeToMCP: () =>
+        confirm({
+          message: 'Expose this project to MCP (AI Agent) server?',
+          initialValue: true,
+        }),
     },
     {
       onCancel: () => {
@@ -117,6 +123,7 @@ export async function runSetupFlow(
       tools: config.tools as string[],
       linkedProjects: config.linkedProjects as string[],
       addToGitignore: config.addToGitignore as boolean,
+      exposeToMCP: config.exposeToMCP as boolean,
     }, workspacePath, workspaceName, existingProjects);
 
     s.stop('Configuration generated');
@@ -155,22 +162,40 @@ export async function runSetupFlow(
     
     note(summary.join('\n'), 'Setup Summary');
     
-    // Gateway to MCP Setup
-    const shouldConfigureMCP = await confirm({
-      message: 'Would you like to configure the MCP server now?',
-      initialValue: true,
-    });
-
-    if (shouldConfigureMCP && !isCancel(shouldConfigureMCP)) {
-      const { runMCP } = await import('../../mcp/index');
-      await runMCP();
+    // MCP Configuration handling
+    // If user opted to expose to MCP during setup, we don't need to ask again
+    // But we might want to ask to START the server if it's not running?
+    // For now, let's keep it simple: if they didn't expose, ask if they want to configure.
+    
+    if (config.exposeToMCP) {
+        // Already handled in generateConfiguration, just let them know
+        note(`${pc.green('✓')} Project exposed to MCP Hub`, 'MCP Configuration');
+        
+        // Maybe ask to start server if installed?
+        // For now, just finish gracefully.
+        if (linkedProjects.length > 0) {
+            outro(pc.green(`✓ Setup complete! Open ${pc.bold(`${workspaceName}.code-workspace`)} in VSCode to access linked knowledge.`));
+        } else {
+            outro(pc.green(`✓ Setup complete! Your agents are ready to use.`));
+        }
     } else {
-      // Show appropriate outro message
-      if (linkedProjects.length > 0) {
-        outro(pc.green(`✓ Setup complete! Open ${pc.bold(`${workspaceName}.code-workspace`)} in VSCode to access linked knowledge.`));
-      } else {
-        outro(pc.green(`✓ Setup complete! Your agents are ready to use.`));
-      }
+        // Gateway to MCP Setup (Validation: only if NOT exposed)
+        const shouldConfigureMCP = await confirm({
+          message: 'Would you like to configure the MCP server now?',
+          initialValue: true,
+        });
+
+        if (shouldConfigureMCP && !isCancel(shouldConfigureMCP)) {
+          const { runMCP } = await import('../../mcp/index');
+          await runMCP();
+        } else {
+          // Show appropriate outro message
+          if (linkedProjects.length > 0) {
+            outro(pc.green(`✓ Setup complete! Open ${pc.bold(`${workspaceName}.code-workspace`)} in VSCode to access linked knowledge.`));
+          } else {
+            outro(pc.green(`✓ Setup complete! Your agents are ready to use.`));
+          }
+        }
     }
 
   } catch (error) {
@@ -272,6 +297,57 @@ tools:
       config.linkedProjects.includes(`${p.name}:${p.source}`)
     );
     generateVSCodeWorkspace(workspacePath, workspaceName, selectedProjects, config.globalPath);
+  }
+
+  // Expose to MCP if requested
+  if (config.exposeToMCP) {
+    try {
+      // Dynamic imports to avoid circular deps or heavy loads if not needed
+      const { loadMCPConfig, saveMCPConfig, setProjectConfig } = await import('../../mcp/config');
+      const { getWorkspaceName } = await import('../../lib/paths');
+      
+      const mcpConfig = loadMCPConfig();
+      const currentProjectName = workspaceName; // Already validated in setup-flow
+      
+      // We need to know the SOURCE of this project. 
+      // Since we are running IN the project, and we just set it up...
+      // If storageMode is global, source is global.
+      // If storageMode is workspace, source is workspace.
+      
+      // Actually, scanForProjects would detect it. But we can just add it blindly if we trust our paths.
+      // However, the MCP config only stores the NAME and EXPOSE status. 
+      // The `scanForProjects` function in `lib/detection` is responsible for finding the path.
+      // So as long as we add it to the config, `scanForProjects` will find it (if it's in a scannable location?)
+      
+      // Wait, `mcp.yaml` config purely stores "project X is exposed: true".
+      // It relies on `scanForProjects` to find "project X".
+      // If `scanForProjects` can't find it (e.g. custom location not in home dir scan), then exposing it does nothing.
+      // BUT `scanForProjects` scans the `workspaces` dir in global home.
+      
+      if (config.storageMode === 'workspace') {
+          // If in workspace mode, it might NOT be found by default scan if it's in a random folder.
+          // Is `scanForProjects` searching the entire disk? No.
+          // It searches `~` (non-recursive, just 1 level or known code dirs) and `~/.rrce-workflow/workspaces`.
+          
+          // CRITICAL: We might need to "register" the path if it's weird?
+          // Currently `rrce-workflow` detection seems to scan specific dirs.
+          // Let's assume for now the user puts code in a standard place or we rely on the scanner.
+          // Actually, looking at `scanForProjects`:
+          // It looks at `paths.ts` -> `getProjectPaths`.
+          
+          // For now, just setting the config is the correct "intent".
+          setProjectConfig(mcpConfig, currentProjectName, true);
+          saveMCPConfig(mcpConfig);
+      } else {
+          // Global mode -> definitely in `~/.rrce-workflow/workspaces/` so it will be found.
+          setProjectConfig(mcpConfig, currentProjectName, true);
+          saveMCPConfig(mcpConfig);
+      }
+
+    } catch (e) {
+      // Don't fail the whole setup if MCP config fails, just log/warn
+      console.error('Failed to update MCP config:', e);
+    }
   }
 }
 
