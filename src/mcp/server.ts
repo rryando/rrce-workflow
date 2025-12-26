@@ -17,6 +17,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { logger } from './logger';
 import { loadMCPConfig, getProjectPermissions } from './config';
 import { getExposedProjects, getProjectContext, getProjectTasks, searchKnowledge } from './resources';
 import { AGENT_PROMPTS } from './prompts';
@@ -36,26 +37,52 @@ let mcpServer: Server | null = null;
  * Start the MCP server with stdio transport
  */
 export async function startMCPServer(): Promise<{ port: number; pid: number }> {
-  const config = loadMCPConfig();
-  
-  mcpServer = new Server(
-    { name: 'rrce-mcp-hub', version: '1.0.0' },
-    { capabilities: { resources: {}, tools: {}, prompts: {} } }
-  );
+  try {
+    logger.info('Starting MCP Server...');
+    
+    // Global error handlers to prevent silent crashes
+    process.on('uncaughtException', (error) => {
+      logger.error('Uncaught Exception', error);
+      // Don't exit immediately, try to keep going if possible, or at least log it
+      console.error('Uncaught Exception:', error);
+    });
+    
+    process.on('unhandledRejection', (reason) => {
+      logger.error('Unhandled Rejection', reason);
+      console.error('Unhandled Rejection:', reason);
+    });
 
-  registerResourceHandlers(mcpServer);
-  registerToolHandlers(mcpServer);
-  registerPromptHandlers(mcpServer);
+    const config = loadMCPConfig();
+    
+    mcpServer = new Server(
+      { name: 'rrce-mcp-hub', version: '1.0.0' },
+      { capabilities: { resources: {}, tools: {}, prompts: {} } }
+    );
 
-  const transport = new StdioServerTransport();
-  await mcpServer.connect(transport);
+    // Set up error handling for the server instance
+    mcpServer.onerror = (error) => {
+      logger.error('MCP Server Error', error);
+    };
 
-  serverState = { running: true, port: config.server.port, pid: process.pid };
+    registerResourceHandlers(mcpServer);
+    registerToolHandlers(mcpServer);
+    registerPromptHandlers(mcpServer);
 
-  console.error(`RRCE MCP Hub started (pid: ${process.pid})`);
-  console.error(`Exposed projects: ${getExposedProjects().map(p => p.name).join(', ')}`);
+    const transport = new StdioServerTransport();
+    await mcpServer.connect(transport);
 
-  return { port: config.server.port, pid: process.pid };
+    serverState = { running: true, port: config.server.port, pid: process.pid };
+
+    const exposed = getExposedProjects().map(p => p.name).join(', ');
+    logger.info(`RRCE MCP Hub started (pid: ${process.pid})`, { exposedProjects: exposed });
+    console.error(`RRCE MCP Hub started (pid: ${process.pid})`);
+    console.error(`Exposed projects: ${exposed}`);
+
+    return { port: config.server.port, pid: process.pid };
+  } catch (error) {
+    logger.error('Failed to start MCP server', error);
+    throw error;
+  }
 }
 
 /**
@@ -63,6 +90,7 @@ export async function startMCPServer(): Promise<{ port: number; pid: number }> {
  */
 function registerResourceHandlers(server: Server): void {
   server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    logger.debug('Listing resources');
     const projects = getExposedProjects();
     const resources: Array<{ uri: string; name: string; description: string; mimeType: string }> = [];
 
@@ -101,37 +129,43 @@ function registerResourceHandlers(server: Server): void {
 
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     const { uri } = request.params;
+    logger.info(`Reading resource: ${uri}`);
 
-    if (uri === 'rrce://projects') {
-      const projects = getExposedProjects();
-      return {
-        contents: [{
-          uri,
-          mimeType: 'application/json',
-          text: JSON.stringify(projects.map(p => ({ name: p.name, source: p.source, path: p.path })), null, 2),
-        }],
-      };
+    try {
+      if (uri === 'rrce://projects') {
+        const projects = getExposedProjects();
+        return {
+          contents: [{
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify(projects.map(p => ({ name: p.name, source: p.source, path: p.path })), null, 2),
+          }],
+        };
+      }
+
+      const projectMatch = uri.match(/^rrce:\/\/projects\/([^/]+)\/(.+)$/);
+      if (projectMatch) {
+        const [, projectName, resourceType] = projectMatch;
+        const content = resourceType === 'context' 
+          ? getProjectContext(projectName)
+          : JSON.stringify(getProjectTasks(projectName), null, 2);
+        
+        if (content === null) throw new Error(`Resource not found: ${uri}`);
+
+        return {
+          contents: [{
+            uri,
+            mimeType: resourceType === 'tasks' ? 'application/json' : 'text/markdown',
+            text: content,
+          }],
+        };
+      }
+
+      throw new Error(`Unknown resource: ${uri}`);
+    } catch (error) {
+      logger.error(`Failed to read resource: ${uri}`, error);
+      throw error;
     }
-
-    const projectMatch = uri.match(/^rrce:\/\/projects\/([^/]+)\/(.+)$/);
-    if (projectMatch) {
-      const [, projectName, resourceType] = projectMatch;
-      const content = resourceType === 'context' 
-        ? getProjectContext(projectName)
-        : JSON.stringify(getProjectTasks(projectName), null, 2);
-      
-      if (content === null) throw new Error(`Resource not found: ${uri}`);
-
-      return {
-        contents: [{
-          uri,
-          mimeType: resourceType === 'tasks' ? 'application/json' : 'text/markdown',
-          text: content,
-        }],
-      };
-    }
-
-    throw new Error(`Unknown resource: ${uri}`);
   });
 }
 
@@ -169,33 +203,41 @@ function registerToolHandlers(server: Server): void {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+    logger.info(`Calling tool: ${name}`, args);
 
-    switch (name) {
-      case 'search_knowledge': {
-        const results = searchKnowledge((args as { query: string }).query);
-        return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
-      }
-
-      case 'list_projects': {
-        const projects = getExposedProjects();
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify(projects.map(p => ({ name: p.name, source: p.source, path: p.path })), null, 2),
-          }],
-        };
-      }
-
-      case 'get_project_context': {
-        const context = getProjectContext((args as { project: string }).project);
-        if (!context) {
-          return { content: [{ type: 'text', text: `No project context found for "${(args as { project: string }).project}"` }], isError: true };
+    try {
+      switch (name) {
+        case 'search_knowledge': {
+          const results = searchKnowledge((args as { query: string }).query);
+          return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
         }
-        return { content: [{ type: 'text', text: context }] };
-      }
 
-      default:
-        throw new Error(`Unknown tool: ${name}`);
+        case 'list_projects': {
+          const projects = getExposedProjects();
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(projects.map(p => ({ name: p.name, source: p.source, path: p.path })), null, 2),
+            }],
+          };
+        }
+
+        case 'get_project_context': {
+          const context = getProjectContext((args as { project: string }).project);
+          if (!context) {
+            const msg = `No project context found for "${(args as { project: string }).project}"`;
+            logger.warn(msg);
+            return { content: [{ type: 'text', text: msg }], isError: true };
+          }
+          return { content: [{ type: 'text', text: context }] };
+        }
+
+        default:
+          throw new Error(`Unknown tool: ${name}`);
+      }
+    } catch (error) {
+      logger.error(`Tool execution failed: ${name}`, error);
+      throw error;
     }
   });
 }
@@ -214,27 +256,33 @@ function registerPromptHandlers(server: Server): void {
 
   server.setRequestHandler(GetPromptRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+    logger.info(`Getting prompt: ${name}`, args);
     
-    const promptDef = AGENT_PROMPTS.find(p => p.name === name);
-    if (!promptDef) throw new Error(`Unknown prompt: ${name}`);
+    try {
+      const promptDef = AGENT_PROMPTS.find(p => p.name === name);
+      if (!promptDef) throw new Error(`Unknown prompt: ${name}`);
 
-    const promptsDir = getAgentCorePromptsDir();
-    const promptPath = path.join(promptsDir, promptDef.file);
-    
-    if (!fs.existsSync(promptPath)) throw new Error(`Prompt file not found: ${promptDef.file}`);
+      const promptsDir = getAgentCorePromptsDir();
+      const promptPath = path.join(promptsDir, promptDef.file);
+      
+      if (!fs.existsSync(promptPath)) throw new Error(`Prompt file not found: ${promptDef.file}`);
 
-    let promptContent = fs.readFileSync(promptPath, 'utf-8');
+      let promptContent = fs.readFileSync(promptPath, 'utf-8');
 
-    if (args) {
-      for (const [key, value] of Object.entries(args)) {
-        promptContent = promptContent.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value));
+      if (args) {
+        for (const [key, value] of Object.entries(args)) {
+          promptContent = promptContent.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value));
+        }
       }
-    }
 
-    return {
-      description: promptDef.description,
-      messages: [{ role: 'user', content: { type: 'text', text: promptContent } }],
-    };
+      return {
+        description: promptDef.description,
+        messages: [{ role: 'user', content: { type: 'text', text: promptContent } }],
+      };
+    } catch (error) {
+      logger.error(`Failed to get prompt: ${name}`, error);
+      throw error;
+    }
   });
 }
 
@@ -243,10 +291,12 @@ function registerPromptHandlers(server: Server): void {
  */
 export function stopMCPServer(): void {
   if (mcpServer) {
+    logger.info('Stopping MCP Server...');
     mcpServer.close();
     mcpServer = null;
   }
   serverState = { running: false };
+  logger.info('RRCE MCP Hub stopped');
   console.error('RRCE MCP Hub stopped');
 }
 

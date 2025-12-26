@@ -191,11 +191,13 @@ async function handleShowStatus(): Promise<void> {
  * Configure which projects to expose
  */
 async function handleConfigure(): Promise<void> {
+  const { logger } = await import('./logger');
   const s = spinner();
   s.start('Scanning for projects...');
 
   const config = loadMCPConfig();
   const projects = scanForProjects();
+  logger.info('Configure: Loaded config', { projects: config.projects, defaultMode: config.defaults.includeNew });
 
   s.stop('Projects found');
 
@@ -237,13 +239,15 @@ async function handleConfigure(): Promise<void> {
 
   // Update config
   const selectedNames = selected as string[];
-  
+  logger.info('Configure: User selected projects', selectedNames);
+
   for (const project of projects) {
     const shouldExpose = selectedNames.includes(project.name);
     setProjectConfig(config, project.name, shouldExpose);
   }
 
   saveMCPConfig(config);
+  logger.info('Configure: Config saved', config);
 
   const exposedCount = selectedNames.length;
   note(
@@ -257,26 +261,82 @@ async function handleConfigure(): Promise<void> {
 /**
  * Start the MCP server
  */
+/**
+ * Start the MCP server - Interactive Mode
+ * Starts the server and streams logs to the console
+ */
 async function handleStartServer(): Promise<void> {
-  const s = spinner();
-  s.start('Starting MCP server...');
+  const fs = await import('fs');
+  const { getLogFilePath } = await import('./logger');
+
+  // Clear screen for server view
+  console.clear();
+  
+  const logPath = getLogFilePath();
+  
+  console.log(pc.cyan('╔═══════════════════════════════════════════╗'));
+  console.log(pc.cyan('║           RRCE MCP Hub Running            ║'));
+  console.log(pc.cyan('╚═══════════════════════════════════════════╝'));
+  console.log('');
+  console.log(pc.dim('Server is running in Stdio mode (JSON-RPC).'));
+  console.log(pc.dim('Do not type in this console as it may interfere with the protocol.'));
+  console.log(pc.dim(`Logging to: ${logPath}`));
+  console.log(pc.yellow('Press Ctrl+C to stop the server'));
+  console.log('');
+  console.log(pc.bold('Server Logs:'));
+  console.log(pc.dim('---------------------------------------------'));
 
   try {
-    const result = await startMCPServer();
-    s.stop(pc.green(`MCP server started on port ${result.port}`));
+    // Start server (hooks up Stdio transport)
+    await startMCPServer();
     
-    note(
-      `The MCP server is now running.\n\n` +
-      `To connect from Claude Desktop, add to your config:\n` +
-      pc.cyan(`~/.config/claude/claude_desktop_config.json`),
-      'Server Started'
-    );
+    // Tail the log file and print to stderr to avoid polluting stdout (which is used for JSON-RPC)
+    // We use a simple polling approach for tailing
+    let lastSize = 0;
+    
+    // Check if file exists first
+    if (fs.existsSync(logPath)) {
+      const stats = fs.statSync(logPath);
+      lastSize = stats.size;
+    }
+
+    // Keep process alive and poll for logs
+    setInterval(() => {
+      if (fs.existsSync(logPath)) {
+        const stats = fs.statSync(logPath);
+        if (stats.size > lastSize) {
+          const stream = fs.createReadStream(logPath, {
+            start: lastSize,
+            end: stats.size,
+            encoding: 'utf-8',
+          });
+          
+          stream.on('data', (chunk) => {
+            process.stderr.write(chunk); // Write to stderr!
+          });
+          
+          lastSize = stats.size;
+        }
+      }
+    }, 500);
+
+    // Handle shutdown
+    const cleanup = () => {
+      stopMCPServer();
+      console.log(pc.yellow('\nMCP Server caught signal, stopping...'));
+      process.exit(0);
+    };
+
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+
+    // Keep promise from resolving to hold the TUI loop (though we effectively exit the loop visually)
+    await new Promise(() => {});
+
   } catch (error) {
-    s.stop(pc.red('Failed to start server'));
-    note(
-      `Error: ${error instanceof Error ? error.message : String(error)}`,
-      'Server Error'
-    );
+    console.error(pc.red('\nFailed to start server:'));
+    console.error(error);
+    process.exit(1);
   }
 }
 

@@ -104,63 +104,121 @@ export function saveMCPConfig(config: MCPConfig): void {
 
 /**
  * Parse MCP config from YAML string
- * Simple parser without external dependencies
+ * Line-by-line parser to properly handle YAML structure
  */
 function parseMCPConfig(content: string): MCPConfig {
   const config: MCPConfig = { ...DEFAULT_MCP_CONFIG, projects: [] };
+  const lines = content.split('\n');
+  
+  let currentSection: 'server' | 'defaults' | 'projects' | null = null;
+  let currentProject: MCPProjectConfig | null = null;
+  let inPermissions = false;
 
-  // Parse server section
-  const portMatch = content.match(/port:\s*(\d+)/);
-  if (portMatch?.[1]) config.server.port = parseInt(portMatch[1], 10);
-
-  const autoStartMatch = content.match(/autoStart:\s*(true|false)/);
-  if (autoStartMatch) config.server.autoStart = autoStartMatch[1] === 'true';
-
-  // Parse defaults section
-  const includeNewMatch = content.match(/includeNew:\s*(true|false)/);
-  if (includeNewMatch) config.defaults.includeNew = includeNewMatch[1] === 'true';
-
-  // Parse projects section
-  const projectsMatch = content.match(/projects:\s*\n((?:\s+-[\s\S]*?(?=\n\w|\n*$))+)/);
-  if (projectsMatch?.[1]) {
-    const projectsContent = projectsMatch[1];
-    const projectBlocks = projectsContent.split(/\n\s+-\s+name:/).filter(Boolean);
+  for (const line of lines) {
+    const trimmed = line.trim();
     
-    for (const block of projectBlocks) {
-      const nameMatch = block.match(/(?:^|\n\s*)name:\s*[\"']?([^\"'\n]+)[\"']?/) || 
-                        block.match(/^[\"']?([^\"'\n:]+)[\"']?/);
-      const exposeMatch = block.match(/expose:\s*(true|false)/);
+    // Skip comments and empty lines
+    if (trimmed.startsWith('#') || trimmed === '') continue;
+    
+    // Detect top-level sections
+    if (line.match(/^server:/)) {
+      currentSection = 'server';
+      currentProject = null;
+      inPermissions = false;
+      continue;
+    }
+    if (line.match(/^defaults:/)) {
+      currentSection = 'defaults';
+      currentProject = null;
+      inPermissions = false;
+      continue;
+    }
+    if (line.match(/^projects:/)) {
+      currentSection = 'projects';
+      currentProject = null;
+      inPermissions = false;
+      continue;
+    }
+    
+    // Parse based on current section
+    if (currentSection === 'server') {
+      const portMatch = trimmed.match(/^port:\s*(\d+)/);
+      if (portMatch?.[1]) config.server.port = parseInt(portMatch[1], 10);
       
-      if (nameMatch?.[1]) {
-        const permissions = parsePermissions(block);
-        config.projects.push({
-          name: nameMatch[1].trim(),
-          expose: exposeMatch ? exposeMatch[1] === 'true' : true,
-          permissions,
-        });
+      const autoStartMatch = trimmed.match(/^autoStart:\s*(true|false)/);
+      if (autoStartMatch) config.server.autoStart = autoStartMatch[1] === 'true';
+    }
+    
+    if (currentSection === 'defaults') {
+      const includeNewMatch = trimmed.match(/^includeNew:\s*(true|false)/);
+      if (includeNewMatch) config.defaults.includeNew = includeNewMatch[1] === 'true';
+      
+      // Handle defaults.permissions
+      if (trimmed === 'permissions:') {
+        inPermissions = true;
+        continue;
+      }
+      if (inPermissions) {
+        const knowledgeMatch = trimmed.match(/^knowledge:\s*(true|false)/);
+        if (knowledgeMatch) config.defaults.permissions.knowledge = knowledgeMatch[1] === 'true';
+        
+        const tasksMatch = trimmed.match(/^tasks:\s*(true|false)/);
+        if (tasksMatch) config.defaults.permissions.tasks = tasksMatch[1] === 'true';
+        
+        const refsMatch = trimmed.match(/^refs:\s*(true|false)/);
+        if (refsMatch) config.defaults.permissions.refs = refsMatch[1] === 'true';
+      }
+    }
+    
+    if (currentSection === 'projects') {
+      // New project entry starts with "- name:"
+      const projectNameMatch = line.match(/^\s+-\s+name:\s*["']?([^"'\n]+)["']?/);
+      if (projectNameMatch) {
+        // Save previous project if exists
+        if (currentProject && currentProject.name) {
+          config.projects.push(currentProject);
+        }
+        currentProject = {
+          name: projectNameMatch[1]!.trim(),
+          expose: true,
+          permissions: { ...DEFAULT_PERMISSIONS },
+        };
+        inPermissions = false;
+        continue;
+      }
+      
+      // Parse project properties
+      if (currentProject) {
+        const exposeMatch = trimmed.match(/^expose:\s*(true|false)/);
+        if (exposeMatch) {
+          currentProject.expose = exposeMatch[1] === 'true';
+        }
+        
+        if (trimmed === 'permissions:') {
+          inPermissions = true;
+          continue;
+        }
+        
+        if (inPermissions) {
+          const knowledgeMatch = trimmed.match(/^knowledge:\s*(true|false)/);
+          if (knowledgeMatch) currentProject.permissions.knowledge = knowledgeMatch[1] === 'true';
+          
+          const tasksMatch = trimmed.match(/^tasks:\s*(true|false)/);
+          if (tasksMatch) currentProject.permissions.tasks = tasksMatch[1] === 'true';
+          
+          const refsMatch = trimmed.match(/^refs:\s*(true|false)/);
+          if (refsMatch) currentProject.permissions.refs = refsMatch[1] === 'true';
+        }
       }
     }
   }
+  
+  // Don't forget the last project
+  if (currentProject && currentProject.name) {
+    config.projects.push(currentProject);
+  }
 
   return config;
-}
-
-/**
- * Parse permissions from a project block
- */
-function parsePermissions(block: string): MCPPermissions {
-  const permissions = { ...DEFAULT_PERMISSIONS };
-  
-  const knowledgeMatch = block.match(/knowledge:\s*(true|false)/);
-  if (knowledgeMatch) permissions.knowledge = knowledgeMatch[1] === 'true';
-  
-  const tasksMatch = block.match(/tasks:\s*(true|false)/);
-  if (tasksMatch) permissions.tasks = tasksMatch[1] === 'true';
-  
-  const refsMatch = block.match(/refs:\s*(true|false)/);
-  if (refsMatch) permissions.refs = refsMatch[1] === 'true';
-  
-  return permissions;
 }
 
 /**
