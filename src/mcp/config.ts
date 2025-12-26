@@ -189,6 +189,11 @@ function parseMCPConfig(content: string): MCPConfig {
       
       // Parse project properties
       if (currentProject) {
+        const pathMatch = trimmed.match(/^path:\s*["']?([^"'\n]+)["']?/);
+        if (pathMatch) {
+            currentProject.path = pathMatch[1].trim();
+        }
+
         const exposeMatch = trimmed.match(/^expose:\s*(true|false)/);
         if (exposeMatch) {
           currentProject.expose = exposeMatch[1] === 'true';
@@ -247,7 +252,11 @@ projects:
   } else {
     for (const project of config.projects) {
       content += `  - name: "${project.name}"
-    expose: ${project.expose}
+`;
+      if (project.path) {
+        content += `    path: "${project.path}"\n`;
+      }
+      content += `    expose: ${project.expose}
     permissions:
       knowledge: ${project.permissions.knowledge}
       tasks: ${project.permissions.tasks}
@@ -266,18 +275,41 @@ export function setProjectConfig(
   config: MCPConfig, 
   name: string, 
   expose: boolean,
-  permissions?: Partial<MCPPermissions>
+  permissions?: Partial<MCPPermissions>,
+  projectPath?: string
 ): MCPConfig {
-  const existing = config.projects.find(p => p.name === name);
+  let existing = config.projects.find(p => {
+    // Exact match on path if both have it
+    if (projectPath && p.path) {
+        return p.path === projectPath;
+    }
+    // Fallback to name match if paths are missing
+    if (!projectPath && !p.path) {
+        return p.name === name;
+    }
+    // If one has path and other doesn't, but names match?
+    // Assume legacy config upgrade if name matches and config has no path
+    if (projectPath && !p.path && p.name === name) {
+        return true;
+    }
+    return false;
+  });
   
   if (existing) {
     existing.expose = expose;
+    // Upgrade path if missing
+    if (projectPath && !existing.path) {
+        existing.path = projectPath;
+    }
     if (permissions) {
       existing.permissions = { ...existing.permissions, ...permissions };
     }
   } else {
+    // If we didn't find it by path, try checking if there's a loose name match to avoid duplicates?
+    // No, if the user explicitly provided a path, we treat it as a distinct entry unless matched above.
     config.projects.push({
       name,
+      path: projectPath,
       expose,
       permissions: permissions ? { ...DEFAULT_PERMISSIONS, ...permissions } : { ...DEFAULT_PERMISSIONS },
     });
@@ -297,8 +329,14 @@ export function removeProjectConfig(config: MCPConfig, name: string): MCPConfig 
 /**
  * Check if a project is exposed via MCP
  */
-export function isProjectExposed(config: MCPConfig, name: string): boolean {
-  const project = config.projects.find(p => p.name === name);
+export function isProjectExposed(config: MCPConfig, name: string, projectPath?: string): boolean {
+  const project = config.projects.find(p => {
+    if (projectPath && p.path) return p.path === projectPath;
+    if (!projectPath && !p.path) return p.name === name;
+    // Fallback: if we have a path but config doesn't, allow name match
+    if (projectPath && !p.path) return p.name === name;
+    return false;
+  });
   
   // If explicitly configured, use that
   if (project) {
@@ -312,7 +350,12 @@ export function isProjectExposed(config: MCPConfig, name: string): boolean {
 /**
  * Get permissions for a project
  */
-export function getProjectPermissions(config: MCPConfig, name: string): MCPPermissions {
-  const project = config.projects.find(p => p.name === name);
+export function getProjectPermissions(config: MCPConfig, name: string, projectPath?: string): MCPPermissions {
+  const project = config.projects.find(p => {
+    if (projectPath && p.path) return p.path === projectPath;
+    if (!projectPath && !p.path) return p.name === name;
+    if (projectPath && !p.path) return p.name === name;
+    return false;
+  });
   return project?.permissions ?? config.defaults.permissions;
 }

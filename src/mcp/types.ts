@@ -10,6 +10,7 @@ export interface MCPPermissions {
 
 export interface MCPProjectConfig {
   name: string;
+  path?: string;
   expose: boolean;
   permissions: MCPPermissions;
 }

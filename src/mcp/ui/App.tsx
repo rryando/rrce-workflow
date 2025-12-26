@@ -102,14 +102,17 @@ export const App = ({ onExit, onConfigure, onInstall, initialPort }: AppProps) =
     if (input === 'q' || (key.ctrl && input === 'c')) {
       stopMCPServer();
       onExit(); // This triggers unmount/cleanup in index.ts
+      exit();
     }
     
     if (input === 'p') {
       onConfigure();
+      exit();
     }
     
     if (input === 'i') {
       onInstall();
+      exit();
     }
 
     if (input === 'c') {

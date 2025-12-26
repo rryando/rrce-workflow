@@ -14,7 +14,7 @@ import { scanForProjects, type DetectedProject } from '../lib/detection';
 export function getExposedProjects(): DetectedProject[] {
   const config = loadMCPConfig();
   const allProjects = scanForProjects();
-  return allProjects.filter(project => isProjectExposed(config, project.name));
+  return allProjects.filter(project => isProjectExposed(config, project.name, project.dataPath));
 }
 
 /**
@@ -37,20 +37,21 @@ export function detectActiveProject(): DetectedProject | undefined {
  */
 export function getProjectContext(projectName: string): string | null {
   const config = loadMCPConfig();
+  const projects = scanForProjects();
   
-  if (!isProjectExposed(config, projectName)) {
+  // Find the SPECIFIC project that is exposed (disambiguate by path if need be)
+  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.dataPath));
+  
+  if (!project) {
     return null;
   }
 
-  const permissions = getProjectPermissions(config, projectName);
+  const permissions = getProjectPermissions(config, projectName, project.dataPath);
   if (!permissions.knowledge) {
     return null;
   }
-
-  const projects = scanForProjects();
-  const project = projects.find(p => p.name === projectName);
   
-  if (!project?.knowledgePath) {
+  if (!project.knowledgePath) {
     return null;
   }
 
@@ -68,20 +69,20 @@ export function getProjectContext(projectName: string): string | null {
  */
 export function getProjectTasks(projectName: string): object[] {
   const config = loadMCPConfig();
+  const projects = scanForProjects();
   
-  if (!isProjectExposed(config, projectName)) {
+  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.dataPath));
+  
+  if (!project) {
     return [];
   }
 
-  const permissions = getProjectPermissions(config, projectName);
+  const permissions = getProjectPermissions(config, projectName, project.dataPath);
   if (!permissions.tasks) {
     return [];
   }
-
-  const projects = scanForProjects();
-  const project = projects.find(p => p.name === projectName);
   
-  if (!project?.tasksPath || !fs.existsSync(project.tasksPath)) {
+  if (!project.tasksPath || !fs.existsSync(project.tasksPath)) {
     return [];
   }
 
@@ -126,7 +127,7 @@ export function searchKnowledge(query: string): Array<{
   const queryLower = query.toLowerCase();
 
   for (const project of projects) {
-    const permissions = getProjectPermissions(config, project.name);
+    const permissions = getProjectPermissions(config, project.name, project.dataPath);
     
     if (!permissions.knowledge || !project.knowledgePath) continue;
     
