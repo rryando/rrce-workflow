@@ -198,6 +198,23 @@ function registerToolHandlers(server: Server): void {
           required: ['project'],
         },
       },
+      {
+        name: 'list_agents',
+        description: 'List available RRCE agents/workflows',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'get_agent_prompt',
+        description: 'Get the instructions/prompt for a specific agent',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            agent: { type: 'string', description: 'Name of the agent (e.g. init, plan, execute)' },
+            args: { type: 'object', description: 'Arguments for the agent prompt', additionalProperties: true },
+          },
+          required: ['agent'],
+        },
+      },
     ],
   }));
 
@@ -230,6 +247,70 @@ function registerToolHandlers(server: Server): void {
             return { content: [{ type: 'text', text: msg }], isError: true };
           }
           return { content: [{ type: 'text', text: context }] };
+        }
+
+        case 'list_agents': {
+          const prompts = getAllPrompts();
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(prompts.map(p => ({ 
+                name: p.name, 
+                description: p.description,
+                arguments: p.arguments 
+              })), null, 2),
+            }],
+          };
+        }
+
+        case 'get_agent_prompt': {
+          const params = args as { agent: string; args?: Record<string, string> };
+          const agentName = params.agent;
+          const promptDef = getPromptDef(agentName);
+          
+          if (!promptDef) {
+            throw new Error(`Agent not found: ${agentName}`);
+          }
+
+          // Generate Prompt with Context Injection (Reusing logic from GetPrompt handler would be ideal, but for now duplicate the injection to ensure consistency)
+          // Actually, I should probably extract the "generatePromptWithContext" logic to a helper function to avoid duplication.
+          // But for now, let's reuse the logic from prompts.ts (renderPrompt) and add strict context.
+          
+          // Render content
+          const renderArgs = params.args || {};
+          // Ensure strings
+          const stringArgs: Record<string, string> = {};
+          for (const [key, val] of Object.entries(renderArgs)) {
+            stringArgs[key] = String(val);
+          }
+           
+          const content = renderPrompt(promptDef.content, stringArgs);
+          
+          // Context Injection (Same as GetPromptRequest)
+          const projects = getExposedProjects();
+          const activeProject = detectActiveProject();
+          
+          const projectList = projects.map(p => {
+            const isActive = activeProject && p.dataPath === activeProject.dataPath;
+            return `- ${p.name} (${p.source}) ${isActive ? '**[ACTIVE]**' : ''}`;
+          }).join('\n');
+          
+          let contextPreamble = `
+Context - Available Projects (MCP Hub):
+${projectList}
+`;
+
+          if (activeProject) {
+            contextPreamble += `\nCurrent Active Workspace: ${activeProject.name} (${activeProject.path})\n`;
+            contextPreamble += `IMPORTANT: Treat '${activeProject.path}' as the {{WORKSPACE_ROOT}}. All relative path operations (file reads/writes) MUST be performed relative to this directory.\n`;
+          }
+
+          contextPreamble += `
+Note: If the user's request refers to a project not listed here, ask them to expose it via 'rrce-workflow mcp configure'.
+
+---
+`;
+          return { content: [{ type: 'text', text: contextPreamble + content }] };
         }
 
         default:
