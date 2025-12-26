@@ -34,9 +34,10 @@ let serverState: ServerStatus = { running: false };
 let mcpServer: Server | null = null;
 
 /**
- * Start the MCP server with stdio transport
+ * Start the MCP server
+ * @param options.interactive If true, does not attach stdio transport (avoids conflict with TUI)
  */
-export async function startMCPServer(): Promise<{ port: number; pid: number }> {
+export async function startMCPServer(options: { interactive?: boolean } = {}): Promise<{ port: number; pid: number }> {
   try {
     logger.info('Starting MCP Server...');
     
@@ -68,8 +69,14 @@ export async function startMCPServer(): Promise<{ port: number; pid: number }> {
     registerToolHandlers(mcpServer);
     registerPromptHandlers(mcpServer);
 
-    const transport = new StdioServerTransport();
-    await mcpServer.connect(transport);
+    // Only attach transport if NOT interactive (TUI mode)
+    // In TUI mode, we run the logic but don't bind to stdio to avoid conflict with Ink
+    if (!options.interactive) {
+      const transport = new StdioServerTransport();
+      await mcpServer.connect(transport);
+    } else {
+        logger.info('Running in interactive mode (Stdio transport detached)');
+    }
 
     serverState = { running: true, port: config.server.port, pid: process.pid };
 

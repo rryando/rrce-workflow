@@ -43,7 +43,7 @@ export const App = ({ onExit, onConfigure, onInstall, initialPort }: AppProps) =
       if (!status.running) {
         try {
           // Check if server fails on start
-          const res = await startMCPServer();
+          const res = await startMCPServer({ interactive: true });
           setServerInfo(prev => ({ ...prev, running: true, port: res.port, pid: res.pid }));
         } catch (e) {
             setLogs(prev => [...prev, `Error starting server: ${e}`]);
