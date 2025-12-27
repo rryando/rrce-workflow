@@ -5,7 +5,11 @@ import { SimpleSelect } from './components/SimpleSelect';
 import { loadMCPConfig, saveMCPConfig, setProjectConfig } from '../config';
 import { scanForProjects } from '../../lib/detection';
 
-export const ProjectsView = () => {
+interface ProjectsViewProps {
+  onConfigChange?: () => void;
+}
+
+export const ProjectsView = ({ onConfigChange }: ProjectsViewProps) => {
   const [config, setConfig] = useState(loadMCPConfig());
   const allProjects = scanForProjects();
   
@@ -54,6 +58,7 @@ export const ProjectsView = () => {
     
     saveMCPConfig(newConfig);
     setConfig(newConfig); // Local update
+    if (onConfigChange) onConfigChange();
   };
 
   return (
@@ -70,7 +75,6 @@ export const ProjectsView = () => {
             onSelect={() => {}} 
             onSubmit={handleSubmit}
             onCancel={() => {}} // No cancel in tab view, just switch tabs
-            itemLimit={10}
         />
        </Box>
     </Box>

@@ -17,20 +17,25 @@ export const TabBar = ({ tabs, activeTab, onChange }: TabBarProps) => {
   useInput((input, key) => {
     if (key.leftArrow) {
       const index = tabs.findIndex(t => t.id === activeTab);
-      const nextIndex = (index - 1 + tabs.length) % tabs.length;
-      onChange(tabs[nextIndex].id);
+      if (index !== -1) {
+          const nextIndex = (index - 1 + tabs.length) % tabs.length;
+          onChange(tabs[nextIndex]?.id || tabs[0].id);
+      }
     }
     
     if (key.rightArrow) {
       const index = tabs.findIndex(t => t.id === activeTab);
-      const nextIndex = (index + 1) % tabs.length;
-      onChange(tabs[nextIndex].id);
+      if (index !== -1) {
+          const nextIndex = (index + 1) % tabs.length;
+          onChange(tabs[nextIndex]?.id || tabs[0].id);
+      }
     }
     
     // Support number keys for quick switching (1-9)
     const num = parseInt(input);
     if (!isNaN(num) && num > 0 && num <= tabs.length) {
-      onChange(tabs[num - 1].id);
+      const tab = tabs[num - 1];
+      if (tab) onChange(tab.id);
     }
   });
 
@@ -41,7 +46,7 @@ export const TabBar = ({ tabs, activeTab, onChange }: TabBarProps) => {
         return (
           <Box key={tab.id} marginRight={2}>
             <Text 
-              color={isActive ? 'cyan' : 'gray'} 
+              color={isActive ? 'cyan' : 'white'} 
               bold={isActive}
               backgroundColor={isActive ? 'black' : undefined}
             >

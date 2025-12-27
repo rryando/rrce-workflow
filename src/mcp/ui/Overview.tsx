@@ -2,7 +2,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { Header } from './Header';
-import { StatusBoard } from './StatusBoard';
+
 
 interface OverviewProps {
   serverStatus: {
@@ -19,18 +19,10 @@ interface OverviewProps {
 
 export const Overview = ({ serverStatus, stats }: OverviewProps) => {
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" flexGrow={1}>
       <Header />
-      <Box marginTop={1} marginBottom={1}>
-        <StatusBoard 
-            exposedLabel={`${stats.exposedProjects} / ${stats.totalProjects} projects`} 
-            port={serverStatus.port} 
-            pid={serverStatus.pid} 
-            running={serverStatus.running} 
-        />
-      </Box>
       
-      <Box borderStyle="round" padding={1} borderColor="white" flexDirection="column">
+      <Box borderStyle="round" padding={1} borderColor="white" flexDirection="column" flexGrow={1}>
          <Text bold underline>System Status</Text>
          <Box marginTop={1}>
             <Text>Integrations Installed: </Text>

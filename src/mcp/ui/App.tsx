@@ -5,6 +5,7 @@ import { Overview } from './Overview';
 import { ProjectsView } from './ProjectsView';
 import { InstallView } from './InstallView';
 import { LogViewer } from './LogViewer';
+import { StatusBoard } from './StatusBoard';
 import { TabBar, type Tab } from './components/TabBar';
 import { loadMCPConfig } from '../config';
 import { scanForProjects } from '../../lib/detection';
@@ -21,14 +22,14 @@ interface AppProps {
 
 const TABS: Tab[] = [
     { id: 'overview', label: 'Overview' },
+    { id: 'logs', label: 'Logs' },
     { id: 'projects', label: 'Projects' },
-    { id: 'install', label: 'Install' },
-    { id: 'logs', label: 'Logs' }
+    { id: 'install', label: 'Install' }
 ];
 
 export const App = ({ onExit, initialPort }: AppProps) => {
   const { exit } = useApp();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('logs');
   const [logs, setLogs] = useState<string[]>([]);
   const [serverInfo, setServerInfo] = useState({ 
     port: initialPort, 
@@ -36,8 +37,9 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     running: false 
   });
   
-  // Stats for Overview
-  const config = loadMCPConfig();
+  // Stats and Config
+  const [configVersion, setConfigVersion] = useState(0); // Used to trigger re-renders
+  const config = loadMCPConfig(); // Config re-reads on render, or we force update
   const projects = scanForProjects();
   const exposedProjects = projects.filter(p => {
     const cfg = config.projects.find(c => 
@@ -74,16 +76,14 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     start();
   }, []);
 
-  // Log Tailing Effect
+  // Log Tailing Effect (omitted for brevity, same as before)
   useEffect(() => {
     const logPath = getLogFilePath();
     let lastSize = 0;
-    
     if (fs.existsSync(logPath)) {
       const stats = fs.statSync(logPath);
       lastSize = stats.size;
     }
-
     const interval = setInterval(() => {
       if (fs.existsSync(logPath)) {
         const stats = fs.statSync(logPath);
@@ -92,20 +92,16 @@ export const App = ({ onExit, initialPort }: AppProps) => {
           const fd = fs.openSync(logPath, 'r');
           fs.readSync(fd, buffer, 0, buffer.length, lastSize);
           fs.closeSync(fd);
-          
           const newContent = buffer.toString('utf-8');
           const newLines = newContent.split('\n').filter(l => l.trim());
-          
           setLogs(prev => {
             const next = [...prev, ...newLines];
             return next.slice(-100); 
           });
-          
           lastSize = stats.size;
         }
       }
     }, 500);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -116,11 +112,17 @@ export const App = ({ onExit, initialPort }: AppProps) => {
       onExit();
       exit();
     }
-  }); // Note: TabBar handles arrow keys and numbers
+  }); 
 
   // Layout Calc
   const termHeight = process.stdout.rows || 24;
-  const contentHeight = termHeight - 8; // Header + TabBar + Borders
+  // Reduce content height to account for TabBar (header) AND StatusBoard (footer)
+  const contentHeight = termHeight - 8; 
+
+  const handleConfigChange = () => {
+      // Force re-render to update stats
+      setConfigVersion(prev => prev + 1);
+  };
 
   return (
     <Box flexDirection="column" padding={0} height={termHeight}>
@@ -137,9 +139,19 @@ export const App = ({ onExit, initialPort }: AppProps) => {
                  }} 
                />
            )}
-           {activeTab === 'projects' && <ProjectsView />}
+           {activeTab === 'projects' && <ProjectsView onConfigChange={handleConfigChange} />}
            {activeTab === 'install' && <InstallView />}
            {activeTab === 'logs' && <LogViewer logs={logs} height={contentHeight} />}
+       </Box>
+
+       {/* Persistent Status Bar */}
+       <Box marginTop={0}>
+          <StatusBoard 
+              exposedLabel={`${exposedProjects.length} / ${projects.length} projects`} 
+              port={serverInfo.port} 
+              pid={serverInfo.pid} 
+              running={serverInfo.running} 
+          />
        </Box>
     </Box>
   );
