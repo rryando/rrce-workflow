@@ -1,19 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { SimpleSelect } from './components/SimpleSelect';
-import { loadMCPConfig, saveMCPConfig } from '../config';
+import { loadMCPConfig, saveMCPConfig, setProjectConfig } from '../config';
 import { scanForProjects } from '../../lib/detection';
-import { setProjectConfig } from '../config';
 
-interface ConfigModalProps {
-  onBack: () => void;
-}
-
-export const ConfigModal = ({ onBack }: ConfigModalProps) => {
+export const ProjectsView = () => {
   const [config, setConfig] = useState(loadMCPConfig());
-  // Scan filtering out current workspace if needed - but here we want all.
-  // We want to list all detected projects.
   const allProjects = scanForProjects();
   
   // Merge with config to determine status
@@ -41,39 +34,45 @@ export const ConfigModal = ({ onBack }: ConfigModalProps) => {
   const handleSubmit = (selectedIds: string[]) => {
     let newConfig = { ...config };
     
-    // For each detected project, update its config
-    // This allows "Saving" the state.
-    // Note: This logic forces entries for all manipulated projects.
-    
+    // For each detected project, check if it's in the selectedIds list
     projectItems.forEach(item => {
         const isSelected = selectedIds.includes(item.value);
         const project = allProjects.find(p => p.dataPath === item.value);
+        
+        // Only update if changed or new
+        // Actually, the simplest way is to ensure all are recorded if we want persistence
         if (project) {
-            newConfig = setProjectConfig(
+             newConfig = setProjectConfig(
                 newConfig,
                 project.name,
                 isSelected,
-                undefined, // Keep existing permissions or defaults
-                project.path // Ensure path is stored
+                undefined, 
+                project.path 
             );
         }
     });
     
     saveMCPConfig(newConfig);
-    onBack();
+    setConfig(newConfig); // Local update
   };
 
   return (
-    <Box flexDirection="column">
-      <SimpleSelect 
-        message="Select projects to expose via MCP:"
-        items={projectItems}
-        isMulti={true}
-        initialSelected={initialSelected}
-        onSelect={() => {}} // Unused in multi
-        onSubmit={handleSubmit}
-        onCancel={onBack}
-      />
+    <Box flexDirection="column" padding={1} borderStyle="round" borderColor="cyan">
+       <Text bold color="cyan"> Exposed Projects </Text>
+       <Text color="dim"> Select projects to expose via the MCP server. Use Space to toggle, Enter to save.</Text>
+       <Box marginTop={1} flexDirection="column">
+        <SimpleSelect 
+            key={JSON.stringify(initialSelected)} // Force re-render on external updates if any
+            message="" // No header needed inside the view
+            items={projectItems}
+            isMulti={true}
+            initialSelected={initialSelected}
+            onSelect={() => {}} 
+            onSubmit={handleSubmit}
+            onCancel={() => {}} // No cancel in tab view, just switch tabs
+            itemLimit={10}
+        />
+       </Box>
     </Box>
   );
 };

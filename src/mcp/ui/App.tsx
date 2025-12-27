@@ -1,10 +1,17 @@
+
 import React, { useState, useEffect } from 'react';
 import { Box, useInput, useApp } from 'ink';
-import { Dashboard } from './Dashboard';
+import { Overview } from './Overview';
+import { ProjectsView } from './ProjectsView';
+import { InstallView } from './InstallView';
+import { LogViewer } from './LogViewer';
+import { TabBar, type Tab } from './components/TabBar';
 import { loadMCPConfig } from '../config';
 import { scanForProjects } from '../../lib/detection';
 import { getLogFilePath } from '../logger';
 import { stopMCPServer, startMCPServer, getMCPServerStatus } from '../server';
+import { checkInstallStatus } from '../install';
+import { detectWorkspaceRoot } from '../../lib/paths';
 import fs from 'fs';
 
 interface AppProps {
@@ -12,21 +19,24 @@ interface AppProps {
   initialPort: number;
 }
 
-import { ConfigModal } from './ConfigModal';
-import { InstallModal } from './InstallModal';
+const TABS: Tab[] = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'projects', label: 'Projects' },
+    { id: 'install', label: 'Install' },
+    { id: 'logs', label: 'Logs' }
+];
 
 export const App = ({ onExit, initialPort }: AppProps) => {
   const { exit } = useApp();
-  const [view, setView] = useState<'dashboard' | 'config' | 'install'>('dashboard');
+  const [activeTab, setActiveTab] = useState('overview');
   const [logs, setLogs] = useState<string[]>([]);
   const [serverInfo, setServerInfo] = useState({ 
     port: initialPort, 
     pid: process.pid,
     running: false 
   });
-  const [showHelp, setShowHelp] = useState(false);
   
-  // Load config for display
+  // Stats for Overview
   const config = loadMCPConfig();
   const projects = scanForProjects();
   const exposedProjects = projects.filter(p => {
@@ -35,11 +45,16 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     );
     return cfg?.expose ?? config.defaults.includeNew;
   });
-  
-  const exposedNames = exposedProjects.map(p => p.name).slice(0, 5);
-  const exposedLabel = exposedNames.length > 0 
-    ? exposedNames.join(', ') + (exposedProjects.length > 5 ? ` (+${exposedProjects.length - 5} more)` : '')
-    : '(none)';
+
+  const workspacePath = detectWorkspaceRoot();
+  const installStatus = checkInstallStatus(workspacePath);
+  const installedCount = [
+      installStatus.antigravity, 
+      installStatus.claude, 
+      installStatus.vscodeGlobal, 
+      installStatus.vscodeWorkspace
+    ].filter(Boolean).length;
+
 
   // Start Server Effect
   useEffect(() => {
@@ -47,21 +62,16 @@ export const App = ({ onExit, initialPort }: AppProps) => {
       const status = getMCPServerStatus();
       if (!status.running) {
         try {
-          // Check if server fails on start
           const res = await startMCPServer({ interactive: true });
           setServerInfo(prev => ({ ...prev, running: true, port: res.port, pid: res.pid }));
         } catch (e) {
-            setLogs(prev => [...prev, `Error starting server: ${e}`]);
+            setLogs(prev => [...prev, `[ERROR] Error starting server: ${e}`]);
         }
       } else {
          setServerInfo(prev => ({ ...prev, running: true, port: status.port || initialPort, pid: status.pid || process.pid }));
       }
     };
     start();
-
-    return () => {
-      // Cleanup handled by onExit logic mostly, but good practice
-    };
   }, []);
 
   // Log Tailing Effect
@@ -88,7 +98,7 @@ export const App = ({ onExit, initialPort }: AppProps) => {
           
           setLogs(prev => {
             const next = [...prev, ...newLines];
-            return next.slice(-50); // Keep last 50 logs
+            return next.slice(-100); 
           });
           
           lastSize = stats.size;
@@ -99,59 +109,38 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Input Handling
+  // Input Handling for Exit
   useInput((input, key) => {
-    // Debug logging
-    // fs.appendFileSync('input_debug.log', `Input: ${input}, Key: ${JSON.stringify(key)}\n`);
-
     if (input === 'q' || (key.ctrl && input === 'c')) {
       stopMCPServer();
-      onExit(); // This triggers unmount/cleanup in index.ts
+      onExit();
       exit();
     }
-    
-    if (input === 'p') {
-      setView('config');
-    }
-    
-    if (input === 'i') {
-      setView('install');
-    }
+  }); // Note: TabBar handles arrow keys and numbers
 
-    if (input === 'c') {
-      setLogs([]);
-    }
-    
-    if (input === 'r') {
-       setLogs(prev => [...prev, '[INFO] Config reload requested...']);
-    }
-
-    if (input === '?') {
-       setShowHelp(prev => !prev);
-    }
-  }, { isActive: true }); // Ensure we only capture when active
-
-  // Calculate layout
+  // Layout Calc
   const termHeight = process.stdout.rows || 24;
-  const logHeight = Math.max(5, termHeight - 12);
-
-  if (view === 'config') {
-      return <ConfigModal onBack={() => setView('dashboard')} />;
-  }
-  
-  if (view === 'install') {
-      return <InstallModal onBack={() => setView('dashboard')} />;
-  }
+  const contentHeight = termHeight - 8; // Header + TabBar + Borders
 
   return (
-    <Dashboard 
-      logs={logs}
-      exposedLabel={exposedLabel}
-      port={serverInfo.port}
-      pid={serverInfo.pid}
-      running={serverInfo.running}
-      logHeight={logHeight}
-      showHelp={showHelp}
-    />
+    <Box flexDirection="column" padding={0} height={termHeight}>
+       <TabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+       
+       <Box marginTop={1} flexGrow={1}>
+           {activeTab === 'overview' && (
+               <Overview 
+                 serverStatus={serverInfo} 
+                 stats={{ 
+                     exposedProjects: exposedProjects.length, 
+                     totalProjects: projects.length,
+                     installedIntegrations: installedCount
+                 }} 
+               />
+           )}
+           {activeTab === 'projects' && <ProjectsView />}
+           {activeTab === 'install' && <InstallView />}
+           {activeTab === 'logs' && <LogViewer logs={logs} height={contentHeight} />}
+       </Box>
+    </Box>
   );
 };
