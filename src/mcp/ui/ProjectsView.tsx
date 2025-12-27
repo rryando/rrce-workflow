@@ -17,7 +17,7 @@ export const ProjectsView = ({ onConfigChange }: ProjectsViewProps) => {
   const projectItems = allProjects.map(p => {
     // Check if explicitly configured
     const projectConfig = config.projects.find(c => 
-        (c.path && c.path === p.dataPath) || (!c.path && c.name === p.name)
+        (c.path && c.path === p.path) || (!c.path && c.name === p.name)
     );
     // Is exposed?
     // If explicit config exists, use it. Else use default.
@@ -62,7 +62,7 @@ export const ProjectsView = ({ onConfigChange }: ProjectsViewProps) => {
   };
 
   return (
-    <Box flexDirection="column" padding={1} borderStyle="round" borderColor="cyan">
+    <Box flexDirection="column" padding={1} borderStyle="round" borderColor="cyan" flexGrow={1}>
        <Text bold color="cyan"> Exposed Projects </Text>
        <Text color="dim"> Select projects to expose via the MCP server. Use Space to toggle, Enter to save.</Text>
        <Box marginTop={1} flexDirection="column">

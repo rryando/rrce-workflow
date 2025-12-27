@@ -43,7 +43,7 @@ export const App = ({ onExit, initialPort }: AppProps) => {
   const projects = scanForProjects();
   const exposedProjects = projects.filter(p => {
     const cfg = config.projects.find(c => 
-      (c.path && c.path === p.dataPath) || (!c.path && c.name === p.name)
+      (c.path && c.path === p.path) || (!c.path && c.name === p.name)
     );
     return cfg?.expose ?? config.defaults.includeNew;
   });

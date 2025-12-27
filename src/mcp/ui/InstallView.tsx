@@ -11,7 +11,7 @@ export const InstallView = () => {
     const workspacePath = detectWorkspaceRoot();
 
     return (
-        <Box flexDirection="column" padding={1} borderStyle="round" borderColor="magenta">
+        <Box flexDirection="column" padding={1} borderStyle="round" borderColor="magenta" flexGrow={1}>
             <Text bold color="magenta"> Installation & Configuration </Text>
              <Text color="dim"> Configure IDE integrations for VSCode, Claude, and Antigravity.</Text>
             <Box marginTop={1} flexDirection="column">
