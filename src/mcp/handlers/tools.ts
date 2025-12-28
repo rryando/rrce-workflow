@@ -4,7 +4,7 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../logger';
-import { getExposedProjects, getProjectContext, searchKnowledge, detectActiveProject } from '../resources';
+import { getExposedProjects, getProjectContext, searchKnowledge, indexKnowledge, detectActiveProject } from '../resources';
 import { getAllPrompts, getPromptDef, renderPrompt } from '../prompts';
 
 /**
@@ -21,6 +21,18 @@ export function registerToolHandlers(server: Server): void {
           properties: { query: { type: 'string', description: 'Search query to find in knowledge files' } },
           required: ['query'],
         },
+      },
+      {
+        name: 'index_knowledge',
+        description: 'Update the semantic search index for a specific project',
+        inputSchema: {
+            type: 'object',
+            properties: { 
+                project: { type: 'string', description: 'Name of the project to index' },
+                force: { type: 'boolean', description: 'Force re-indexing of all files' }
+            },
+            required: ['project']
+        }
       },
       {
         name: 'list_projects',
@@ -76,8 +88,14 @@ export function registerToolHandlers(server: Server): void {
     try {
       switch (name) {
         case 'search_knowledge': {
-          const results = searchKnowledge((args as { query: string }).query);
+          const results = await searchKnowledge((args as { query: string }).query);
           return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
+        }
+
+        case 'index_knowledge': {
+            const params = args as { project: string; force?: boolean };
+            const result = await indexKnowledge(params.project, params.force);
+            return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
 
         case 'list_projects': {

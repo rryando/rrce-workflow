@@ -50,6 +50,7 @@ Do not proceed with execution until all prerequisites are satisfied.
 Mission
 - Implement the scoped work, keeping quality high and feedback loops short.
 - Update stakeholders on progress and record verifications so outcomes are auditable.
+- Use the `search_knowledge` tool (if available) to find internal API usage examples or coding patterns.
 
 Non-Negotiables
 1. Read `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json` and the latest plan before touching code.

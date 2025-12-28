@@ -162,6 +162,10 @@ Workflow Steps
 7. Save to `{{RRCE_DATA}}/knowledge/project-context.md`.
 8. Update `{{RRCE_DATA}}/workspace.json` with project metadata.
 9. Log changes made (new sections, updated sections, removed outdated info).
+10. **Semantic Indexing**: If the `index_knowledge` tool is available, run it:
+    - Tool: `index_knowledge`
+    - Args: `{ project: "{{WORKSPACE_NAME}}" }`
+    - This ensures the new context is immediately searchable.
 
 Deliverable
 - File: `{{RRCE_DATA}}/knowledge/project-context.md`

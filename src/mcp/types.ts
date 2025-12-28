@@ -8,11 +8,17 @@ export interface MCPPermissions {
   refs: boolean;
 }
 
+export interface MCPSemanticSearchConfig {
+  enabled: boolean;
+  model?: string;
+}
+
 export interface MCPProjectConfig {
   name: string;
   path?: string;
   expose: boolean;
   permissions: MCPPermissions;
+  semanticSearch?: MCPSemanticSearchConfig;
 }
 
 export interface MCPServerConfig {

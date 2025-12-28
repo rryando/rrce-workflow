@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { loadMCPConfig, isProjectExposed, getProjectPermissions } from './config';
 import { scanForProjects, type DetectedProject } from '../lib/detection';
+import { RAGService } from './services/rag';
 
 /**
  * Get list of projects exposed via MCP
@@ -190,14 +191,15 @@ export function getProjectTasks(projectName: string): object[] {
 /**
  * Search across all exposed project knowledge bases
  */
-export function searchKnowledge(query: string): Array<{
+export async function searchKnowledge(query: string): Promise<Array<{
   project: string;
   file: string;
   matches: string[];
-}> {
+  score?: number;
+}>> {
   const config = loadMCPConfig();
   const projects = getExposedProjects();
-  const results: Array<{ project: string; file: string; matches: string[] }> = [];
+  const results: Array<{ project: string; file: string; matches: string[]; score?: number }> = [];
   
   const queryLower = query.toLowerCase();
 
@@ -205,6 +207,34 @@ export function searchKnowledge(query: string): Array<{
     const permissions = getProjectPermissions(config, project.name, project.dataPath);
     
     if (!permissions.knowledge || !project.knowledgePath) continue;
+
+    // Check for RAG configuration
+    const projConfig = config.projects.find(p => 
+        (p.path && p.path === project.dataPath) || (!p.path && p.name === project.name)
+    );
+    const useRAG = projConfig?.semanticSearch?.enabled;
+
+    if (useRAG) {
+        try {
+            const indexPath = path.join(project.knowledgePath, 'embeddings.json');
+            const rag = new RAGService(indexPath, projConfig?.semanticSearch?.model);
+            const ragResults = await rag.search(query, 5); // Limit 5 per project? or general?
+
+            for (const r of ragResults) {
+                results.push({
+                    project: project.name,
+                    file: path.relative(project.knowledgePath, r.filePath),
+                    matches: [r.content], // The chunk content is the match
+                    score: r.score
+                });
+            }
+        } catch (e) {
+            // Fallback or log?
+        }
+        continue; // Skip text search if RAG enabled (or maybe do both?)
+        // Design choice: If RAG is enabled, we trust it? Or we combine?
+        // Mini RAG implies strict semantic. Let's stick to RAG if enabled.
+    }
     
     try {
       const files = fs.readdirSync(project.knowledgePath);
@@ -239,4 +269,50 @@ export function searchKnowledge(query: string): Array<{
   }
 
   return results;
+}
+
+/**
+ * Trigger knowledge indexing for a project
+ */
+export async function indexKnowledge(projectName: string, force: boolean = false): Promise<{ success: boolean; message: string; filesIndexed: number }> {
+    const config = loadMCPConfig();
+    const projects = getExposedProjects(); // Or specific project lookup
+    const project = projects.find(p => p.name === projectName || (p.path && p.path === projectName)); // Relaxed name matching
+
+    if (!project) {
+        return { success: false, message: `Project '${projectName}' not found`, filesIndexed: 0 };
+    }
+
+    const projConfig = config.projects.find(p => 
+        (p.path && p.path === project.dataPath) || (!p.path && p.name === project.name)
+    );
+    
+    if (!projConfig?.semanticSearch?.enabled) {
+        return { success: false, message: 'Semantic Search is not enabled for this project', filesIndexed: 0 };
+    }
+
+    if (!project.knowledgePath || !fs.existsSync(project.knowledgePath)) {
+        return { success: false, message: 'No knowledge directory found', filesIndexed: 0 };
+    }
+
+    try {
+        const indexPath = path.join(project.knowledgePath, 'embeddings.json');
+        const rag = new RAGService(indexPath, projConfig.semanticSearch.model);
+        
+        // Scan files
+        const files = fs.readdirSync(project.knowledgePath).filter(f => f.endsWith('.md'));
+        let count = 0;
+
+        for (const file of files) {
+            const filePath = path.join(project.knowledgePath, file);
+            const content = fs.readFileSync(filePath, 'utf-8');
+            await rag.indexFile(path.join(project.knowledgePath, file), content);
+            count++;
+        }
+        
+        return { success: true, message: `Successfully indexed ${count} files`, filesIndexed: count };
+
+    } catch (error) {
+        return { success: false, message: `Indexing failed: ${error}`, filesIndexed: 0 };
+    }
 }

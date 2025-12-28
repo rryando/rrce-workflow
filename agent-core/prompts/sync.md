@@ -66,6 +66,9 @@ Workflow
    - Remove outdated sections or entire files once you verify the information no longer applies.
 4. Ensure cross-references (links to tasks, commits, or other knowledge files) point to current resources.
 5. Summarize any unresolved questions or future sync needs at the bottom of the modified file(s) under a `Checklist` heading.
+6. **Semantic Indexing**: If any knowledge files were modified or created, and the `index_knowledge` tool is available, run it to keep the search index current:
+   - Tool: `index_knowledge`
+   - Args: `{ project: "{{WORKSPACE_NAME}}" }`
 
 Deliverable
 - Updated `{{RRCE_DATA}}/knowledge/*` files that accurately reflect the present project state, each carrying the latest `Updated:` marker and lean checklist.

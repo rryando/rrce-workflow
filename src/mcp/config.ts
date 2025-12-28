@@ -7,7 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getEffectiveRRCEHome, detectWorkspaceRoot } from '../lib/paths';
-import type { MCPConfig, MCPProjectConfig, MCPPermissions } from './types';
+import type { MCPConfig, MCPProjectConfig, MCPPermissions, MCPSemanticSearchConfig } from './types';
 import { DEFAULT_MCP_CONFIG, DEFAULT_PERMISSIONS } from './types';
 
 /**
@@ -113,6 +113,7 @@ function parseMCPConfig(content: string): MCPConfig {
   let currentSection: 'server' | 'defaults' | 'projects' | null = null;
   let currentProject: MCPProjectConfig | null = null;
   let inPermissions = false;
+  let inSemanticSearch = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -125,18 +126,21 @@ function parseMCPConfig(content: string): MCPConfig {
       currentSection = 'server';
       currentProject = null;
       inPermissions = false;
+      inSemanticSearch = false;
       continue;
     }
     if (line.match(/^defaults:/)) {
       currentSection = 'defaults';
       currentProject = null;
       inPermissions = false;
+      inSemanticSearch = false;
       continue;
     }
     if (line.match(/^projects:/)) {
       currentSection = 'projects';
       currentProject = null;
       inPermissions = false;
+      inSemanticSearch = false;
       continue;
     }
     
@@ -214,6 +218,23 @@ function parseMCPConfig(content: string): MCPConfig {
           const refsMatch = trimmed.match(/^refs:\s*(true|false)/);
           if (refsMatch) currentProject.permissions.refs = refsMatch[1] === 'true';
         }
+
+        if (trimmed === 'semanticSearch:') {
+          inSemanticSearch = true;
+          inPermissions = false;
+          if (!currentProject.semanticSearch) {
+              currentProject.semanticSearch = { enabled: false };
+          }
+          continue;
+        }
+
+        if (inSemanticSearch && currentProject.semanticSearch) {
+            const enabledMatch = trimmed.match(/^enabled:\s*(true|false)/);
+            if (enabledMatch) currentProject.semanticSearch.enabled = enabledMatch[1] === 'true';
+
+            const modelMatch = trimmed.match(/^model:\s*["']?([^"'\n]+)["']?/);
+            if (modelMatch) currentProject.semanticSearch.model = modelMatch[1].trim();
+        }
       }
     }
   }
@@ -256,8 +277,17 @@ projects:
       if (project.path) {
         content += `    path: "${project.path}"\n`;
       }
-      content += `    expose: ${project.expose}
-    permissions:
+      content += `    expose: ${project.expose}\n`;
+      if (project.semanticSearch) {
+        content += `    semanticSearch:
+      enabled: ${project.semanticSearch.enabled}
+`;
+        if (project.semanticSearch.model) {
+            content += `      model: "${project.semanticSearch.model}"
+`;
+        }
+      }
+      content += `    permissions:
       knowledge: ${project.permissions.knowledge}
       tasks: ${project.permissions.tasks}
       refs: ${project.permissions.refs}
@@ -276,7 +306,8 @@ export function setProjectConfig(
   name: string, 
   expose: boolean,
   permissions?: Partial<MCPPermissions>,
-  projectPath?: string
+  projectPath?: string,
+  semanticSearch?: MCPSemanticSearchConfig
 ): MCPConfig {
   let existing = config.projects.find(p => {
     // Exact match on path if both have it
@@ -304,6 +335,9 @@ export function setProjectConfig(
     if (permissions) {
       existing.permissions = { ...existing.permissions, ...permissions };
     }
+    if (semanticSearch) {
+        existing.semanticSearch = semanticSearch;
+    }
   } else {
     // If we didn't find it by path, try checking if there's a loose name match to avoid duplicates?
     // No, if the user explicitly provided a path, we treat it as a distinct entry unless matched above.
@@ -312,6 +346,7 @@ export function setProjectConfig(
       path: projectPath,
       expose,
       permissions: permissions ? { ...DEFAULT_PERMISSIONS, ...permissions } : { ...DEFAULT_PERMISSIONS },
+      semanticSearch,
     });
   }
 
