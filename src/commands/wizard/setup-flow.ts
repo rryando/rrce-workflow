@@ -57,6 +57,11 @@ export async function runSetupFlow(
           ],
           required: false,
         }),
+      exposeToMCP: () =>
+        confirm({
+          message: 'Expose this project to MCP (AI Agent) server?',
+          initialValue: true,
+        }),
       linkedProjects: () => {
         // Only show if there are other projects to link
         if (existingProjects.length === 0) {
@@ -85,15 +90,10 @@ export async function runSetupFlow(
           message: 'Create configuration?',
           initialValue: true,
         }),
-      exposeToMCP: () =>
-        confirm({
-          message: 'Expose this project to MCP (AI Agent) server?',
-          initialValue: true,
-        }),
       enableRAG: () => 
         confirm({
           message: 'Enable Semantic Search (Local Mini RAG)?',
-          initialValue: false, // Default false because it's heavy
+          initialValue: true,
         }),
       enableRAGConfirm: ({ results }) => {
           if (results.enableRAG) {
@@ -290,21 +290,23 @@ async function generateConfiguration(
   }
 
   // Create workspace config (inside .rrce-workflow folder)
-  const workspaceConfigPath = path.join(workspacePath, '.rrce-workflow', 'config.yaml');
-  ensureDir(path.dirname(workspaceConfigPath));
-  
-  let configContent = `# RRCE-Workflow Configuration
+  // ONLY if storageMode is 'workspace'. In global mode, we rely on mcp.yaml registration.
+  if (config.storageMode === 'workspace') {
+      const workspaceConfigPath = path.join(workspacePath, '.rrce-workflow', 'config.yaml');
+      ensureDir(path.dirname(workspaceConfigPath));
+      
+      let configContent = `# RRCE-Workflow Configuration
 version: 1
 
 storage:
   mode: ${config.storageMode}`;
 
-  // Add custom global path if different from default
-  if (config.globalPath && config.globalPath !== getDefaultRRCEHome()) {
-    configContent += `\n  globalPath: "${config.globalPath}"`;
-  }
+      // Add custom global path if different from default
+      if (config.globalPath && config.globalPath !== getDefaultRRCEHome()) {
+        configContent += `\n  globalPath: "${config.globalPath}"`;
+      }
 
-  configContent += `
+      configContent += `
 
 project:
   name: "${workspaceName}"
@@ -314,15 +316,16 @@ tools:
   antigravity: ${config.tools.includes('antigravity')}
 `;
 
-  // Add linked projects if any
-  if (config.linkedProjects.length > 0) {
-    configContent += `\nlinked_projects:\n`;
-    config.linkedProjects.forEach(name => {
-      configContent += `  - ${name}\n`;
-    });
-  }
+      // Add linked projects if any
+      if (config.linkedProjects.length > 0) {
+        configContent += `\nlinked_projects:\n`;
+        config.linkedProjects.forEach(name => {
+          configContent += `  - ${name}\n`;
+        });
+      }
 
-  fs.writeFileSync(workspaceConfigPath, configContent);
+      fs.writeFileSync(workspaceConfigPath, configContent);
+  }
 
   // Add generated folders to .gitignore if user opted in
   if (config.addToGitignore) {
@@ -375,14 +378,19 @@ tools:
             config.enableRAG ? { enabled: true } : undefined // semanticSearch
           );
           saveMCPConfig(mcpConfig);
+          saveMCPConfig(mcpConfig);
       } else {
           // Global mode -> definitely in `~/.rrce-workflow/workspaces/` so it will be found.
+          // BUT we must register the current workspace PATH so `detection/scan` can know about it?
+          // Wait, `npx rrce` running in THIS folder needs to know it is configured.
+          // Detection checks `mcp.yaml`.
+          // So we MUST provide `path`.
           setProjectConfig(
             mcpConfig, 
             currentProjectName, 
             true, 
             undefined, // permissions
-            undefined, // path
+            workspacePath, // <--- IMPORTANT: Register absolute path so config scanner finds it
             config.enableRAG ? { enabled: true } : undefined // semanticSearch
           );
           saveMCPConfig(mcpConfig);

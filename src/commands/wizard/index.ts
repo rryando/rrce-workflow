@@ -60,10 +60,11 @@ Workspace: ${pc.bold(workspaceName)}`,
   
   // Check if already configured (using getConfigPath for new/legacy support)
   const configFilePath = getConfigPath(workspacePath);
-  const isAlreadyConfigured = fs.existsSync(configFilePath);
+  let isAlreadyConfigured = fs.existsSync(configFilePath);
   
-  // Check current storage mode from config
+  // Check current storage mode from config or MCP status
   let currentStorageMode: string | null = null;
+  
   if (isAlreadyConfigured) {
     try {
       const configContent = fs.readFileSync(configFilePath, 'utf-8');
@@ -72,6 +73,21 @@ Workspace: ${pc.bold(workspaceName)}`,
     } catch {
       // Ignore parse errors
     }
+  } else {
+      // Not configured via local file. Check if registered in MCP as global project
+      // We need to check if there is an MCP project pointing to this workspace path
+      try {
+          const mcpConfig = loadMCPConfig(); // Imported dynamically above or statically
+          // Check for project where path === workspacePath AND it exists (we are in it, so it exists)
+          const mcpProject = mcpConfig.projects.find(p => p.path === workspacePath);
+          
+          if (mcpProject) {
+              isAlreadyConfigured = true;
+              currentStorageMode = 'global'; // Assume global or at least managed externally
+          }
+      } catch (e) {
+          // ignore
+      }
   }
 
   // Check if workspace has local data that could be synced
