@@ -23,6 +23,7 @@ interface SetupConfig {
   linkedProjects: string[];
   addToGitignore: boolean;
   exposeToMCP: boolean;
+  enableRAG: boolean;
 }
 
 /**
@@ -89,6 +90,20 @@ export async function runSetupFlow(
           message: 'Expose this project to MCP (AI Agent) server?',
           initialValue: true,
         }),
+      enableRAG: () => 
+        confirm({
+          message: 'Enable Semantic Search (Local Mini RAG)?',
+          initialValue: false, // Default false because it's heavy
+        }),
+      enableRAGConfirm: ({ results }) => {
+          if (results.enableRAG) {
+              return confirm({
+                  message: `${pc.yellow('Warning:')} This will download a ~100MB model (Xenova/all-MiniLM-L6-v2) on first use. Proceed?`,
+                  initialValue: true,
+              })
+          }
+          return Promise.resolve(true); 
+      },
     },
     {
       onCancel: () => {
@@ -124,6 +139,7 @@ export async function runSetupFlow(
       linkedProjects: config.linkedProjects as string[],
       addToGitignore: config.addToGitignore as boolean,
       exposeToMCP: config.exposeToMCP as boolean,
+      enableRAG: (config.enableRAG && config.enableRAGConfirm) as boolean,
     }, workspacePath, workspaceName, existingProjects);
 
     s.stop('Configuration generated');
@@ -238,16 +254,20 @@ async function generateConfiguration(
   const prompts = loadPromptsFromDir(getAgentCorePromptsDir());
 
   // Copy prompts to tool-specific locations (for IDE integration)
-  if (config.tools.includes('copilot')) {
-    const copilotPath = getAgentPromptPath(workspacePath, 'copilot');
-    ensureDir(copilotPath);
-    copyPromptsToDir(prompts, copilotPath, '.agent.md');
-  }
+  // Only copy to local workspace if we are in workspace mode
+  // If in global mode, we assume the user wants to avoid local clutter or relies on global paths
+  if (config.storageMode === 'workspace') {
+      if (config.tools.includes('copilot')) {
+        const copilotPath = getAgentPromptPath(workspacePath, 'copilot');
+        ensureDir(copilotPath);
+        copyPromptsToDir(prompts, copilotPath, '.agent.md');
+      }
 
-  if (config.tools.includes('antigravity')) {
-    const antigravityPath = getAgentPromptPath(workspacePath, 'antigravity');
-    ensureDir(antigravityPath);
-    copyPromptsToDir(prompts, antigravityPath, '.md');
+      if (config.tools.includes('antigravity')) {
+        const antigravityPath = getAgentPromptPath(workspacePath, 'antigravity');
+        ensureDir(antigravityPath);
+        copyPromptsToDir(prompts, antigravityPath, '.md');
+      }
   }
 
   // Create workspace config (inside .rrce-workflow folder)
@@ -326,21 +346,26 @@ tools:
       
       if (config.storageMode === 'workspace') {
           // If in workspace mode, it might NOT be found by default scan if it's in a random folder.
-          // Is `scanForProjects` searching the entire disk? No.
-          // It searches `~` (non-recursive, just 1 level or known code dirs) and `~/.rrce-workflow/workspaces`.
-          
-          // CRITICAL: We might need to "register" the path if it's weird?
-          // Currently `rrce-workflow` detection seems to scan specific dirs.
-          // Let's assume for now the user puts code in a standard place or we rely on the scanner.
-          // Actually, looking at `scanForProjects`:
-          // It looks at `paths.ts` -> `getProjectPaths`.
-          
-          // For now, just setting the config is the correct "intent".
-          setProjectConfig(mcpConfig, currentProjectName, true);
+           // Setting project config with RAG option if enabled
+          setProjectConfig(
+            mcpConfig, 
+            currentProjectName, 
+            true, 
+            undefined, // permissions
+            undefined, // path
+            config.enableRAG ? { enabled: true } : undefined // semanticSearch
+          );
           saveMCPConfig(mcpConfig);
       } else {
           // Global mode -> definitely in `~/.rrce-workflow/workspaces/` so it will be found.
-          setProjectConfig(mcpConfig, currentProjectName, true);
+          setProjectConfig(
+            mcpConfig, 
+            currentProjectName, 
+            true, 
+            undefined, // permissions
+            undefined, // path
+            config.enableRAG ? { enabled: true } : undefined // semanticSearch
+          );
           saveMCPConfig(mcpConfig);
       }
 
