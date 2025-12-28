@@ -85,25 +85,16 @@ export async function runSetupFlow(
           message: 'Add generated folders to .gitignore? (as comments - uncomment if needed)',
           initialValue: true,
         }),
+      enableRAG: () => 
+        confirm({
+          message: `Enable Semantic Search (Local Mini RAG)?\n${pc.yellow('⚠ First use will download a ~100MB model')}`,
+          initialValue: true,
+        }),
       confirm: () =>
         confirm({
           message: 'Create configuration?',
           initialValue: true,
         }),
-      enableRAG: () => 
-        confirm({
-          message: 'Enable Semantic Search (Local Mini RAG)?',
-          initialValue: true,
-        }),
-      enableRAGConfirm: ({ results }) => {
-          if (results.enableRAG) {
-              return confirm({
-                  message: `${pc.yellow('Warning:')} This will download a ~100MB model (Xenova/all-MiniLM-L6-v2) on first use. Proceed?`,
-                  initialValue: true,
-              })
-          }
-          return Promise.resolve(true); 
-      },
     },
     {
       onCancel: () => {
@@ -158,7 +149,7 @@ export async function runSetupFlow(
       linkedProjects: config.linkedProjects as string[],
       addToGitignore: config.addToGitignore as boolean,
       exposeToMCP: config.exposeToMCP as boolean,
-      enableRAG: (config.enableRAG && config.enableRAGConfirm) as boolean,
+      enableRAG: (config.enableRAG) as boolean,
     }, workspacePath, workspaceName, existingProjects);
 
     s.stop('Configuration generated');

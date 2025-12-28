@@ -1,17 +1,19 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import { SimpleSelect } from './components/SimpleSelect';
-import { loadMCPConfig, saveMCPConfig, setProjectConfig } from '../config';
-import { scanForProjects } from '../../lib/detection';
+import { saveMCPConfig, setProjectConfig } from '../config';
+import type { MCPConfig } from '../types';
+import type { DetectedProject } from '../../lib/detection';
 
 interface ProjectsViewProps {
+  config: MCPConfig;
+  projects: DetectedProject[];
   onConfigChange?: () => void;
 }
 
-export const ProjectsView = ({ onConfigChange }: ProjectsViewProps) => {
-  const [config, setConfig] = useState(loadMCPConfig());
-  const allProjects = scanForProjects();
+export const ProjectsView = ({ config: initialConfig, projects: allProjects, onConfigChange }: ProjectsViewProps) => {
+  const [config, setConfig] = useState(initialConfig);
   
   // Merge with config to determine status
   const projectItems = allProjects.map(p => {

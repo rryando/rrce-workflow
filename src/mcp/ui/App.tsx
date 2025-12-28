@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Box, useInput, useApp } from 'ink';
 import { Overview } from './Overview';
 import { ProjectsView } from './ProjectsView';
@@ -8,6 +8,7 @@ import { LogViewer } from './LogViewer';
 import { StatusBoard } from './StatusBoard';
 import { TabBar, type Tab } from './components/TabBar';
 import { loadMCPConfig } from '../config';
+import { findProjectConfig } from '../config-utils';
 import { scanForProjects } from '../../lib/detection';
 import { getLogFilePath } from '../logger';
 import { stopMCPServer, startMCPServer, getMCPServerStatus } from '../server';
@@ -119,10 +120,9 @@ export const App = ({ onExit, initialPort }: AppProps) => {
   // Reduce content height to account for TabBar (header) AND StatusBoard (footer)
   const contentHeight = termHeight - 8; 
 
-  const handleConfigChange = () => {
-      // Force re-render to update stats
-      setConfigVersion(prev => prev + 1);
-  };
+  const handleConfigChange = useCallback(() => {
+    refreshData();
+  }, [refreshData]);
 
   return (
     <Box flexDirection="column" padding={0} height={termHeight}>

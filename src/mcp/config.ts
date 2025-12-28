@@ -6,9 +6,11 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import YAML from 'yaml';
 import { getEffectiveRRCEHome, detectWorkspaceRoot } from '../lib/paths';
 import type { MCPConfig, MCPProjectConfig, MCPPermissions, MCPSemanticSearchConfig } from './types';
 import { DEFAULT_MCP_CONFIG, DEFAULT_PERMISSIONS } from './types';
+import { findProjectConfig } from './config-utils';
 
 /**
  * Get path to MCP config file
@@ -104,198 +106,61 @@ export function saveMCPConfig(config: MCPConfig): void {
 
 /**
  * Parse MCP config from YAML string
- * Line-by-line parser to properly handle YAML structure
+ * Uses yaml library for reliable parsing
  */
 function parseMCPConfig(content: string): MCPConfig {
-  const config: MCPConfig = { ...DEFAULT_MCP_CONFIG, projects: [] };
-  const lines = content.split('\n');
-  
-  let currentSection: 'server' | 'defaults' | 'projects' | null = null;
-  let currentProject: MCPProjectConfig | null = null;
-  let inPermissions = false;
-  let inSemanticSearch = false;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
+  try {
+    const parsed = YAML.parse(content);
     
-    // Skip comments and empty lines
-    if (trimmed.startsWith('#') || trimmed === '') continue;
+    // Ensure all required fields have defaults
+    const config: MCPConfig = {
+      server: {
+        port: parsed?.server?.port ?? DEFAULT_MCP_CONFIG.server.port,
+        autoStart: parsed?.server?.autoStart ?? DEFAULT_MCP_CONFIG.server.autoStart,
+      },
+      defaults: {
+        includeNew: parsed?.defaults?.includeNew ?? DEFAULT_MCP_CONFIG.defaults.includeNew,
+        permissions: {
+          knowledge: parsed?.defaults?.permissions?.knowledge ?? DEFAULT_PERMISSIONS.knowledge,
+          tasks: parsed?.defaults?.permissions?.tasks ?? DEFAULT_PERMISSIONS.tasks,
+          refs: parsed?.defaults?.permissions?.refs ?? DEFAULT_PERMISSIONS.refs,
+        },
+      },
+      projects: Array.isArray(parsed?.projects) ? parsed.projects.map((p: any) => ({
+        name: p.name || '',
+        path: p.path,
+        expose: p.expose ?? true,
+        permissions: {
+          knowledge: p.permissions?.knowledge ?? DEFAULT_PERMISSIONS.knowledge,
+          tasks: p.permissions?.tasks ?? DEFAULT_PERMISSIONS.tasks,
+          refs: p.permissions?.refs ?? DEFAULT_PERMISSIONS.refs,
+        },
+        semanticSearch: p.semanticSearch,
+      })) : [],
+    };
     
-    // Detect top-level sections
-    if (line.match(/^server:/)) {
-      currentSection = 'server';
-      currentProject = null;
-      inPermissions = false;
-      inSemanticSearch = false;
-      continue;
-    }
-    if (line.match(/^defaults:/)) {
-      currentSection = 'defaults';
-      currentProject = null;
-      inPermissions = false;
-      inSemanticSearch = false;
-      continue;
-    }
-    if (line.match(/^projects:/)) {
-      currentSection = 'projects';
-      currentProject = null;
-      inPermissions = false;
-      inSemanticSearch = false;
-      continue;
-    }
-    
-    // Parse based on current section
-    if (currentSection === 'server') {
-      const portMatch = trimmed.match(/^port:\s*(\d+)/);
-      if (portMatch?.[1]) config.server.port = parseInt(portMatch[1], 10);
-      
-      const autoStartMatch = trimmed.match(/^autoStart:\s*(true|false)/);
-      if (autoStartMatch) config.server.autoStart = autoStartMatch[1] === 'true';
-    }
-    
-    if (currentSection === 'defaults') {
-      const includeNewMatch = trimmed.match(/^includeNew:\s*(true|false)/);
-      if (includeNewMatch) config.defaults.includeNew = includeNewMatch[1] === 'true';
-      
-      // Handle defaults.permissions
-      if (trimmed === 'permissions:') {
-        inPermissions = true;
-        continue;
-      }
-      if (inPermissions) {
-        const knowledgeMatch = trimmed.match(/^knowledge:\s*(true|false)/);
-        if (knowledgeMatch) config.defaults.permissions.knowledge = knowledgeMatch[1] === 'true';
-        
-        const tasksMatch = trimmed.match(/^tasks:\s*(true|false)/);
-        if (tasksMatch) config.defaults.permissions.tasks = tasksMatch[1] === 'true';
-        
-        const refsMatch = trimmed.match(/^refs:\s*(true|false)/);
-        if (refsMatch) config.defaults.permissions.refs = refsMatch[1] === 'true';
-      }
-    }
-    
-    if (currentSection === 'projects') {
-      // New project entry starts with "- name:"
-      const projectNameMatch = line.match(/^\s+-\s+name:\s*["']?([^"'\n]+)["']?/);
-      if (projectNameMatch) {
-        // Save previous project if exists
-        if (currentProject && currentProject.name) {
-          config.projects.push(currentProject);
-        }
-        currentProject = {
-          name: projectNameMatch[1]!.trim(),
-          expose: true,
-          permissions: { ...DEFAULT_PERMISSIONS },
-        };
-        inPermissions = false;
-        continue;
-      }
-      
-      // Parse project properties
-      if (currentProject) {
-        const pathMatch = trimmed.match(/^path:\s*["']?([^"'\n]+)["']?/);
-        if (pathMatch) {
-            currentProject.path = pathMatch[1].trim();
-        }
-
-        const exposeMatch = trimmed.match(/^expose:\s*(true|false)/);
-        if (exposeMatch) {
-          currentProject.expose = exposeMatch[1] === 'true';
-        }
-        
-        if (trimmed === 'permissions:') {
-          inPermissions = true;
-          continue;
-        }
-        
-        if (inPermissions) {
-          const knowledgeMatch = trimmed.match(/^knowledge:\s*(true|false)/);
-          if (knowledgeMatch) currentProject.permissions.knowledge = knowledgeMatch[1] === 'true';
-          
-          const tasksMatch = trimmed.match(/^tasks:\s*(true|false)/);
-          if (tasksMatch) currentProject.permissions.tasks = tasksMatch[1] === 'true';
-          
-          const refsMatch = trimmed.match(/^refs:\s*(true|false)/);
-          if (refsMatch) currentProject.permissions.refs = refsMatch[1] === 'true';
-        }
-
-        if (trimmed === 'semanticSearch:') {
-          inSemanticSearch = true;
-          inPermissions = false;
-          if (!currentProject.semanticSearch) {
-              currentProject.semanticSearch = { enabled: false };
-          }
-          continue;
-        }
-
-        if (inSemanticSearch && currentProject.semanticSearch) {
-            const enabledMatch = trimmed.match(/^enabled:\s*(true|false)/);
-            if (enabledMatch) currentProject.semanticSearch.enabled = enabledMatch[1] === 'true';
-
-            const modelMatch = trimmed.match(/^model:\s*["']?([^"'\n]+)["']?/);
-            if (modelMatch) currentProject.semanticSearch.model = modelMatch[1].trim();
-        }
-      }
-    }
+    return config;
+  } catch (err) {
+    // On parse error, return default config
+    return { ...DEFAULT_MCP_CONFIG };
   }
-  
-  // Don't forget the last project
-  if (currentProject && currentProject.name) {
-    config.projects.push(currentProject);
-  }
-
-  return config;
 }
 
 /**
  * Serialize MCP config to YAML string
+ * Uses yaml library for clean, standard-compliant output
  */
 function serializeMCPConfig(config: MCPConfig): string {
-  let content = `# RRCE MCP Hub Configuration
+  // Add header comment manually
+  const header = `# RRCE MCP Hub Configuration
 # Manages which projects are exposed via MCP
 
-server:
-  port: ${config.server.port}
-  autoStart: ${config.server.autoStart}
-
-defaults:
-  includeNew: ${config.defaults.includeNew}
-  permissions:
-    knowledge: ${config.defaults.permissions.knowledge}
-    tasks: ${config.defaults.permissions.tasks}
-    refs: ${config.defaults.permissions.refs}
-
-projects:
 `;
-
-  if (config.projects.length === 0) {
-    content += '  # No projects configured yet. Run "rrce-workflow mcp" to add projects.\n';
-  } else {
-    for (const project of config.projects) {
-      content += `  - name: "${project.name}"
-`;
-      if (project.path) {
-        content += `    path: "${project.path}"\n`;
-      }
-      content += `    expose: ${project.expose}\n`;
-      if (project.semanticSearch) {
-        content += `    semanticSearch:
-      enabled: ${project.semanticSearch.enabled}
-`;
-        if (project.semanticSearch.model) {
-            content += `      model: "${project.semanticSearch.model}"
-`;
-        }
-      }
-      content += `    permissions:
-      knowledge: ${project.permissions.knowledge}
-      tasks: ${project.permissions.tasks}
-      refs: ${project.permissions.refs}
-`;
-    }
-  }
-
-  return content;
+  
+  return header + YAML.stringify(config, {
+    indent: 2,
+    lineWidth: 0, // No line wrapping
+  });
 }
 
 /**
@@ -309,22 +174,7 @@ export function setProjectConfig(
   projectPath?: string,
   semanticSearch?: MCPSemanticSearchConfig
 ): MCPConfig {
-  let existing = config.projects.find(p => {
-    // Exact match on path if both have it
-    if (projectPath && p.path) {
-        return p.path === projectPath;
-    }
-    // Fallback to name match if paths are missing
-    if (!projectPath && !p.path) {
-        return p.name === name;
-    }
-    // If one has path and other doesn't, but names match?
-    // Assume legacy config upgrade if name matches and config has no path
-    if (projectPath && !p.path && p.name === name) {
-        return true;
-    }
-    return false;
-  });
+  const existing = findProjectConfig(config, { name, path: projectPath });
   
   if (existing) {
     existing.expose = expose;
@@ -365,20 +215,12 @@ export function removeProjectConfig(config: MCPConfig, name: string): MCPConfig 
  * Check if a project is exposed via MCP
  */
 export function isProjectExposed(config: MCPConfig, name: string, projectPath?: string): boolean {
-  const project = config.projects.find(p => {
-    if (projectPath && p.path) return p.path === projectPath;
-    if (!projectPath && !p.path) return p.name === name;
-    // Fallback: if we have a path but config doesn't, allow name match
-    if (projectPath && !p.path) return p.name === name;
-    return false;
-  });
+  const project = findProjectConfig(config, { name, path: projectPath });
   
-  // If explicitly configured, use that
   if (project) {
     return project.expose;
   }
   
-  // Otherwise use default
   return config.defaults.includeNew;
 }
 
@@ -386,12 +228,7 @@ export function isProjectExposed(config: MCPConfig, name: string, projectPath?: 
  * Get permissions for a project
  */
 export function getProjectPermissions(config: MCPConfig, name: string, projectPath?: string): MCPPermissions {
-  const project = config.projects.find(p => {
-    if (projectPath && p.path) return p.path === projectPath;
-    if (!projectPath && !p.path) return p.name === name;
-    if (projectPath && !p.path) return p.name === name;
-    return false;
-  });
+  const project = findProjectConfig(config, { name, path: projectPath });
   return project?.permissions ?? config.defaults.permissions;
 }
 
