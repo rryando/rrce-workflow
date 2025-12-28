@@ -394,3 +394,41 @@ export function getProjectPermissions(config: MCPConfig, name: string, projectPa
   });
   return project?.permissions ?? config.defaults.permissions;
 }
+
+/**
+ * Clean up stale project entries from configuration
+ * - Removes projects with explicit paths that no longer exist
+ * - Removes global projects whose workspace directory no longer exists
+ */
+export function cleanStaleProjects(config: MCPConfig): { config: MCPConfig, removed: string[] } {
+    const rrceHome = getEffectiveRRCEHome(); // We can't easily adhere to custom workspace config here as this is a global cleanup
+    const globalWorkspacesDir = path.join(rrceHome, 'workspaces');
+    
+    const validProjects: MCPProjectConfig[] = [];
+    const removed: string[] = [];
+    
+    for (const project of config.projects) {
+        let exists = false;
+        
+        if (project.path) {
+            // Explicit path
+            exists = fs.existsSync(project.path);
+        } else {
+            // Global project - check workspaces dir
+            const globalPath = path.join(globalWorkspacesDir, project.name);
+            exists = fs.existsSync(globalPath);
+        }
+        
+        if (exists) {
+            validProjects.push(project);
+        } else {
+            removed.push(project.name);
+        }
+    }
+    
+    if (removed.length > 0) {
+        config.projects = validProjects;
+    }
+    
+    return { config, removed };
+}

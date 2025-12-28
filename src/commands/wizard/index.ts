@@ -15,7 +15,10 @@ import { runSetupFlow } from './setup-flow';
 import { runLinkProjectsFlow } from './link-flow';
 import { runSyncToGlobalFlow } from './sync-flow';
 import { runUpdateFlow } from './update-flow';
+import { runDeleteGlobalProjectFlow } from './delete-flow';
 import { runMCP } from '../../mcp/index';
+// Dynamic import for config to avoid cyclic load if possible, but static here is fine as long as we catch errors
+import { loadMCPConfig, saveMCPConfig, cleanStaleProjects } from '../../mcp/config';
 
 export async function runWizard() {
   intro(pc.cyan(pc.inverse(' RRCE-Workflow Setup ')));
@@ -26,6 +29,19 @@ export async function runWizard() {
   const workspacePath = detectWorkspaceRoot();
   const workspaceName = getWorkspaceName(workspacePath);
   const gitUser = getGitUser();
+
+  // Perform stale config cleanup silently or with notification
+  try {
+      const mcpConfig = loadMCPConfig();
+      const { config: cleanConfig, removed } = cleanStaleProjects(mcpConfig);
+      if (removed.length > 0) {
+          saveMCPConfig(cleanConfig);
+          // We can notify user or keep it silent. Let's log it to console but not interrupt flow excessively
+          // console.log(pc.yellow(`Cleaned up stale projects: ${removed.join(', ')}`));
+      }
+  } catch (e) {
+      // Ignore config errors during startup cleanup
+  }
 
   await new Promise(r => setTimeout(r, 800)); // Dramatic pause
   s.stop('Environment detected');
@@ -73,10 +89,18 @@ Workspace: ${pc.bold(workspaceName)}`,
       hint: 'Expose projects to AI assistants (VSCode, Antigravity, Claude)' 
     });
     
-    // Add link option if other projects exist
+    // Add delete global project option if any exist
+    if (detectedProjects.some(p => p.source === 'global')) {
+         menuOptions.push({
+             value: 'delete-global',
+             label: '🗑️  Delete global project(s)',
+             hint: 'Remove knowledge and configuration'
+         });
+    }
+
     if (detectedProjects.length > 0) {
       menuOptions.push({ 
-        value: 'link', 
+        value: 'link',  
         label: '🔗 Link other project knowledge', 
         hint: `${detectedProjects.length} projects detected (global + sibling)` 
       });
@@ -108,6 +132,17 @@ Workspace: ${pc.bold(workspaceName)}`,
     if (action === 'mcp') {
       await runMCP();
       return;
+    }
+    
+    if (action === 'delete-global') {
+        await runDeleteGlobalProjectFlow(detectedProjects);
+        // After deletion, we might want to reload/re-run wizard? 
+        // For now just exit or return to menu? Returning ends the function.
+        // Let's just exit for simplicity or re-run wizard?
+        // Re-running wizard is recursive, might be ok.
+        // await runWizard(); 
+        // actually simplest is just return, process ends.
+        return;
     }
 
     if (action === 'link') {

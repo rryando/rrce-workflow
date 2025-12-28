@@ -128,6 +128,25 @@ export async function runSetupFlow(
       process.exit(1);
     }
   }
+  
+  if (config.storageMode === 'global') {
+      const targetGlobalPath = path.join(customGlobalPath || getDefaultRRCEHome(), 'workspaces', workspaceName);
+      if (fs.existsSync(targetGlobalPath)) {
+          const overwriteAction = await select({
+              message: `Project '${workspaceName}' already exists globally.`,
+              options: [
+                  { value: 'overwrite', label: 'Overwrite existing project', hint: 'Will replace global config' },
+                  { value: 'cancel', label: 'Cancel setup' }
+              ],
+          });
+          
+          if (isCancel(overwriteAction) || overwriteAction === 'cancel') {
+              cancel('Setup cancelled.');
+              process.exit(0);
+          }
+          // If overwrite, we just proceed. ensureDir will be called later.
+      }
+  }
 
   s.start('Generating configuration');
 
