@@ -1,5 +1,5 @@
 
-import { pipeline, env } from '@xenova/transformers';
+// import { pipeline, env } from '@xenova/transformers';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../logger';
@@ -44,6 +44,8 @@ export class RAGService {
     if (!this.pipe) {
       logger.info(`RAG: Initializing model ${this.modelName}...`);
       try {
+        // Dynamic import to prevent startup hang and reduce initial memory
+        const { pipeline } = await import('@xenova/transformers');
         this.pipe = await pipeline('feature-extraction', this.modelName);
         logger.info(`RAG: Model ${this.modelName} initialized successfully.`);
       } catch (error) {
