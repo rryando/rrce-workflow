@@ -140,6 +140,7 @@ When you run the wizard on an already-configured project, you'll see:
 | **Link other project knowledge** | Reference knowledge from other projects in global storage |
 | **Sync to global storage** | Copy workspace data to global (enables cross-project access) |
 | **Update from package** | Get latest prompts and templates |
+| **Reconfigure project** | Change storage mode, selected tools, or linked projects without resetting |
 
 ---
 
@@ -161,6 +162,151 @@ storage:
   mode: global
   globalPath: "/path/to/custom/rrce-workflow"
 ```
+
+---
+
+## MCP Hub (Cross-Project AI Access)
+
+RRCE-Workflow includes an **MCP (Model Context Protocol) Hub** that exposes your project knowledge to AI assistants like **VSCode Copilot** and **Claude Desktop**.
+
+### Quick Start
+
+```bash
+# Start the MCP Hub
+npx rrce-workflow mcp
+
+# Or run directly
+npx rrce-workflow mcp start
+```
+
+### MCP Features
+
+| Feature | Description |
+|---------|-------------|
+| **Cross-project knowledge** | AI can access context from multiple projects simultaneously |
+| **Agent prompts** | All 6 agents (init, research, plan, execute, docs, sync) exposed as MCP prompts |
+| **Search across projects** | Search knowledge bases across all exposed projects |
+| **Selective exposure** | Choose which projects to expose via interactive TUI |
+
+### VSCode Copilot Setup
+
+1. Create `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "servers": {
+    "rrce": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["rrce-workflow", "mcp", "start"]
+    }
+  }
+}
+```
+
+2. In Copilot Chat, switch to **Agent** mode
+3. Click the 🔧 tools icon to see RRCE resources, tools, and prompts
+
+### Claude Desktop Setup
+
+Add to `~/.config/claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "rrce": {
+      "command": "npx",
+      "args": ["rrce-workflow", "mcp", "start"]
+    }
+  }
+}
+```
+
+### MCP Resources & Tools
+
+**Resources:**
+- `rrce://projects` — List all exposed projects
+- `rrce://projects/{name}/context` — Get project context
+- `rrce://projects/{name}/tasks` — Get task list
+
+**Tools:**
+- `search_knowledge` — Search across all project knowledge bases
+- `list_projects` — List exposed projects
+- `get_project_context` — Get specific project context
+
+**Prompts:**
+- `init`, `research`, `plan`, `execute`, `docs`, `sync` — Full RRCE pipeline
+
+### Using Agent Prompts via MCP
+
+Once the MCP server is connected, you can invoke RRCE agent prompts directly:
+
+#### In VSCode Copilot (Agent Mode)
+
+```
+# Initialize project context
+@rrce Use the init prompt to analyze this codebase
+
+# Start a new task
+@rrce Use the research prompt with REQUEST="add user authentication" and TASK_SLUG="auth-feature"
+
+# Create execution plan
+@rrce Use the plan prompt for TASK_SLUG="auth-feature"
+
+# Execute the plan
+@rrce Use the execute prompt for TASK_SLUG="auth-feature"
+```
+
+#### In Claude Desktop
+
+```
+Use the RRCE init prompt to analyze the current project
+
+Search my RRCE projects for "authentication"
+
+Use the research prompt with these arguments:
+- REQUEST: "Add OAuth2 login"
+- TASK_SLUG: "oauth-login"
+```
+
+#### In Other MCP-Compatible Tools (Cursor, etc.)
+
+Most MCP clients follow similar patterns:
+1. Connect to the RRCE MCP server via stdio
+2. Use `list_prompts` to see available prompts
+3. Call prompts with required arguments
+
+**Example prompt arguments:**
+
+| Prompt | Required Args | Optional Args |
+|--------|---------------|---------------|
+| `init` | — | `PROJECT_NAME` |
+| `research` | `REQUEST`, `TASK_SLUG` | `TITLE` |
+| `plan` | `TASK_SLUG` | — |
+| `execute` | `TASK_SLUG` | `BRANCH` |
+| `docs` | `DOC_TYPE` | `TASK_SLUG` |
+| `sync` | — | `SCOPE` |
+
+### MCP Configuration
+
+Configure which projects to expose:
+
+```bash
+npx rrce-workflow mcp           # Interactive TUI Dashboard
+npx rrce-workflow mcp status    # View current status
+```
+
+**Interactive Dashboard Controls:**
+- `p`: Open **Project Configuration** modal (Toggle exposed projects)
+- `i`: Open **IDE Installation** modal (Auto-configure VSCode/Claude)
+- `r`: Reload configuration
+- `c`: Clear logs
+- `?`: Toggle Help & Shortcuts
+
+**Unified Context:**
+Projects linked via the main wizard (`Link other project knowledge`) are automatically detected and exposed by the MCP server alongside globally configured projects.
+
+Config stored at `~/.rrce-workflow/mcp.yaml`
 
 ---
 
@@ -192,6 +338,15 @@ Make sure the agent reads `.rrce-workflow/config.yaml` first. All prompts includ
 npx rrce-workflow
 # Select "Update from package"
 ```
+
+### MCP server not connecting
+
+Ensure the server starts successfully:
+```bash
+npx rrce-workflow mcp start
+```
+
+Check that your IDE is configured to use stdio transport.
 
 ---
 

@@ -1,4 +1,4 @@
-import { multiselect, spinner, note, outro, cancel, isCancel } from '@clack/prompts';
+import { multiselect, spinner, note, outro, cancel, isCancel, confirm } from '@clack/prompts';
 import pc from 'picocolors';
 import * as fs from 'fs';
 import { getEffectiveRRCEHome, getConfigPath } from '../../lib/paths';
@@ -113,4 +113,31 @@ export async function runLinkProjectsFlow(
   note(summary.join('\n'), 'Link Summary');
 
   outro(pc.green(`✓ Projects linked! Open ${pc.bold(workspaceFile)} in VSCode to access linked data.`));
+
+  // OPTIONAL: Ask to also expose these projects to the Global MCP Config
+  // This bridges the gap so Antigravity can also see them easily via global mcp.yaml
+  // (Even though we fixed resources.ts to read local links, this is a good backup/UX for "Expose" intent)
+  const shouldExpose = await confirm({
+    message: 'Also expose these linked projects to the MCP server (for Agent access)?',
+    initialValue: true
+  });
+
+  if (shouldExpose && !isCancel(shouldExpose)) {
+     try {
+       // We need to dynamically import MCP config tools to avoid circular deps if possible, 
+       // but here we are in commands/wizard so it should be fine.
+       // However, let's keep imports clean.
+       const { loadMCPConfig, saveMCPConfig, setProjectConfig } = await import('../../mcp/config');
+       
+       const mcpConfig = loadMCPConfig();
+       for (const project of selectedProjects) {
+          // If already exposed, this is a no-op which is fine
+          setProjectConfig(mcpConfig, project.name, true, undefined, project.dataPath); 
+       }
+       saveMCPConfig(mcpConfig);
+       note('Projects have been added to the global MCP configuration.', 'MCP Updated');
+     } catch (err) {
+       note(`Failed to update MCP config: ${err}`, 'MCP Update Failed');
+     }
+  }
 }

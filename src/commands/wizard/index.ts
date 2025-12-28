@@ -15,6 +15,7 @@ import { runSetupFlow } from './setup-flow';
 import { runLinkProjectsFlow } from './link-flow';
 import { runSyncToGlobalFlow } from './sync-flow';
 import { runUpdateFlow } from './update-flow';
+import { runMCP } from '../../mcp/index';
 
 export async function runWizard() {
   intro(pc.cyan(pc.inverse(' RRCE-Workflow Setup ')));
@@ -65,11 +66,18 @@ Workspace: ${pc.bold(workspaceName)}`,
   if (isAlreadyConfigured) {
     const menuOptions: { value: string; label: string; hint?: string }[] = [];
     
+    // Add MCP configuration option first
+    menuOptions.push({ 
+      value: 'mcp', 
+      label: '🔌 Configure MCP Server', 
+      hint: 'Expose projects to AI assistants (VSCode, Antigravity, Claude)' 
+    });
+    
     // Add link option if other projects exist
     if (detectedProjects.length > 0) {
       menuOptions.push({ 
         value: 'link', 
-        label: 'Link other project knowledge', 
+        label: '🔗 Link other project knowledge', 
         hint: `${detectedProjects.length} projects detected (global + sibling)` 
       });
     }
@@ -78,13 +86,14 @@ Workspace: ${pc.bold(workspaceName)}`,
     if (currentStorageMode === 'workspace' && hasLocalData) {
       menuOptions.push({ 
         value: 'sync-global', 
-        label: 'Sync to global storage', 
+        label: '☁️  Sync to global storage', 
         hint: 'Share knowledge with other projects' 
       });
     }
     
-    menuOptions.push({ value: 'update', label: 'Update from package', hint: 'Get latest prompts & templates' });
-    menuOptions.push({ value: 'exit', label: 'Exit' });
+    menuOptions.push({ value: 'update', label: '📦 Update from package', hint: 'Get latest prompts & templates' });
+    menuOptions.push({ value: 'reconfigure', label: '🔧 Reconfigure project', hint: 'Change storage mode, tools, etc.' });
+    menuOptions.push({ value: 'exit', label: '↩  Exit' });
 
     const action = await select({
       message: 'This workspace is already configured. What would you like to do?',
@@ -94,6 +103,11 @@ Workspace: ${pc.bold(workspaceName)}`,
     if (isCancel(action) || action === 'exit') {
       outro('Exited.');
       process.exit(0);
+    }
+
+    if (action === 'mcp') {
+      await runMCP();
+      return;
     }
 
     if (action === 'link') {
@@ -110,8 +124,13 @@ Workspace: ${pc.bold(workspaceName)}`,
       await runUpdateFlow(workspacePath, workspaceName, currentStorageMode);
       return;
     }
+
+    if (action === 'reconfigure') {
+      // Fall through to runSetupFlow
+    }
   }
 
   // Run full setup flow for new workspaces
   await runSetupFlow(workspacePath, workspaceName, detectedProjects);
 }
+

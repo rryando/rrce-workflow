@@ -18,16 +18,40 @@ export async function runSelector() {
 
   const selection = await select({
     message: 'Select an agent:',
-    options: prompts.map(p => ({
-      value: p,
-      label: p.frontmatter.name,
-      hint: p.frontmatter.description
-    })),
+    options: [
+      {
+        value: 'mcp',
+        label: '🔌 Manage MCP Hub',
+        hint: 'Configure & Start MCP Server'
+      },
+      {
+        value: 'wizard',
+        label: '✨ Run Setup Wizard',
+        hint: 'Configure workspace & agents'
+      },
+      ...prompts.map(p => ({
+        value: p,
+        label: p.frontmatter.name,
+        hint: p.frontmatter.description
+      }))
+    ] as any[],
   });
 
   if (isCancel(selection)) {
     cancel('Selection cancelled.');
     process.exit(0);
+  }
+
+  if (selection === 'mcp') {
+    const { runMCP } = await import('../mcp/index');
+    await runMCP();
+    return;
+  }
+
+  if (selection === 'wizard') {
+    const { runWizard } = await import('./wizard/index');
+    await runWizard();
+    return;
   }
 
   const prompt = selection as ParsedPrompt;
