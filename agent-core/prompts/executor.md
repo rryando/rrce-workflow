@@ -79,6 +79,9 @@ Workflow
 4. Record checkpoints, blockers, and validation steps in `agents.executor.notes` and `references`.
 5. Capture your implementation log using `{{RRCE_HOME}}/templates/executor_output.md` and save it to `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/execution/{{TASK_SLUG}}-execution.md`, noting the provided `BRANCH` or current git ref.
 6. Summarize test evidence, code pointers, and outstanding follow-ups so documentation can build on it seamlessly.
+7. **Semantic Indexing**: If significant code was added or modified, suggest running `index_knowledge` to update the semantic search index:
+   - Tool: `index_knowledge`
+   - Args: `{ project: "{{WORKSPACE_NAME}}" }`
 
 Deliverable
 - File: `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/execution/{{TASK_SLUG}}-execution.md`

@@ -267,15 +267,15 @@ export async function searchKnowledge(query: string): Promise<Array<{
 }
 
 /**
- * Trigger knowledge indexing for a project
+ * Trigger knowledge indexing for a project (scans entire codebase)
  */
-export async function indexKnowledge(projectName: string, force: boolean = false): Promise<{ success: boolean; message: string; filesIndexed: number }> {
+export async function indexKnowledge(projectName: string, force: boolean = false): Promise<{ success: boolean; message: string; filesIndexed: number; filesSkipped: number }> {
     const config = loadMCPConfig();
-    const projects = getExposedProjects(); // Or specific project lookup
-    const project = projects.find(p => p.name === projectName || (p.path && p.path === projectName)); // Relaxed name matching
+    const projects = getExposedProjects();
+    const project = projects.find(p => p.name === projectName || (p.path && p.path === projectName));
 
     if (!project) {
-        return { success: false, message: `Project '${projectName}' not found`, filesIndexed: 0 };
+        return { success: false, message: `Project '${projectName}' not found`, filesIndexed: 0, filesSkipped: 0 };
     }
 
     const projConfig = config.projects.find(p => 
@@ -283,32 +283,94 @@ export async function indexKnowledge(projectName: string, force: boolean = false
     );
     
     if (!projConfig?.semanticSearch?.enabled) {
-        return { success: false, message: 'Semantic Search is not enabled for this project', filesIndexed: 0 };
+        return { success: false, message: 'Semantic Search is not enabled for this project', filesIndexed: 0, filesSkipped: 0 };
     }
 
-    if (!project.knowledgePath || !fs.existsSync(project.knowledgePath)) {
-        return { success: false, message: 'No knowledge directory found', filesIndexed: 0 };
+    // Use project root for scanning, not just knowledge path
+    const scanRoot = project.path || project.dataPath;
+    if (!fs.existsSync(scanRoot)) {
+        return { success: false, message: 'Project root not found', filesIndexed: 0, filesSkipped: 0 };
     }
+
+    // Extensions to index (common source files)
+    const INDEXABLE_EXTENSIONS = [
+        '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
+        '.py', '.pyw',
+        '.go',
+        '.rs',
+        '.java', '.kt', '.kts',
+        '.c', '.cpp', '.h', '.hpp',
+        '.cs',
+        '.rb',
+        '.php',
+        '.swift',
+        '.md', '.mdx',
+        '.json', '.yaml', '.yml', '.toml',
+        '.sh', '.bash', '.zsh',
+        '.sql',
+        '.html', '.css', '.scss', '.sass', '.less'
+    ];
+
+    // Directories to skip
+    const SKIP_DIRS = ['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', 'venv', '.venv', 'target', 'vendor'];
 
     try {
-        const indexPath = path.join(project.knowledgePath, 'embeddings.json');
+        const indexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'embeddings.json');
         const rag = new RAGService(indexPath, projConfig.semanticSearch.model);
         
-        // Scan files
-        const files = fs.readdirSync(project.knowledgePath).filter(f => f.endsWith('.md'));
-        let count = 0;
+        let indexed = 0;
+        let skipped = 0;
 
-        for (const file of files) {
-            const filePath = path.join(project.knowledgePath, file);
-            const content = fs.readFileSync(filePath, 'utf-8');
-            await rag.indexFile(path.join(project.knowledgePath, file), content);
-            count++;
-        }
+        // Recursive file scanner
+        const scanDir = async (dir: string) => {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            
+            for (const entry of entries) {
+                const fullPath = path.join(dir, entry.name);
+                
+                if (entry.isDirectory()) {
+                    // Skip excluded directories
+                    if (SKIP_DIRS.includes(entry.name) || entry.name.startsWith('.')) {
+                        continue;
+                    }
+                    await scanDir(fullPath);
+                } else if (entry.isFile()) {
+                    const ext = path.extname(entry.name).toLowerCase();
+                    if (!INDEXABLE_EXTENSIONS.includes(ext)) {
+                        continue;
+                    }
+                    
+                    try {
+                        const stat = fs.statSync(fullPath);
+                        const mtime = force ? undefined : stat.mtimeMs; // Force ignores mtime
+                        const content = fs.readFileSync(fullPath, 'utf-8');
+                        
+                        const wasIndexed = await rag.indexFile(fullPath, content, mtime);
+                        if (wasIndexed) {
+                            indexed++;
+                        } else {
+                            skipped++;
+                        }
+                    } catch (err) {
+                        // Skip files that can't be read (binary, permissions, etc.)
+                    }
+                }
+            }
+        };
+
+        await scanDir(scanRoot);
+        rag.markFullIndex();
         
-        return { success: true, message: `Successfully indexed ${count} files`, filesIndexed: count };
+        const stats = rag.getStats();
+        return { 
+            success: true, 
+            message: `Indexed ${indexed} files, skipped ${skipped} unchanged. Total: ${stats.totalChunks} chunks from ${stats.totalFiles} files.`, 
+            filesIndexed: indexed,
+            filesSkipped: skipped
+        };
 
     } catch (error) {
-        return { success: false, message: `Indexing failed: ${error}`, filesIndexed: 0 };
+        return { success: false, message: `Indexing failed: ${error}`, filesIndexed: 0, filesSkipped: 0 };
     }
 }
 

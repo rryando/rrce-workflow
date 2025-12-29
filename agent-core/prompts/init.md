@@ -162,10 +162,16 @@ Workflow Steps
 7. Save to `{{RRCE_DATA}}/knowledge/project-context.md`.
 8. Update `{{RRCE_DATA}}/workspace.json` with project metadata.
 9. Log changes made (new sections, updated sections, removed outdated info).
-10. **Semantic Indexing**: If the `index_knowledge` tool is available, run it:
-    - Tool: `index_knowledge`
-    - Args: `{ project: "{{WORKSPACE_NAME}}" }`
-    - This ensures the new context is immediately searchable.
+10. **Semantic Index Status & Indexing**: 
+    - Determine if semantic search is enabled (check config or look for `embeddings.json` existence).
+    - If `index_knowledge` tool is available and enabled:
+      - Run it: `index_knowledge` with `{ project: "{{WORKSPACE_NAME}}" }`.
+      - Capture the result (files indexed, skipped, totals).
+    - Populate Section 11 "Semantic Index Status" in the template with:
+      - Enabled: yes/no
+      - Last Indexed: Current time (if you just ran it) or file modification time of `embeddings.json`.
+      - Index Location: Path to `embeddings.json`.
+      - Totals: Use data from `index_knowledge` output if avail.
 
 Deliverable
 - File: `{{RRCE_DATA}}/knowledge/project-context.md`

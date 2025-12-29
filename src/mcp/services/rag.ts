@@ -13,6 +13,7 @@ export interface RAGChunk {
   filePath: string;
   content: string;
   embedding: number[];
+  mtime?: number; // File modification time for smart indexing
   metadata?: Record<string, any>;
 }
 
@@ -20,6 +21,8 @@ export interface RAGIndex {
   version: string;
   baseModel: string;
   chunks: RAGChunk[];
+  lastFullIndex?: number; // Timestamp of last full index
+  fileMetadata?: Record<string, { mtime: number; chunkCount: number }>; // Per-file tracking
 }
 
 const INDEX_VERSION = '1.0.0';
@@ -144,20 +147,36 @@ export class RAGService {
   }
 
   /**
-   * Index a file
+   * Index a file (smart: skips if mtime unchanged)
+   * @param filePath Absolute path to the file
+   * @param content File content
+   * @param mtime Optional modification time (if not provided, always re-indexes)
+   * @returns true if file was indexed, false if skipped
    */
-  async indexFile(filePath: string, content: string): Promise<void> {
+  async indexFile(filePath: string, content: string, mtime?: number): Promise<boolean> {
     this.loadIndex();
     if (!this.index) throw new Error('Index not initialized');
 
+    // Initialize fileMetadata if missing
+    if (!this.index.fileMetadata) {
+      this.index.fileMetadata = {};
+    }
+
+    // Smart check: skip if mtime matches
+    if (mtime !== undefined && this.index.fileMetadata[filePath]) {
+      const existingMeta = this.index.fileMetadata[filePath];
+      if (existingMeta.mtime === mtime) {
+        logger.debug(`RAG: Skipping unchanged file ${filePath}`);
+        return false;
+      }
+    }
+
     logger.info(`RAG: Indexing file ${filePath}`);
 
-    // clear existing chunks for this file
+    // Clear existing chunks for this file
     this.index.chunks = this.index.chunks.filter(c => c.filePath !== filePath);
 
-    // Simple chunking strategy: split by paragraphs or max chars
-    // For code, maybe split by function boundaries (complex), or just fixed size
-    // Start with simple chunking by lines/paragraphs for "Mini RAG"
+    // Chunk content
     const chunks = this.chunkContent(content);
 
     for (const chunkText of chunks) {
@@ -166,28 +185,66 @@ export class RAGService {
         id: `${filePath}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         filePath,
         content: chunkText,
-        embedding
+        embedding,
+        mtime
       });
     }
 
+    // Update file metadata
+    this.index.fileMetadata[filePath] = {
+      mtime: mtime ?? Date.now(),
+      chunkCount: chunks.length
+    };
+
     this.saveIndex();
+    return true;
   }
 
   /**
    * Remove a file from index
    */
-    async removeFile(filePath: string): Promise<void> {
-        this.loadIndex();
-        if (!this.index) return;
-        
-        const initialCount = this.index.chunks.length;
-        this.index.chunks = this.index.chunks.filter(c => c.filePath !== filePath);
-        
-        if (this.index.chunks.length !== initialCount) {
-            logger.info(`RAG: Removed file ${filePath} from index (${initialCount - this.index.chunks.length} chunks removed)`);
-            this.saveIndex();
-        }
+  async removeFile(filePath: string): Promise<void> {
+    this.loadIndex();
+    if (!this.index) return;
+    
+    const initialCount = this.index.chunks.length;
+    this.index.chunks = this.index.chunks.filter(c => c.filePath !== filePath);
+    
+    // Also remove from fileMetadata
+    if (this.index.fileMetadata) {
+      delete this.index.fileMetadata[filePath];
     }
+    
+    if (this.index.chunks.length !== initialCount) {
+      logger.info(`RAG: Removed file ${filePath} from index (${initialCount - this.index.chunks.length} chunks removed)`);
+      this.saveIndex();
+    }
+  }
+
+  /**
+   * Get index statistics
+   */
+  getStats(): { totalChunks: number; totalFiles: number; lastFullIndex?: number } {
+    this.loadIndex();
+    if (!this.index) return { totalChunks: 0, totalFiles: 0 };
+    
+    const fileCount = this.index.fileMetadata ? Object.keys(this.index.fileMetadata).length : 0;
+    return {
+      totalChunks: this.index.chunks.length,
+      totalFiles: fileCount,
+      lastFullIndex: this.index.lastFullIndex
+    };
+  }
+
+  /**
+   * Mark the last full index timestamp
+   */
+  markFullIndex(): void {
+    this.loadIndex();
+    if (!this.index) return;
+    this.index.lastFullIndex = Date.now();
+    this.saveIndex();
+  }
 
   /**
    * Search the index

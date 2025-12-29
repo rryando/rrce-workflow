@@ -73,6 +73,9 @@ Workflow
 3. Where new persistent knowledge is created (API notes, domain decisions, etc.), append or create records in `{{RRCE_DATA}}/knowledge/{{DOMAIN}}.md` and log the file path inside `meta.json.references`.
 4. Structure the plan using `{{RRCE_HOME}}/templates/planning_output.md` and store it at `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/planning/{{TASK_SLUG}}-plan.md`.
 5. Provide clear guidance on validation, testing strategy, rollout sequencing, and success criteria for the Executor.
+6. **Semantic Indexing**: If new knowledge files were created in `{{RRCE_DATA}}/knowledge/`, suggest running `index_knowledge` to update the semantic search index:
+   - Tool: `index_knowledge`
+   - Args: `{ project: "{{WORKSPACE_NAME}}" }`
 
 Deliverable
 - File: `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/planning/{{TASK_SLUG}}-plan.md`

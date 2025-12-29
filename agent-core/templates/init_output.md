@@ -256,9 +256,25 @@ Based on the tech stack analysis, the Executor agent should have proficiency in:
 |----------|----------|-------|
 |  | high/medium/low |  |
 
+
+---
+
+## 11. Semantic Index Status
+
+| Attribute | Value |
+|-----------|-------|
+| **Enabled** | yes / no |
+| **Last Indexed** | `{{last_indexed_date}}` |
+| **Index Location** | `{{index_path}}` |
+| **Total Files** |  |
+| **Total Chunks** |  |
+
+*If semantic search is enabled, run `index_knowledge` to update the index after significant changes.*
+
 ---
 
 ## Checklist
+
 
 - [ ] Tech stack fully documented
 - [ ] Coding conventions captured
