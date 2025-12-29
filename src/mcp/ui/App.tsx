@@ -38,16 +38,26 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     running: false 
   });
   
-  // Stats and Config
-  const [configVersion, setConfigVersion] = useState(0); // Used to trigger re-renders
-  const config = loadMCPConfig(); // Config re-reads on render, or we force update
-  const projects = scanForProjects();
-  const exposedProjects = projects.filter(p => {
-    const cfg = config.projects.find(c => 
-      (c.path && c.path === p.path) || (!c.path && c.name === p.name)
-    );
-    return cfg?.expose ?? config.defaults.includeNew;
-  });
+  // Stats and Config - cached in state
+  const [config, setConfig] = useState(() => loadMCPConfig());
+  const [projects, setProjects] = useState(() => scanForProjects());
+  
+  // Refresh callback for manual updates
+  const refreshData = useCallback(() => {
+    setConfig(loadMCPConfig());
+    setProjects(scanForProjects());
+  }, []);
+  
+  // Memoize exposed projects calculation
+  const exposedProjects = useMemo(() => 
+    projects.filter(p => {
+      const cfg = config.projects.find(c => 
+        (c.path && c.path === p.path) || (!c.path && c.name === p.name)
+      );
+      return cfg?.expose ?? config.defaults.includeNew;
+    }),
+    [projects, config]
+  );
 
   const workspacePath = detectWorkspaceRoot();
   const installStatus = checkInstallStatus(workspacePath);
