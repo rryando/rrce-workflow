@@ -10,6 +10,11 @@ export async function runInstallWizard(workspacePath?: string): Promise<void> {
   
   const options: { value: string; label: string; hint: string }[] = [
     { 
+      value: 'opencode',
+      label: 'OpenCode',
+      hint: status.opencode ? pc.green('✓ Installed') : pc.dim('Not installed'),
+    },
+    { 
       value: 'antigravity', 
       label: 'Antigravity IDE', 
       hint: status.antigravity ? pc.green('✓ Installed') : pc.dim('Not installed'),
@@ -35,6 +40,7 @@ export async function runInstallWizard(workspacePath?: string): Promise<void> {
     message: 'Select where to install RRCE MCP Server:',
     options,
     initialValues: [
+      ...(status.opencode ? ['opencode'] : []),
       ...(status.antigravity ? ['antigravity'] : []),
       ...(status.vscodeGlobal ? ['vscode-global'] : []),
       ...(status.vscodeWorkspace ? ['vscode-workspace'] : []),

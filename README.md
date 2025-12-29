@@ -28,7 +28,7 @@ npx rrce-workflow mcp
 From this dashboard, you can:
 -   **Manage Projects**: Toggle which projects are exposed to your AI agents.
 -   **Monitor Status**: See the health of the MCP server and RAG indexing.
--   **Install to IDE**: Automatically configure **VSCode** or **Claude Desktop** to use the RRCE MCP server.
+-   **Install to IDE**: Automatically configure **VSCode**, **Claude Desktop**, **Antigravity IDE**, or **OpenCode** to use the RRCE MCP server.
 -   **View Logs**: Debug agent interactions in real-time.
 
 ### 2. Setting Up a Project
@@ -64,6 +64,22 @@ RRCE-Workflow uses the [Model Context Protocol](https://modelcontextprotocol.io/
 
 The easiest way to connect is via the TUI (`npx rrce-workflow mcp` -> **Install** tab), but you can also configure it manually.
 
+#### OpenCode
+
+Add to `~/.config/opencode/opencode.json`:
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "rrce": {
+      "type": "local",
+      "command": ["npx", "-y", "rrce-workflow", "mcp", "start"],
+      "enabled": true
+    }
+  }
+}
+```
+
 #### VSCode (with MCP Extension)
 Add to `.vscode/mcp.json`:
 ```json
@@ -90,6 +106,20 @@ Add to `~/.config/claude/claude_desktop_config.json`:
   }
 }
 ```
+
+### Uninstalling MCP Integration
+
+To remove RRCE from your IDEs:
+
+```bash
+npx rrce-workflow mcp uninstall
+```
+
+This will:
+- Show you which IDEs currently have RRCE installed
+- Let you select which ones to remove it from
+- Ask for confirmation before removal
+- Cleanly remove RRCE configuration while preserving other MCP servers and settings
 
 ---
 
