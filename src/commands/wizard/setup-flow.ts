@@ -27,6 +27,104 @@ interface SetupConfig {
 }
 
 /**
+ * Express Setup - Quick start with recommended defaults (3 steps only)
+ */
+async function runExpressSetup(
+  workspacePath: string,
+  workspaceName: string,
+  existingProjects: DetectedProject[],
+  s: ReturnType<typeof spinner>
+): Promise<void> {
+  // Step 1: Storage mode (respects global/workspace preference)
+  const storageMode = await select({
+    message: 'Where should workflow data be stored?',
+    options: [
+      { value: 'global', label: 'Global (~/.rrce-workflow/)', hint: 'Recommended - cross-project access' },
+      { value: 'workspace', label: 'Workspace (.rrce-workflow/)', hint: 'Self-contained' },
+    ],
+    initialValue: 'global',
+  });
+  
+  if (isCancel(storageMode)) {
+    cancel('Setup cancelled.');
+    process.exit(0);
+  }
+  
+  // Resolve global path if needed
+  let customGlobalPath: string | undefined;
+  if (storageMode === 'global') {
+    customGlobalPath = await resolveGlobalPath();
+    if (!customGlobalPath) {
+      cancel('Setup cancelled - no global path selected.');
+      process.exit(0);
+    }
+  }
+  
+  // Step 2: Confirm with summary of defaults
+  note(
+    `${pc.bold('Express Setup will configure:')}\n` +
+    `• Storage: ${storageMode === 'global' ? 'Global' : 'Workspace'}\n` +
+    `• MCP Server: Enabled\n` +
+    `• Semantic Search (RAG): Enabled\n` +
+    `• Git ignore entries: Added (as comments)\n` +
+    `• AI Tools: All available`,
+    'Configuration Preview'
+  );
+  
+  const confirmed = await confirm({
+    message: 'Proceed with express setup?',
+    initialValue: true,
+  });
+  
+  if (isCancel(confirmed) || !confirmed) {
+    cancel('Setup cancelled.');
+    process.exit(0);
+  }
+  
+  // Generate with defaults
+  s.start('Generating configuration');
+  
+  try {
+    await generateConfiguration({
+      storageMode: storageMode as StorageMode,
+      globalPath: customGlobalPath,
+      tools: ['copilot', 'antigravity'], // All tools
+      linkedProjects: [], // No linking in express mode
+      addToGitignore: true,
+      exposeToMCP: true,
+      enableRAG: true,
+    }, workspacePath, workspaceName, existingProjects);
+    
+    s.stop('Configuration generated');
+    
+    // Summary
+    const summary = [
+      `${pc.green('✓')} Agent prompts installed`,
+      `${pc.green('✓')} MCP server configured`,
+      `${pc.green('✓')} Semantic Search enabled`,
+    ];
+    note(summary.join('\n'), 'Setup Complete');
+    
+    // Offer to start MCP server
+    const startMCP = await confirm({
+      message: 'Start MCP server now?',
+      initialValue: true,
+    });
+    
+    if (startMCP && !isCancel(startMCP)) {
+      const { runMCP } = await import('../../mcp/index');
+      await runMCP();
+    } else {
+      outro(pc.green(`✓ Express setup complete! Run ${pc.cyan('npx rrce-workflow mcp')} to start the server.`));
+    }
+  } catch (error) {
+    s.stop('Error occurred');
+    cancel(`Express setup failed: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+}
+
+/**
  * Run the full setup flow for new workspaces
  */
 export async function runSetupFlow(
@@ -36,7 +134,27 @@ export async function runSetupFlow(
 ): Promise<void> {
   const s = spinner();
   
-  // Full setup flow
+  // Ask for setup mode first
+  const setupMode = await select({
+    message: 'Setup mode:',
+    options: [
+      { value: 'express', label: 'Express Setup', hint: 'Quick start with recommended defaults (3 steps)' },
+      { value: 'custom', label: 'Custom Setup', hint: 'Full configuration options' },
+    ],
+    initialValue: 'express',
+  });
+  
+  if (isCancel(setupMode)) {
+    cancel('Setup cancelled.');
+    process.exit(0);
+  }
+  
+  // Express setup - minimal prompts with smart defaults
+  if (setupMode === 'express') {
+    return runExpressSetup(workspacePath, workspaceName, existingProjects, s);
+  }
+  
+  // Full custom setup flow
   const config = await group(
     {
       storageMode: () =>
@@ -369,7 +487,6 @@ tools:
             config.enableRAG ? { enabled: true } : undefined // semanticSearch
           );
           saveMCPConfig(mcpConfig);
-          saveMCPConfig(mcpConfig);
       } else {
           // Global mode -> definitely in `~/.rrce-workflow/workspaces/` so it will be found.
           // BUT we must register the current workspace PATH so `detection/scan` can know about it?
@@ -388,8 +505,13 @@ tools:
       }
 
     } catch (e) {
-      // Don't fail the whole setup if MCP config fails, just log/warn
-      console.error('Failed to update MCP config:', e);
+      // Non-fatal: Don't fail setup if MCP config fails
+      note(
+        `${pc.yellow('⚠')} Could not register project with MCP\n` +
+        `Error: ${e instanceof Error ? e.message : String(e)}\n\n` +
+        `You can configure MCP later: ${pc.cyan('npx rrce-workflow mcp')}`,
+        'MCP Registration Warning'
+      );
     }
   }
 }

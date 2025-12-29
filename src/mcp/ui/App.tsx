@@ -139,7 +139,7 @@ export const App = ({ onExit, initialPort }: AppProps) => {
                  }} 
                />
            )}
-           {activeTab === 'projects' && <ProjectsView onConfigChange={handleConfigChange} />}
+           {activeTab === 'projects' && <ProjectsView config={config} projects={projects} onConfigChange={handleConfigChange} />}
            {activeTab === 'install' && <InstallView />}
            {activeTab === 'logs' && <LogViewer logs={logs} height={contentHeight} />}
        </Box>
