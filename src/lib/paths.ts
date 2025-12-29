@@ -40,15 +40,51 @@ export function getConfigPath(workspaceRoot: string): string {
   const newPath = path.join(workspaceRoot, '.rrce-workflow', 'config.yaml');
   const legacyPath = path.join(workspaceRoot, '.rrce-workflow.yaml');
   
-  // Prefer new location, fall back to legacy
+  // Prefer new local location
   if (fs.existsSync(newPath)) {
     return newPath;
   }
+  // Fall back to legacy local location
   if (fs.existsSync(legacyPath)) {
     return legacyPath;
   }
+
+  // Check global storage via MCP config lookup
+  try {
+    const rrceHome = getDefaultRRCEHome(); // We can't use getEffectiveRRCEHome(workspaceRoot) here to avoid infinite recursion/chicken-egg
+    const mcpConfigPath = path.join(rrceHome, 'mcp.yaml');
+    
+    if (fs.existsSync(mcpConfigPath)) {
+      // Basic manual parsing to avoid heavy deps/imports cycle in paths.ts
+      const mcpContent = fs.readFileSync(mcpConfigPath, 'utf-8');
+      
+      // Look for a project entry with this path
+      // Simple regex approach to avoid cyclical import of YAML parser or types
+      // Pattern: - name: foo ... path: /workspace/root
+      
+      // We need to find the name associated with this workspaceRoot
+      // This is a naive heuristic but should cover standard generated mcp.yaml
+      const lines = mcpContent.split('\n');
+      let currentName = '';
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('- name:')) {
+          currentName = line.replace('- name:', '').trim();
+        } else if (line.startsWith('path:')) {
+          const p = line.replace('path:', '').trim();
+          if (p === workspaceRoot || p === `"${workspaceRoot}"` || p === `'${workspaceRoot}'`) {
+             // Found match! Return global config path
+             return path.join(rrceHome, 'workspaces', currentName, 'config.yaml');
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Ignore errors during global lookup
+  }
   
-  // Default to new location for new configs
+  // Default to new local location for new configs if nothing found
   return newPath;
 }
 

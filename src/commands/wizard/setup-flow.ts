@@ -234,7 +234,11 @@ async function executeSetup(
     }
     
     // Generate VSCode workspace file if needed
-    if (config.tools.includes('copilot') || config.linkedProjects.length > 0) {
+    // Only if using Copilot in workspace mode (needs local config) OR if linking projects
+    const needsVSCodeWorkspace = (config.storageMode === 'workspace' && config.tools.includes('copilot')) || 
+                                 config.linkedProjects.length > 0;
+
+    if (needsVSCodeWorkspace) {
       const selectedProjects = allProjects.filter(p => 
         config.linkedProjects.includes(`${p.name}:${p.source}`)
       );

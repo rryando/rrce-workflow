@@ -84,9 +84,18 @@ export function createWorkspaceConfig(
   workspacePath: string,
   workspaceName: string
 ): void {
-  // Always create config file, even for global mode (so agents can find project context)
+  // Determine target path based on storage mode
+  let configPath: string;
   
-  const configPath = path.join(workspacePath, '.rrce-workflow', 'config.yaml');
+  if (config.storageMode === 'global') {
+    // Global mode: Store config in global workspace wrapper
+    const rrceHome = config.globalPath || getDefaultRRCEHome();
+    configPath = path.join(rrceHome, 'workspaces', workspaceName, 'config.yaml');
+  } else {
+    // Workspace mode: Store locally
+    configPath = path.join(workspacePath, '.rrce-workflow', 'config.yaml');
+  }
+  
   ensureDir(path.dirname(configPath));
   
   let content = `# RRCE-Workflow Configuration
