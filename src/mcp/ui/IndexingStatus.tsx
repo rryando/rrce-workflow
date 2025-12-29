@@ -30,7 +30,12 @@ export const IndexingStatus: React.FC<IndexingStatusProps> = ({ projects, config
         const newStats: ProjectStats[] = [];
         
         for (const project of projects) {
-            const projConfig = findProjectConfig(config, { name: project.name, path: project.path });
+            let projConfig = findProjectConfig(config, { name: project.name, path: project.path });
+            
+            // Fallback for global projects: path in config (local) != path in detection (global storage)
+            if (!projConfig && project.source === 'global') {
+                projConfig = config.projects.find(p => p.name === project.name);
+            }
             const enabled = projConfig?.semanticSearch?.enabled ?? false;
             
             if (!enabled) {
