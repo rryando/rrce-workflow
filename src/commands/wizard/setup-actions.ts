@@ -152,17 +152,8 @@ export async function registerWithMCP(
     
     const mcpConfig = loadMCPConfig();
     
-    if (config.storageMode === 'workspace') {
-      setProjectConfig(
-        mcpConfig, 
-        workspaceName, 
-        true, 
-        undefined,
-        undefined,
-        config.enableRAG ? { enabled: true } : undefined
-      );
-    } else {
-      // Global mode - register with path for detection
+      // Register with path for detection in both modes
+      // This ensures the global MCP server can find the project without relying on deep filesystem scanning
       setProjectConfig(
         mcpConfig, 
         workspaceName, 
@@ -171,7 +162,6 @@ export async function registerWithMCP(
         workspacePath,
         config.enableRAG ? { enabled: true } : undefined
       );
-    }
     
     saveMCPConfig(mcpConfig);
   } catch (e) {

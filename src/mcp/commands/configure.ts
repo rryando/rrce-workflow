@@ -12,7 +12,11 @@ export async function handleConfigure(): Promise<void> {
   s.start('Scanning for projects...');
 
   const config = loadMCPConfig();
-  const projects = scanForProjects();
+  
+  // Ensure we include projects already in config
+  const knownPaths = config.projects.map(p => p.path).filter((p): p is string => !!p);
+  const projects = scanForProjects({ knownPaths });
+  
   logger.info('Configure: Loaded config', { projects: config.projects, defaultMode: config.defaults.includeNew });
 
   s.stop('Projects found');

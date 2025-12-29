@@ -15,7 +15,13 @@ import { RAGService } from './services/rag';
  */
 export function getExposedProjects(): DetectedProject[] {
   const config = loadMCPConfig();
-  const allProjects = projectService.scan();
+  
+  // Extract known paths from config to ensure we find workspace-mode projects
+  const knownPaths = config.projects
+    .map(p => p.path)
+    .filter((p): p is string => !!p);
+
+  const allProjects = projectService.scan({ knownPaths });
   
   // 1. Get globally exposed projects
   const globalProjects = allProjects.filter(project => isProjectExposed(config, project.name, project.dataPath));
@@ -103,7 +109,12 @@ export function detectActiveProject(knownProjects?: DetectedProject[]): Detected
   let scanList = knownProjects;
   if (!scanList) {
      const config = loadMCPConfig();
-     const all = projectService.scan();
+     // Use known paths for detection to ensure we find the active project even if not in standard scan
+     const knownPaths = config.projects
+        .map(p => p.path)
+        .filter((p): p is string => !!p);
+        
+     const all = projectService.scan({ knownPaths });
      // Only consider global ones for base detection to start with
      scanList = all.filter(project => isProjectExposed(config, project.name, project.dataPath));
   }
