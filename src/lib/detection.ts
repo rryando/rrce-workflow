@@ -264,5 +264,17 @@ export function getProjectFolders(project: DetectedProject): Array<{
     });
   }
 
+
   return folders;
+}
+
+/**
+ * Find the project that best matches the current working directory
+ * Returns the project with the longest matching path prefix
+ */
+export function findClosestProject(projects: DetectedProject[], cwd: string = process.cwd()): DetectedProject | undefined {
+  const matches = projects.filter(p => cwd.startsWith(p.path));
+  // Sort by path length descending (most specific match first)
+  matches.sort((a, b) => b.path.length - a.path.length);
+  return matches[0];
 }

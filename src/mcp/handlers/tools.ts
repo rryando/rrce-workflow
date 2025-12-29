@@ -4,7 +4,7 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../logger';
-import { getExposedProjects, getProjectContext, searchKnowledge, indexKnowledge, detectActiveProject } from '../resources';
+import { getExposedProjects, getProjectContext, searchKnowledge, indexKnowledge, detectActiveProject, getContextPreamble } from '../resources';
 import { getAllPrompts, getPromptDef, renderPrompt } from '../prompts';
 
 /**
@@ -156,29 +156,7 @@ export function registerToolHandlers(server: Server): void {
           const content = renderPrompt(promptDef.content, stringArgs);
           
           // Context Injection (Same as GetPromptRequest)
-          const projects = getExposedProjects();
-          const activeProject = detectActiveProject();
-          
-          const projectList = projects.map(p => {
-            const isActive = activeProject && p.dataPath === activeProject.dataPath;
-            return `- ${p.name} (${p.source}) ${isActive ? '**[ACTIVE]**' : ''}`;
-          }).join('\n');
-          
-          let contextPreamble = `
-Context - Available Projects (MCP Hub):
-${projectList}
-`;
-
-          if (activeProject) {
-            contextPreamble += `\nCurrent Active Workspace: ${activeProject.name} (${activeProject.path})\n`;
-            contextPreamble += `IMPORTANT: Treat '${activeProject.path}' as the {{WORKSPACE_ROOT}}. All relative path operations (file reads/writes) MUST be performed relative to this directory.\n`;
-          }
-
-          contextPreamble += `
-Note: If the user's request refers to a project not listed here, ask them to expose it via 'rrce-workflow mcp configure'.
-
----
-`;
+          const contextPreamble = getContextPreamble();
           return { content: [{ type: 'text', text: contextPreamble + content }] };
         }
 

@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadMCPConfig, isProjectExposed, getProjectPermissions } from './config';
-import { type DetectedProject } from '../lib/detection';
+import { type DetectedProject, findClosestProject } from '../lib/detection';
 import { projectService } from '../lib/detection-service';
 import { RAGService } from './services/rag';
 
@@ -100,13 +100,7 @@ export function detectActiveProject(knownProjects?: DetectedProject[]): Detected
      scanList = all.filter(project => isProjectExposed(config, project.name, project.dataPath));
   }
   
-  const cwd = process.cwd();
-  
-  // Find project where CWD starts with project path (closest match)
-  const matches = scanList.filter(p => cwd.startsWith(p.path));
-  matches.sort((a, b) => b.path.length - a.path.length);
-  
-  return matches[0];
+  return findClosestProject(scanList);
 }
 
 /**
