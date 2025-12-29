@@ -123,7 +123,7 @@ export async function promptLinkedProjects(existingProjects: DetectedProject[]):
 export async function promptGitignore(): Promise<boolean> {
   const result = await confirm({
     message: 'Add generated folders to .gitignore? (as comments - uncomment if needed)',
-    initialValue: true,
+    initialValue: false,
   });
   
   if (isCancel(result)) {

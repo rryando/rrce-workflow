@@ -99,7 +99,7 @@ async function runExpressSetup(
     globalPath: customGlobalPath,
     tools: ['copilot', 'antigravity'],
     linkedProjects: [],
-    addToGitignore: true,
+    addToGitignore: false,
     exposeToMCP: true,
     enableRAG: true,
   };

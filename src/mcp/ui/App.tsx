@@ -45,9 +45,15 @@ export const App = ({ onExit, initialPort }: AppProps) => {
   // Memoize exposed projects calculation
   const exposedProjects = useMemo(() => 
     projects.filter(p => {
+      // Find config: check path match first, then name match
       const cfg = config.projects.find(c => 
-        (c.path && c.path === p.path) || (!c.path && c.name === p.name)
+        (c.path && c.path === p.path) || 
+        (p.source === 'global' && c.name === p.name) ||
+        (!c.path && c.name === p.name)
       );
+      
+      // If found, use config.exposed. 
+      // If not found, use default.
       return cfg?.expose ?? config.defaults.includeNew;
     }),
     [projects, config]
