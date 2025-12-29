@@ -6,6 +6,7 @@ import { ProjectsView } from './ProjectsView';
 import { InstallView } from './InstallView';
 import { LogViewer } from './LogViewer';
 import { StatusBoard } from './StatusBoard';
+import { IndexingStatus } from './IndexingStatus';
 import { TabBar, type Tab } from './components/TabBar';
 import { loadMCPConfig } from '../config';
 import { findProjectConfig } from '../config-utils';
@@ -20,13 +21,6 @@ interface AppProps {
   onExit: () => void;
   initialPort: number;
 }
-
-const TABS: Tab[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'logs', label: 'Logs' },
-    { id: 'projects', label: 'Projects' },
-    { id: 'install', label: 'Install' }
-];
 
 export const App = ({ onExit, initialPort }: AppProps) => {
   const { exit } = useApp();
@@ -58,6 +52,28 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     }),
     [projects, config]
   );
+
+  // Check if any exposed project has RAG enabled
+  const isRAGEnabled = useMemo(() => {
+      return exposedProjects.some(p => {
+          const cfg = findProjectConfig(config, { name: p.name, path: p.path });
+          return cfg?.semanticSearch?.enabled;
+      });
+  }, [exposedProjects, config]);
+
+  const tabs = useMemo<Tab[]>(() => {
+      const baseTabs = [
+        { id: 'overview', label: 'Overview' },
+        { id: 'logs', label: 'Logs' },
+        { id: 'projects', label: 'Projects' },
+        { id: 'install', label: 'Install' }
+      ];
+      if (isRAGEnabled) {
+          // Insert after projects
+          baseTabs.splice(3, 0, { id: 'indexing', label: 'Indexing' });
+      }
+      return baseTabs;
+  }, [isRAGEnabled]);
 
   const workspacePath = detectWorkspaceRoot();
   const installStatus = checkInstallStatus(workspacePath);
@@ -150,7 +166,7 @@ export const App = ({ onExit, initialPort }: AppProps) => {
 
   return (
     <Box flexDirection="column" padding={0} height={termHeight}>
-       <TabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+       <TabBar tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
        
        <Box marginTop={1} flexGrow={1}>
            {activeTab === 'overview' && (
@@ -164,6 +180,7 @@ export const App = ({ onExit, initialPort }: AppProps) => {
                />
            )}
            {activeTab === 'projects' && <ProjectsView config={config} projects={projects} onConfigChange={handleConfigChange} />}
+           {activeTab === 'indexing' && <IndexingStatus config={config} projects={exposedProjects} />}
            {activeTab === 'install' && <InstallView />}
            {activeTab === 'logs' && <LogViewer logs={logs} height={contentHeight} />}
        </Box>

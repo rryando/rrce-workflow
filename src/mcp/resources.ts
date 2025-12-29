@@ -88,6 +88,14 @@ export function getExposedProjects(): DetectedProject[] {
 }
 
 /**
+ * Get RAG index path for a project
+ */
+export function getRAGIndexPath(project: DetectedProject): string {
+    const scanRoot = project.path || project.dataPath;
+    return path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'embeddings.json');
+}
+
+/**
  * Detect the active project based on the current working directory (CWD)
  */
 export function detectActiveProject(knownProjects?: DetectedProject[]): DetectedProject | undefined {

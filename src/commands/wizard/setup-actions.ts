@@ -109,6 +109,13 @@ tools:
   antigravity: ${config.storageMode === 'workspace' && config.tools.includes('antigravity')}
 `;
 
+  if (config.enableRAG) {
+    content += `
+semantic_search:
+  enabled: true
+`;
+  }
+
   if (config.linkedProjects.length > 0) {
     content += `\nlinked_projects:\n`;
     config.linkedProjects.forEach(name => {
