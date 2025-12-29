@@ -63,7 +63,8 @@ export const App = ({ onExit, initialPort }: AppProps) => {
   const isRAGEnabled = useMemo(() => {
       return exposedProjects.some(p => {
           const cfg = findProjectConfig(config, { name: p.name, path: p.path });
-          return cfg?.semanticSearch?.enabled;
+          // Check config first, then fallback to detected status (important for global projects)
+          return cfg?.semanticSearch?.enabled || p.semanticSearchEnabled;
       });
   }, [exposedProjects, config]);
 
@@ -72,7 +73,7 @@ export const App = ({ onExit, initialPort }: AppProps) => {
         { id: 'overview', label: 'Overview' },
         { id: 'logs', label: 'Logs' },
         { id: 'projects', label: 'Projects' },
-        { id: 'install', label: 'Install' }
+        { id: 'install', label: 'Install' },
       ];
       if (isRAGEnabled) {
           // Insert after projects

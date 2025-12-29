@@ -36,7 +36,7 @@ export const IndexingStatus: React.FC<IndexingStatusProps> = ({ projects, config
             if (!projConfig && project.source === 'global') {
                 projConfig = config.projects.find(p => p.name === project.name);
             }
-            const enabled = projConfig?.semanticSearch?.enabled ?? false;
+            const enabled = projConfig?.semanticSearch?.enabled || project.semanticSearchEnabled || false;
             
             if (!enabled) {
                 newStats.push({

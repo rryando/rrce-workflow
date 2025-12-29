@@ -15,6 +15,7 @@ export interface DetectedProject {
   knowledgePath?: string;
   refsPath?: string;
   tasksPath?: string;
+  semanticSearchEnabled?: boolean;
 }
 
 export interface ScanOptions {
@@ -105,6 +106,8 @@ function scanGlobalStorage(excludeWorkspace?: string): DetectedProject[] {
         knowledgePath: fs.existsSync(knowledgePath) ? knowledgePath : undefined,
         refsPath: fs.existsSync(refsPath) ? refsPath : undefined,
         tasksPath: fs.existsSync(tasksPath) ? tasksPath : undefined,
+        // Global projects store config at the root of their data path
+        semanticSearchEnabled: parseWorkspaceConfig(path.join(projectDataPath, 'config.yaml'))?.semanticSearchEnabled
       });
     }
   } catch {
@@ -160,6 +163,7 @@ function scanHomeDirectory(excludePath?: string): DetectedProject[] {
               knowledgePath: fs.existsSync(knowledgePath) ? knowledgePath : undefined,
               refsPath: fs.existsSync(refsPath) ? refsPath : undefined,
               tasksPath: fs.existsSync(tasksPath) ? tasksPath : undefined,
+              semanticSearchEnabled: config?.semanticSearchEnabled,
             });
           }
           // Don't recurse into .rrce-workflow
@@ -189,6 +193,7 @@ export function parseWorkspaceConfig(configPath: string): {
   name: string;
   storageMode: StorageMode;
   linkedProjects?: string[];
+  semanticSearchEnabled?: boolean;
 } | null {
   try {
     const content = fs.readFileSync(configPath, 'utf-8');
@@ -210,10 +215,15 @@ export function parseWorkspaceConfig(configPath: string): {
       }
     }
 
+    // Parse semantic search setting
+    const semanticSearchMatch = content.match(/semantic_search:\s*\n\s*enabled:\s*(true|false)/);
+    const semanticSearchEnabled = semanticSearchMatch ? semanticSearchMatch[1] === 'true' : false;
+
     return {
       name: nameMatch?.[1]?.trim() || path.basename(path.dirname(path.dirname(configPath))),
       storageMode: (modeMatch?.[1] as StorageMode) || 'global',
       linkedProjects: linkedProjects.length > 0 ? linkedProjects : undefined,
+      semanticSearchEnabled,
     };
   } catch {
     return null;
