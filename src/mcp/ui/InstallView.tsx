@@ -13,7 +13,7 @@ export const InstallView = () => {
     return (
         <Box flexDirection="column" padding={1} borderStyle="round" borderColor="magenta" flexGrow={1}>
             <Text bold color="magenta"> Installation & Configuration </Text>
-             <Text color="dim"> Configure IDE integrations for VSCode, Claude, and Antigravity.</Text>
+             <Text color="dim"> Configure IDE integrations for OpenCode, VSCode, Claude, and Antigravity.</Text>
             <Box marginTop={1} flexDirection="column">
                 <InstallWizard 
                     workspacePath={workspacePath}

@@ -16,6 +16,11 @@ export const InstallWizard = ({ workspacePath, onComplete, onCancel }: InstallWi
 
   const options: { value: string; label: string; hint: string }[] = [
     { 
+      value: 'opencode',
+      label: 'OpenCode',
+      hint: status.opencode ? 'INSTALLED' : 'Not installed',
+    },
+    { 
       value: 'antigravity', 
       label: 'Antigravity IDE', 
       hint: status.antigravity ? 'INSTALLED' : 'Not installed',
@@ -38,6 +43,7 @@ export const InstallWizard = ({ workspacePath, onComplete, onCancel }: InstallWi
   ];
 
   const initialSelected = [
+      ...(status.opencode ? ['opencode'] : []),
       ...(status.antigravity ? ['antigravity'] : []),
       ...(status.vscodeGlobal ? ['vscode-global'] : []),
       ...(status.vscodeWorkspace ? ['vscode-workspace'] : []),
