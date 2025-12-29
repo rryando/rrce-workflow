@@ -98,10 +98,12 @@ Add to `~/.config/claude/claude_desktop_config.json`:
 RRCE-Workflow supports two ways to store your agent workflow data (`knowledge/`, `tasks/`, `refs/`).
 
 ### 1. Global Mode (Default & Recommended)
-Stores configuration and knowledge outside your project directory in `~/.rrce-workflow/workspaces/<project-name>`.
+Stores configuration and knowledge outside your project directory in `~/.rrce-workflow/workspaces/<project-name>` (or a custom path you configure).
 
 *   **✅ Pros**: Keeps your repo clean, easy cross-project linking, no `.gitignore` pollution.
 *   **❌ Cons**: Knowledge isn't checked into your project's git repo (unless you manually sync/backup).
+
+**Custom Global Path**: When running the wizard, you can choose a custom location instead of `~/.rrce-workflow/`. Your preference is saved and automatically used for future projects.
 
 ### 2. Workspace Mode (Alternative)
 Stores everything in a `.rrce-workflow` folder inside your project root.
@@ -125,6 +127,7 @@ Once installed, you gain access to powerful agent workflows. Invoke them using y
 | **Execute** | **Implementation** | The "coding" phase. Implements the plan created by the Planning agent. |
 | **Docs** | **Documentation** | Generates tailored docs (API refs, guides) from code. |
 | **Sync** | **Knowledge Maintenance** | Scans code changes to update the `knowledge/` folder. |
+| **Doctor** | **Health Analysis** | Analyzes codebase for issues, tech debt, and improvement opportunities. |
 
 ### Recommended Workflow
 1.  **`/init`**: "Analyze this codebase." -> Creates `project-context.md`.
@@ -145,7 +148,7 @@ RAG is enabled by default in Express Setup. You can toggle it per-project in the
 
 ---
 
-## requirements
+## Requirements
 
 -   **Node.js 18+**
 -   **Git**
