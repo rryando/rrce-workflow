@@ -4,7 +4,7 @@ import {
   GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../logger';
-import { getExposedProjects, detectActiveProject } from '../resources';
+import { getExposedProjects, detectActiveProject, getContextPreamble } from '../resources';
 import { getAllPrompts, getPromptDef, renderPrompt } from '../prompts';
 
 /**
@@ -58,43 +58,8 @@ export function registerPromptHandlers(server: Server): void {
 
       const content = renderPrompt(promptDef.content, renderArgs);
 
-      // Inject Available Projects Context
-      const projects = getExposedProjects();
-      const activeProject = detectActiveProject();
-      
-      const projectList = projects.map(p => {
-        const isActive = activeProject && p.dataPath === activeProject.dataPath;
-        // Check if project is globally exposed or just linked
-        // Actually, we can check source property or check if it's in config
-        // But simply showing the source attribute is enough? p.source should tell us.
-        // Wait, scanForProjects sets source to 'global' or 'workspace'.
-        // If it's linked, it might still have source='global' if it lives in global folder.
-        // But for context, we want to know if it's available.
-        return `- ${p.name} (${p.source}) ${isActive ? '**[ACTIVE]**' : ''}`;
-      }).join('\n');
-      
-      let contextPreamble = `
-Context - Available Projects (MCP Hub):
-${projectList}
-`;
-      if (projects.length === 0) {
-        contextPreamble += `
-WARNING: No projects are currently exposed to the MCP server.
-The user needs to run 'npx rrce-workflow mcp configure' in their terminal to select projects to expose.
-Please advise the user to do this if they expect to see project context.
-`;
-      }
-
-      if (activeProject) {
-        contextPreamble += `\nCurrent Active Workspace: ${activeProject.name} (${activeProject.path})\n`;
-        contextPreamble += `IMPORTANT: Treat '${activeProject.path}' as the {{WORKSPACE_ROOT}}. All relative path operations (file reads/writes) MUST be performed relative to this directory.\n`;
-      }
-
-      contextPreamble += `
-Note: If the user's request refers to a project not listed here, ask them to expose it via 'rrce-workflow mcp configure'.
-
----
-`;
+      // Inject Available Projects Context using shared utility
+      const contextPreamble = getContextPreamble();
 
       return {
         messages: [

@@ -26,11 +26,14 @@ const INDEX_VERSION = '1.0.0';
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2';
 
 export class RAGService {
-  private pipe: any = null;
+  // Static cache for the pipeline to prevent reloading model for every instance
+  private static pipelineInstance: any = null;
+  private static activeModelName: string | null = null;
+  private static loadPromise: Promise<any> | null = null;
+
   private modelName: string;
   private indexPath: string;
   private index: RAGIndex | null = null;
-  private lastAccess: number = 0;
 
   constructor(indexPath: string, modelName: string = DEFAULT_MODEL) {
     this.indexPath = indexPath;
@@ -38,23 +41,44 @@ export class RAGService {
   }
 
   /**
-   * Lazy load the model
+   * Lazy load the model (Singleton pattern)
    */
   private async getPipeline() {
-    if (!this.pipe) {
-      logger.info(`RAG: Initializing model ${this.modelName}...`);
-      try {
-        // Dynamic import to prevent startup hang and reduce initial memory
-        const { pipeline } = await import('@xenova/transformers');
-        this.pipe = await pipeline('feature-extraction', this.modelName);
-        logger.info(`RAG: Model ${this.modelName} initialized successfully.`);
-      } catch (error) {
-        logger.error(`RAG: Failed to initialize model ${this.modelName}`, error);
-        throw error;
-      }
+    // If we're already loading/loaded with the same model, reuse it
+    if (RAGService.activeModelName === this.modelName && RAGService.pipelineInstance) {
+        return RAGService.pipelineInstance;
     }
-    this.lastAccess = Date.now();
-    return this.pipe;
+
+    // If a load is in progress for this model, wait for it
+    if (RAGService.activeModelName === this.modelName && RAGService.loadPromise) {
+        return RAGService.loadPromise;
+    }
+
+    logger.info(`RAG: Initializing model ${this.modelName}...`);
+    
+    RAGService.activeModelName = this.modelName;
+    
+    RAGService.loadPromise = (async () => {
+        try {
+            // Dynamic import to prevent startup hang and reduce initial memory
+            const { pipeline } = await import('@xenova/transformers');
+            
+            // NOTE: We could add env.cacheDir configuration here if needed
+            
+            const pipe = await pipeline('feature-extraction', this.modelName);
+            RAGService.pipelineInstance = pipe;
+            logger.info(`RAG: Model ${this.modelName} initialized successfully.`);
+            return pipe;
+        } catch (error) {
+            logger.error(`RAG: Failed to initialize model ${this.modelName}`, error);
+            RAGService.pipelineInstance = null;
+            RAGService.activeModelName = null;
+            RAGService.loadPromise = null;
+            throw error;
+        }
+    })();
+
+    return RAGService.loadPromise;
   }
 
   /**

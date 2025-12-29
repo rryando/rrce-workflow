@@ -6,7 +6,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadMCPConfig, isProjectExposed, getProjectPermissions } from './config';
-import { scanForProjects, type DetectedProject } from '../lib/detection';
+import { type DetectedProject } from '../lib/detection';
+import { projectService } from '../lib/detection-service';
 import { RAGService } from './services/rag';
 
 /**
@@ -14,7 +15,7 @@ import { RAGService } from './services/rag';
  */
 export function getExposedProjects(): DetectedProject[] {
   const config = loadMCPConfig();
-  const allProjects = scanForProjects();
+  const allProjects = projectService.scan();
   
   // 1. Get globally exposed projects
   const globalProjects = allProjects.filter(project => isProjectExposed(config, project.name, project.dataPath));
@@ -94,7 +95,7 @@ export function detectActiveProject(knownProjects?: DetectedProject[]): Detected
   let scanList = knownProjects;
   if (!scanList) {
      const config = loadMCPConfig();
-     const all = scanForProjects();
+     const all = projectService.scan();
      // Only consider global ones for base detection to start with
      scanList = all.filter(project => isProjectExposed(config, project.name, project.dataPath));
   }
@@ -113,7 +114,7 @@ export function detectActiveProject(knownProjects?: DetectedProject[]): Detected
  */
 export function getProjectContext(projectName: string): string | null {
   const config = loadMCPConfig();
-  const projects = scanForProjects();
+  const projects = projectService.scan();
   
   // Find the SPECIFIC project that is exposed (disambiguate by path if need be)
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.dataPath));
@@ -145,7 +146,7 @@ export function getProjectContext(projectName: string): string | null {
  */
 export function getProjectTasks(projectName: string): object[] {
   const config = loadMCPConfig();
-  const projects = scanForProjects();
+  const projects = projectService.scan();
   
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.dataPath));
   
@@ -315,4 +316,44 @@ export async function indexKnowledge(projectName: string, force: boolean = false
     } catch (error) {
         return { success: false, message: `Indexing failed: ${error}`, filesIndexed: 0 };
     }
+}
+
+/**
+ * Generate standard context preamble for agents
+ * Lists available projects and identifies active workspace
+ */
+export function getContextPreamble(): string {
+  const projects = getExposedProjects();
+  const activeProject = detectActiveProject();
+  
+  const projectList = projects.map(p => {
+    const isActive = activeProject && p.dataPath === activeProject.dataPath;
+    return `- ${p.name} (${p.source}) ${isActive ? '**[ACTIVE]**' : ''}`;
+  }).join('\n');
+  
+  let contextPreamble = `
+Context - Available Projects (MCP Hub):
+${projectList}
+`;
+
+  if (projects.length === 0) {
+    contextPreamble += `
+WARNING: No projects are currently exposed to the MCP server.
+The user needs to run 'npx rrce-workflow mcp configure' in their terminal to select projects to expose.
+Please advise the user to do this if they expect to see project context.
+`;
+  }
+
+  if (activeProject) {
+    contextPreamble += `\nCurrent Active Workspace: ${activeProject.name} (${activeProject.path})\n`;
+    contextPreamble += `IMPORTANT: Treat '${activeProject.path}' as the {{WORKSPACE_ROOT}}. All relative path operations (file reads/writes) MUST be performed relative to this directory.\n`;
+  }
+
+  contextPreamble += `
+Note: If the user's request refers to a project not listed here, ask them to expose it via 'rrce-workflow mcp configure'.
+
+---
+`;
+
+  return contextPreamble;
 }

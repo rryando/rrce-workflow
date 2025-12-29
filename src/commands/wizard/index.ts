@@ -8,7 +8,7 @@ import {
   getLocalWorkspacePath,
   getConfigPath
 } from '../../lib/paths';
-import { scanForProjects } from '../../lib/detection';
+import { projectService } from '../../lib/detection-service';
 
 // Import flows
 import { runSetupFlow } from './setup-flow';
@@ -53,7 +53,7 @@ Workspace: ${pc.bold(workspaceName)}`,
   );
 
   // Scan for existing projects (global storage + home directory)
-  const detectedProjects = scanForProjects({
+  const detectedProjects = projectService.scan({
     excludeWorkspace: workspaceName,
     workspacePath: workspacePath,
   });

@@ -3,13 +3,7 @@
  * Singleton service with caching for efficient project scanning
  */
 
-import { scanForProjects, type DetectedProject } from './detection';
-
-// Define locally since ScanOptions is not exported from detection
-interface ScanOptions {
-  excludeWorkspace?: boolean;
-  workspacePath?: string;
-}
+import { scanForProjects, type DetectedProject, type ScanOptions } from './detection';
 
 class ProjectDetectionService {
   private cache: DetectedProject[] | null = null;

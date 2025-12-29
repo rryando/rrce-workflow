@@ -17,7 +17,7 @@ export interface DetectedProject {
   tasksPath?: string;
 }
 
-interface ScanOptions {
+export interface ScanOptions {
   excludeWorkspace?: string;  // Current workspace name to exclude
   workspacePath?: string;     // Current workspace path to exclude
 }
