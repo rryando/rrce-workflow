@@ -112,6 +112,7 @@ storage:
 
 project:
   name: "${workspaceName}"
+  sourcePath: "${workspacePath}"
 
 tools:
   copilot: ${config.storageMode === 'workspace' && config.tools.includes('copilot')}

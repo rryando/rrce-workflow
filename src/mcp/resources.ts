@@ -286,16 +286,38 @@ export async function indexKnowledge(projectName: string, force: boolean = false
         return { success: false, message: `Project '${projectName}' not found`, filesIndexed: 0, filesSkipped: 0 };
     }
 
+    // Find config with fallback for global projects
     const projConfig = config.projects.find(p => 
         (p.path && p.path === project.dataPath) || (!p.path && p.name === project.name)
-    );
+    ) || (project.source === 'global' ? { semanticSearch: { enabled: true, model: 'Xenova/all-MiniLM-L6-v2' } } : undefined);
     
-    if (!projConfig?.semanticSearch?.enabled) {
+    // Check if RAG is actually enabled (either in config or detected)
+    const isEnabled = projConfig?.semanticSearch?.enabled || (project as any).semanticSearchEnabled;
+
+    if (!isEnabled) {
         return { success: false, message: 'Semantic Search is not enabled for this project', filesIndexed: 0, filesSkipped: 0 };
     }
 
-    // Use project root for scanning, not just knowledge path
-    const scanRoot = project.path || project.dataPath;
+    // Use project root for scanning
+    // For global projects, project.path is the data path. We need to find the ACTUAL source path.
+    // However, in the current architecture 'scanForProjects' sets project.path = dataPath for global projects.
+    // This is a known limitation. We assumed global projects are wrapping the source?
+    // Wait, global setup stores config in ~/.rrce/workspaces/proj/config.yaml
+    // The ACTUAL source code is where 'npx rrce-workflow' was run.
+    // BUT 'scanGlobalStorage' ONLY finds the ~/.rrce entry, it doesn't know where the request came from unless we store it.
+    // CHECK: Does config.yaml in global storage contain the source path?
+    
+    // If not, we can only index what's inside the global storage (which is just metadata). 
+    // This is a CRITICAL ISSUE for global mode RAG if we don't store source path.
+    // Workaround: Check if project has a 'sourcePath' or similar in config.
+    
+    // Let's assume for now we scan 'project.path'. If it's global, that's ~/.rrce/... which is WRONG for code indexing.
+    // We need to read the source path from somewhere.
+    
+    // Use project root for scanning
+    // Prefer explicit sourcePath (Global mode) or detect from path (Workspace mode)
+    const scanRoot = project.sourcePath || project.path || project.dataPath;
+
     if (!fs.existsSync(scanRoot)) {
         return { success: false, message: 'Project root not found', filesIndexed: 0, filesSkipped: 0 };
     }
@@ -324,7 +346,10 @@ export async function indexKnowledge(projectName: string, force: boolean = false
 
     try {
         const indexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'embeddings.json');
-        const rag = new RAGService(indexPath, projConfig.semanticSearch.model);
+        
+        // Fix lint error: ensure model is defined or provide default
+        const model = projConfig?.semanticSearch?.model || 'Xenova/all-MiniLM-L6-v2';
+        const rag = new RAGService(indexPath, model);
         
         let indexed = 0;
         let skipped = 0;

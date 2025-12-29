@@ -12,6 +12,7 @@ export interface DetectedProject {
   dataPath: string;       // Path to .rrce-workflow data directory
   source: 'global' | 'local';
   storageMode?: StorageMode;
+  sourcePath?: string;
   knowledgePath?: string;
   refsPath?: string;
   tasksPath?: string;
@@ -97,17 +98,23 @@ function scanGlobalStorage(excludeWorkspace?: string): DetectedProject[] {
       const knowledgePath = path.join(projectDataPath, 'knowledge');
       const refsPath = path.join(projectDataPath, 'refs');
       const tasksPath = path.join(projectDataPath, 'tasks');
-
+      
+      const configPath = path.join(projectDataPath, 'config.yaml');
+      const config = parseWorkspaceConfig(configPath);
+      
+      // If no config found, skip or default? 
+      // We should probably still list it but we won't know the source path.
+      
       projects.push({
-        name: entry.name,
-        path: projectDataPath,  // For global projects, path is the data path
+        name: config?.name || entry.name,
+        path: projectDataPath,  // Still use dataPath as defaults, BUT...
+        sourcePath: config?.sourcePath, // ...expose sourcePath if available
         dataPath: projectDataPath,
         source: 'global',
         knowledgePath: fs.existsSync(knowledgePath) ? knowledgePath : undefined,
         refsPath: fs.existsSync(refsPath) ? refsPath : undefined,
         tasksPath: fs.existsSync(tasksPath) ? tasksPath : undefined,
-        // Global projects store config at the root of their data path
-        semanticSearchEnabled: parseWorkspaceConfig(path.join(projectDataPath, 'config.yaml'))?.semanticSearchEnabled
+        semanticSearchEnabled: config?.semanticSearchEnabled
       });
     }
   } catch {
@@ -191,6 +198,7 @@ function scanHomeDirectory(excludePath?: string): DetectedProject[] {
  */
 export function parseWorkspaceConfig(configPath: string): {
   name: string;
+  sourcePath?: string;
   storageMode: StorageMode;
   linkedProjects?: string[];
   semanticSearchEnabled?: boolean;
@@ -200,6 +208,7 @@ export function parseWorkspaceConfig(configPath: string): {
     
     // Simple YAML parsing (we don't want to add a full YAML library)
     const nameMatch = content.match(/name:\s*["']?([^"'\n]+)["']?/);
+    const sourcePathMatch = content.match(/sourcePath:\s*["']?([^"'\n]+)["']?/);
     const modeMatch = content.match(/mode:\s*(global|workspace)/);
     
     // Parse linked projects
@@ -221,6 +230,7 @@ export function parseWorkspaceConfig(configPath: string): {
 
     return {
       name: nameMatch?.[1]?.trim() || path.basename(path.dirname(path.dirname(configPath))),
+      sourcePath: sourcePathMatch?.[1]?.trim(),
       storageMode: (modeMatch?.[1] as StorageMode) || 'global',
       linkedProjects: linkedProjects.length > 0 ? linkedProjects : undefined,
       semanticSearchEnabled,
