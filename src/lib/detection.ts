@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { StorageMode } from '../types/prompt';
-import { getDefaultRRCEHome } from './paths';
+import { getDefaultRRCEHome, getEffectiveGlobalPath } from './paths';
 
 /**
  * Detected rrce-workflow project information
@@ -143,7 +143,7 @@ function scanKnownPaths(paths: string[], excludeWorkspace?: string): DetectedPro
  * Scan global storage for projects
  */
 function scanGlobalStorage(excludeWorkspace?: string): DetectedProject[] {
-  const rrceHome = getDefaultRRCEHome();
+  const rrceHome = getEffectiveGlobalPath();
   const workspacesDir = path.join(rrceHome, 'workspaces');
   const projects: DetectedProject[] = [];
 

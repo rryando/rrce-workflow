@@ -2,10 +2,26 @@ import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { StorageMode } from '../types/prompt';
+import { loadUserPreferences } from './preferences';
 
 // Environment variables
 const RRCE_HOME = process.env.RRCE_HOME || path.join(process.env.HOME || '~', '.rrce-workflow');
 const RRCE_WORKSPACE = process.env.RRCE_WORKSPACE;
+
+/**
+ * Get the effective global path, respecting user preferences.
+ * Priority: 
+ *   1) User preferences (if useCustomGlobalPath flag is set)
+ *   2) RRCE_HOME environment variable
+ *   3) Default ~/.rrce-workflow
+ */
+export function getEffectiveGlobalPath(): string {
+  const prefs = loadUserPreferences();
+  if (prefs.useCustomGlobalPath && prefs.defaultGlobalPath) {
+    return prefs.defaultGlobalPath;
+  }
+  return RRCE_HOME;
+}
 
 /**
  * Detect workspace root by walking up from CWD
@@ -68,7 +84,8 @@ export function getConfigPath(workspaceRoot: string): string {
       let currentName = '';
       
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
+        const line = lines[i]?.trim();
+        if (!line) continue;
         if (line.startsWith('- name:')) {
           currentName = line.replace('- name:', '').trim();
         } else if (line.startsWith('path:')) {
@@ -100,13 +117,14 @@ export function getWorkspaceName(workspaceRoot: string): string {
  * Resolve primary data path based on storage mode
  */
 export function resolveDataPath(mode: StorageMode, workspaceName: string, workspaceRoot: string): string {
+  const effectiveHome = getEffectiveGlobalPath();
   switch (mode) {
     case 'global':
-      return path.join(RRCE_HOME, 'workspaces', workspaceName);
+      return path.join(effectiveHome, 'workspaces', workspaceName);
     case 'workspace':
       return path.join(workspaceRoot, '.rrce-workflow');
     default:
-      return path.join(RRCE_HOME, 'workspaces', workspaceName);
+      return path.join(effectiveHome, 'workspaces', workspaceName);
   }
 }
 
@@ -117,7 +135,8 @@ export function resolveDataPath(mode: StorageMode, workspaceName: string, worksp
  * - 'workspace': [<workspace>/.rrce-workflow]
  */
 export function resolveAllDataPaths(mode: StorageMode, workspaceName: string, workspaceRoot: string): string[] {
-  const globalPath = path.join(RRCE_HOME, 'workspaces', workspaceName);
+  const effectiveHome = getEffectiveGlobalPath();
+  const globalPath = path.join(effectiveHome, 'workspaces', workspaceName);
   const workspacePath = path.join(workspaceRoot, '.rrce-workflow');
   
   switch (mode) {
@@ -143,7 +162,8 @@ export function getRRCEHome(): string {
  * @returns Array of project names found in ~/.rrce-workflow/workspaces/
  */
 export function listGlobalProjects(excludeWorkspace?: string): string[] {
-  const workspacesDir = path.join(RRCE_HOME, 'workspaces');
+  const effectiveHome = getEffectiveGlobalPath();
+  const workspacesDir = path.join(effectiveHome, 'workspaces');
   
   if (!fs.existsSync(workspacesDir)) {
     return [];
@@ -163,14 +183,16 @@ export function listGlobalProjects(excludeWorkspace?: string): string[] {
  * Get the knowledge path for a global project
  */
 export function getGlobalProjectKnowledgePath(projectName: string): string {
-  return path.join(RRCE_HOME, 'workspaces', projectName, 'knowledge');
+  const effectiveHome = getEffectiveGlobalPath();
+  return path.join(effectiveHome, 'workspaces', projectName, 'knowledge');
 }
 
 /**
  * Get the global workspace data path for a project
  */
 export function getGlobalWorkspacePath(workspaceName: string): string {
-  return path.join(RRCE_HOME, 'workspaces', workspaceName);
+  const effectiveHome = getEffectiveGlobalPath();
+  return path.join(effectiveHome, 'workspaces', workspaceName);
 }
 
 /**

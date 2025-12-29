@@ -6,6 +6,7 @@ import {
 import { logger } from '../logger';
 import { getExposedProjects, detectActiveProject, getContextPreamble } from '../resources';
 import { getAllPrompts, getPromptDef, renderPrompt } from '../prompts';
+import { getEffectiveGlobalPath } from '../../lib/paths';
 import * as path from 'path';
 
 /**
@@ -62,7 +63,7 @@ export function registerPromptHandlers(server: Server): void {
       // Resolve Project Paths & Context
       // This is crucial for fixing the "Global Project" issue where agents default to local dir
       const activeProject = detectActiveProject();
-      const DEFAULT_RRCE_HOME = process.env.RRCE_HOME || `${process.env.HOME}/.rrce-workflow`;
+      const DEFAULT_RRCE_HOME = getEffectiveGlobalPath();
       
       let resolvedRrceData = '.rrce-workflow/'; // Default to local if no project found
       let resolvedRrceHome = DEFAULT_RRCE_HOME;

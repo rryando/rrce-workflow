@@ -56,7 +56,7 @@ export async function resolveGlobalPath(): Promise<string | undefined> {
   }
 
   // Custom path with bash-like Tab completion
-  const suggestedPath = path.join(process.env.HOME || '~', '.local', 'share', 'rrce-workflow');
+  const suggestedPath = path.join(process.env.HOME || '~', '.rrce-workflow');
   const customPath = await directoryPrompt({
     message: 'Enter custom global path (Tab to autocomplete):',
     defaultValue: suggestedPath,
@@ -81,8 +81,8 @@ export async function resolveGlobalPath(): Promise<string | undefined> {
     expandedPath = path.join(expandedPath, '.rrce-workflow');
   }
 
-  // Save as preference for next time
-  saveUserPreferences({ defaultGlobalPath: expandedPath });
+  // Save as preference for next time (with flag to indicate custom path was chosen)
+  saveUserPreferences({ defaultGlobalPath: expandedPath, useCustomGlobalPath: true });
   
   return expandedPath;
 }

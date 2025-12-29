@@ -5,6 +5,7 @@ import { getDefaultRRCEHome, ensureDir } from './paths';
 
 export interface UserPreferences {
   defaultGlobalPath?: string;
+  useCustomGlobalPath?: boolean;  // True if user explicitly chose a custom path
 }
 
 function getPreferencesPath(): string {

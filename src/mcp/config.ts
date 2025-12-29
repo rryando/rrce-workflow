@@ -7,7 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import YAML from 'yaml';
-import { getEffectiveRRCEHome, detectWorkspaceRoot } from '../lib/paths';
+import { getEffectiveRRCEHome, detectWorkspaceRoot, getEffectiveGlobalPath } from '../lib/paths';
 import type { MCPConfig, MCPProjectConfig, MCPPermissions, MCPSemanticSearchConfig } from './types';
 import { DEFAULT_MCP_CONFIG, DEFAULT_PERMISSIONS } from './types';
 import { findProjectConfig } from './config-utils';
@@ -238,7 +238,7 @@ export function getProjectPermissions(config: MCPConfig, name: string, projectPa
  * - Removes global projects whose workspace directory no longer exists
  */
 export function cleanStaleProjects(config: MCPConfig): { config: MCPConfig, removed: string[] } {
-    const rrceHome = getEffectiveRRCEHome(); // We can't easily adhere to custom workspace config here as this is a global cleanup
+    const rrceHome = getEffectiveGlobalPath();
     const globalWorkspacesDir = path.join(rrceHome, 'workspaces');
     
     const validProjects: MCPProjectConfig[] = [];
