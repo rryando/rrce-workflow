@@ -7,6 +7,7 @@ export interface PromptArgument {
 }
 
 export interface AgentPromptDef {
+  id: string; // The filename without extension (e.g. "init")
   name: string;
   description: string;
   arguments: PromptArgument[];
@@ -39,8 +40,14 @@ export function getAllPrompts(): AgentPromptDef[] {
         required: false
       })));
     }
+    
+    // Extract ID from filename
+    // filePath is absolute, get basename without extension
+    const filename = p.filePath.split('/').pop() || '';
+    const id = filename.replace(/\.md$/, '');
 
     return {
+      id,
       name: p.frontmatter.name,
       description: p.frontmatter.description,
       arguments: args,
@@ -50,10 +57,18 @@ export function getAllPrompts(): AgentPromptDef[] {
 }
 
 /**
- * Get prompt definition by name
+ * Get prompt definition by name (or ID/filename)
  */
 export function getPromptDef(name: string): AgentPromptDef | undefined {
-  return getAllPrompts().find(p => p.name === name);
+  const all = getAllPrompts();
+  const search = name.toLowerCase();
+  
+  return all.find(p => 
+      p.name === name || 
+      p.id === name || 
+      p.name.toLowerCase() === search || 
+      p.id.toLowerCase() === search
+  );
 }
 
 /**

@@ -83,7 +83,7 @@ export function createWorkspaceConfig(
   workspacePath: string,
   workspaceName: string
 ): void {
-  if (config.storageMode !== 'workspace') return;
+  // Always create config file, even for global mode (so agents can find project context)
   
   const configPath = path.join(workspacePath, '.rrce-workflow', 'config.yaml');
   ensureDir(path.dirname(configPath));
