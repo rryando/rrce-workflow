@@ -32,8 +32,11 @@ export const Overview = ({ serverStatus, stats }: OverviewProps) => {
             <Text>Server Port: </Text>
             <Text color="cyan">{serverStatus.port}</Text>
          </Box>
-         <Box marginTop={1}>
-             <Text color="dim">Press 'q' to stop server and exit.</Text>
+         <Box marginTop={1} flexDirection="column">
+             <Text color="dim">Controls:</Text>
+             <Text color="dim">  • Press 'r' to restart server</Text>
+             <Text color="dim">  • Use 1-4 or ◄/► to navigate tabs</Text>
+             <Text color="dim">  • Press 'q' to stop server and exit</Text>
          </Box>
       </Box>
     </Box>

@@ -30,7 +30,7 @@ const TABS: Tab[] = [
 
 export const App = ({ onExit, initialPort }: AppProps) => {
   const { exit } = useApp();
-  const [activeTab, setActiveTab] = useState('logs');
+  const [activeTab, setActiveTab] = useState('overview');
   const [logs, setLogs] = useState<string[]>([]);
   const [serverInfo, setServerInfo] = useState({ 
     port: initialPort, 
@@ -116,12 +116,26 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Input Handling for Exit
-  useInput((input, key) => {
+  // Input Handling for Exit and Restart
+  useInput(async (input, key) => {
     if (input === 'q' || (key.ctrl && input === 'c')) {
       stopMCPServer();
       onExit();
       exit();
+    }
+    
+    if (input === 'r') {
+      setLogs(prev => [...prev, '[INFO] Restarting server...']);
+      stopMCPServer();
+      setServerInfo(prev => ({ ...prev, running: false }));
+      
+      try {
+        const res = await startMCPServer({ interactive: true });
+        setServerInfo(prev => ({ ...prev, running: true, port: res.port, pid: res.pid }));
+        setLogs(prev => [...prev, '[INFO] Server restarted successfully']);
+      } catch (e) {
+        setLogs(prev => [...prev, `[ERROR] Failed to restart: ${e}`]);
+      }
     }
   }); 
 
