@@ -1,7 +1,8 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Box, Text } from 'ink';
 import { Header } from './Header';
+import { getAllPrompts } from '../prompts';
 
 
 interface OverviewProps {
@@ -18,6 +19,8 @@ interface OverviewProps {
 }
 
 export const Overview = ({ serverStatus, stats }: OverviewProps) => {
+  const agents = useMemo(() => getAllPrompts(), []);
+
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Header />
@@ -48,12 +51,19 @@ export const Overview = ({ serverStatus, stats }: OverviewProps) => {
             </Box>
          </Box>
 
-         <Box marginTop={1} borderStyle="single" borderColor="gray" flexDirection="column" paddingX={1}>
-             <Text bold>Usage Tips:</Text>
-             <Text>• <Text color="yellow">init</Text>: "Initialize project context"</Text>
-             <Text>• <Text color="yellow">plan</Text>: "Create a plan for [task]"</Text>
-             <Text>• <Text color="yellow">doctor</Text>: "Check project health"</Text>
-         </Box>
+          <Box marginTop={1} borderStyle="single" borderColor="gray" flexDirection="column" paddingX={1} flexGrow={1}>
+             <Text bold>Available Agents & Instructions:</Text>
+             {agents.map(agent => (
+                <Box key={agent.id} flexDirection="column" marginTop={1}>
+                    <Text color="yellow">➤ {agent.name} <Text color="dim">({agent.id})</Text></Text>
+                    <Text color="white">   {agent.description}</Text>
+                    {agent.arguments.length > 0 && (
+                        <Text color="dim">   Args: {agent.arguments.map(a => a.name + (a.required ? '*' : '')).join(', ')}</Text>
+                    )}
+                    <Text color="cyan">   Instruction: "Use the {agent.name} to..."</Text>
+                </Box>
+             ))}
+          </Box>
 
          <Box marginTop={1} flexDirection="column">
              <Text color="dim">Controls:</Text>

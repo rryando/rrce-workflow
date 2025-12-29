@@ -56,6 +56,7 @@ export function installAgentPrompts(
   // Sync metadata to all storage locations
   syncMetadataToAll(agentCoreDir, dataPaths);
   copyDirToAllStoragePaths(path.join(agentCoreDir, 'templates'), 'templates', dataPaths);
+  copyDirToAllStoragePaths(path.join(agentCoreDir, 'prompts'), 'prompts', dataPaths);
   
   // Load and copy prompts to IDE-specific locations
   if (config.storageMode === 'workspace') {
@@ -104,8 +105,8 @@ project:
   name: "${workspaceName}"
 
 tools:
-  copilot: ${config.tools.includes('copilot')}
-  antigravity: ${config.tools.includes('antigravity')}
+  copilot: ${config.storageMode === 'workspace' && config.tools.includes('copilot')}
+  antigravity: ${config.storageMode === 'workspace' && config.tools.includes('antigravity')}
 `;
 
   if (config.linkedProjects.length > 0) {
