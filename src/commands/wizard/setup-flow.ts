@@ -168,7 +168,14 @@ export async function runSetupFlow(
   
   const tools = await promptTools();
   const exposeToMCP = await promptMCPExposure();
-  const linkedProjects = await promptLinkedProjects(existingProjects);
+
+  
+  // Skip linking for global mode (as requested by user preference)
+  let linkedProjects: string[] = [];
+  if (storageMode !== 'global') {
+    linkedProjects = await promptLinkedProjects(existingProjects);
+  }
+  
   const addToGitignore = await promptGitignore();
   const enableRAG = await promptRAG();
   const confirmed = await promptConfirmation();

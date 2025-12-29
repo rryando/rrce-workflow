@@ -36,7 +36,7 @@ export function registerToolHandlers(server: Server): void {
       },
       {
         name: 'list_projects',
-        description: 'List all projects exposed via MCP',
+        description: 'List all projects exposed via MCP. Use these names for project-specific tools.',
         inputSchema: { type: 'object', properties: {} },
       },
       {
@@ -50,12 +50,12 @@ export function registerToolHandlers(server: Server): void {
       },
       {
         name: 'list_agents',
-        description: 'List available RRCE agents/workflows',
+        description: 'List available agents (e.g. init, plan) and their arguments. Use this to discover which agent to call.',
         inputSchema: { type: 'object', properties: {} },
       },
       {
         name: 'get_agent_prompt',
-        description: 'Get the instructions/prompt for a specific agent',
+        description: 'Get the system prompt for a specific agent. Accepts agent Name (e.g. "RRCE Init") or ID (e.g. "init").',
         inputSchema: {
           type: 'object',
           properties: {
@@ -100,10 +100,12 @@ export function registerToolHandlers(server: Server): void {
 
         case 'list_projects': {
           const projects = getExposedProjects();
+          const list = projects.map(p => ({ name: p.name, source: p.source, path: p.path }));
           return {
             content: [{
               type: 'text',
-              text: JSON.stringify(projects.map(p => ({ name: p.name, source: p.source, path: p.path })), null, 2),
+              text: JSON.stringify(list, null, 2) + 
+                "\n\nTip: Use these project names for tools like `get_project_context` or `index_knowledge`.",
             }],
           };
         }
@@ -111,7 +113,8 @@ export function registerToolHandlers(server: Server): void {
         case 'get_project_context': {
           const context = getProjectContext((args as { project: string }).project);
           if (!context) {
-            const msg = `No project context found for "${(args as { project: string }).project}"`;
+            const projects = getExposedProjects().map(p => p.name).join(', ');
+            const msg = `No project context found for "${(args as { project: string }).project}".\nAvailable projects: ${projects}`;
             logger.warn(msg);
             return { content: [{ type: 'text', text: msg }], isError: true };
           }
@@ -125,9 +128,11 @@ export function registerToolHandlers(server: Server): void {
               type: 'text',
               text: JSON.stringify(prompts.map(p => ({ 
                 name: p.name, 
+                id: p.id,
                 description: p.description,
                 arguments: p.arguments 
-              })), null, 2),
+              })), null, 2) +
+              "\n\nTip: Retrieve the prompt for an agent using `get_agent_prompt` with its name or ID.",
             }],
           };
         }
@@ -138,7 +143,8 @@ export function registerToolHandlers(server: Server): void {
           const promptDef = getPromptDef(agentName);
           
           if (!promptDef) {
-            throw new Error(`Agent not found: ${agentName}`);
+            const available = getAllPrompts().map(p => `${p.name} (id: ${p.id})`).join(', ');
+            throw new Error(`Agent not found: ${agentName}. Available agents: ${available}`);
           }
 
           // Generate Prompt with Context Injection (Reusing logic from GetPrompt handler would be ideal, but for now duplicate the injection to ensure consistency)
