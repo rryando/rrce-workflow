@@ -19,6 +19,7 @@ import {
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
 import { copyPromptsToDir } from './utils';
 import { generateVSCodeWorkspace } from './vscode';
+import { installToConfig, getTargetLabel, type InstallTarget } from '../../mcp/install';
 
 export interface SetupConfig {
   storageMode: StorageMode;
@@ -115,8 +116,9 @@ project:
   sourcePath: "${workspacePath}"
 
 tools:
-  copilot: ${config.storageMode === 'workspace' && config.tools.includes('copilot')}
-  antigravity: ${config.storageMode === 'workspace' && config.tools.includes('antigravity')}
+  opencode: ${config.tools.includes('opencode')}
+  copilot: ${config.tools.includes('copilot')}
+  antigravity: ${config.tools.includes('antigravity')}
 `;
 
   if (config.enableRAG) {
@@ -194,4 +196,44 @@ export function getDataPaths(
     default:
       return [globalPath];
   }
+}
+
+/**
+ * Install RRCE MCP server to selected IDE configs
+ * Non-fatal: catches errors and continues
+ */
+export function installToSelectedIDEs(tools: string[]): { 
+  success: string[]; 
+  failed: string[];
+} {
+  const success: string[] = [];
+  const failed: string[] = [];
+  
+  // Map tool names to install targets
+  const toolToTarget: Record<string, InstallTarget> = {
+    'opencode': 'opencode',
+    'antigravity': 'antigravity',
+    'copilot': 'vscode-global',
+  };
+  
+  for (const tool of tools) {
+    const target = toolToTarget[tool];
+    if (!target) continue;
+    
+    try {
+      const result = installToConfig(target);
+      const label = getTargetLabel(target);
+      if (result) {
+        success.push(label);
+      } else {
+        failed.push(label);
+      }
+    } catch (error) {
+      const label = getTargetLabel(target);
+      console.error(`Failed to install to ${label}:`, error);
+      failed.push(label);
+    }
+  }
+  
+  return { success, failed };
 }

@@ -10,6 +10,7 @@ import * as path from 'path';
 import type { StorageMode } from '../../types/prompt';
 import { type DetectedProject } from '../../lib/detection';
 import { resolveGlobalPath } from '../../lib/tui-utils';
+import { isOpenCodeInstalled, isAntigravityInstalled, isVSCodeInstalled } from '../../mcp/install';
 
 // Import extracted prompt functions
 import {
@@ -30,6 +31,7 @@ import {
   createWorkspaceConfig,
   registerWithMCP,
   getDataPaths,
+  installToSelectedIDEs,
 } from './setup-actions';
 
 // Re-export for other modules
@@ -72,6 +74,13 @@ async function runExpressSetup(
     }
   }
   
+  // Build tools preview based on what's installed
+  const toolsPreview: string[] = [];
+  if (isOpenCodeInstalled()) toolsPreview.push('OpenCode');
+  if (isVSCodeInstalled()) toolsPreview.push('GitHub Copilot');
+  if (isAntigravityInstalled()) toolsPreview.push('Antigravity');
+  const toolsText = toolsPreview.length > 0 ? toolsPreview.join(', ') : 'None detected';
+
   // Step 2: Show preview and confirm
   note(
     `${pc.bold('Express Setup will configure:')}\n` +
@@ -79,7 +88,7 @@ async function runExpressSetup(
     `• MCP Server: Enabled\n` +
     `• Semantic Search (RAG): Enabled\n` +
     `• Git ignore entries: Added (as comments)\n` +
-    `• AI Tools: All available`,
+    `• AI Tools: ${toolsText}`,
     'Configuration Preview'
   );
   
@@ -93,11 +102,17 @@ async function runExpressSetup(
     process.exit(0);
   }
   
+  // Build tools list based on what's installed
+  const defaultTools: string[] = [];
+  if (isOpenCodeInstalled()) defaultTools.push('opencode');
+  if (isVSCodeInstalled()) defaultTools.push('copilot');
+  if (isAntigravityInstalled()) defaultTools.push('antigravity');
+
   // Build config with defaults
   const config: SetupConfig = {
     storageMode,
     globalPath: customGlobalPath,
-    tools: ['copilot', 'antigravity'],
+    tools: defaultTools,
     linkedProjects: [],
     addToGitignore: false,
     exposeToMCP: true,
@@ -248,6 +263,9 @@ async function executeSetup(
     // Register with MCP server
     await registerWithMCP(config, workspacePath, workspaceName);
     
+    // Install RRCE to selected IDEs (OpenCode, VSCode, Antigravity)
+    const ideResults = installToSelectedIDEs(config.tools);
+    
     s.stop('Configuration generated');
     
     // Show summary
@@ -258,7 +276,19 @@ async function executeSetup(
       config.exposeToMCP ? `${pc.green('✓')} MCP server configured` : null,
       config.enableRAG ? `${pc.green('✓')} Semantic Search enabled` : null,
       config.linkedProjects.length > 0 ? `${pc.green('✓')} Linked ${config.linkedProjects.length} project(s)` : null,
+      ideResults.success.length > 0 
+        ? `${pc.green('✓')} RRCE installed to: ${ideResults.success.join(', ')}` 
+        : null,
+      ideResults.failed.length > 0 
+        ? `${pc.yellow('⚠')} Failed to install to: ${ideResults.failed.join(', ')}` 
+        : null,
     ].filter(Boolean);
+    
+    // Add restart hint if any IDEs were installed
+    if (ideResults.success.length > 0) {
+      summary.push('');
+      summary.push(pc.dim('💡 You may need to restart your IDE or refresh MCP config for changes to take effect.'));
+    }
     
     note(summary.join('\n'), 'Setup Complete');
     

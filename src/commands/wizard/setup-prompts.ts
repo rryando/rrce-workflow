@@ -7,6 +7,7 @@ import { select, multiselect, confirm, isCancel, cancel } from '@clack/prompts';
 import pc from 'picocolors';
 import type { StorageMode } from '../../types/prompt';
 import type { DetectedProject } from '../../lib/detection';
+import { isOpenCodeInstalled, isAntigravityInstalled, isVSCodeInstalled } from '../../mcp/install';
 
 /**
  * Prompt for setup mode selection (Express vs Custom)
@@ -52,14 +53,35 @@ export async function promptStorageMode(): Promise<StorageMode> {
 
 /**
  * Prompt for AI tools selection
+ * Only shows IDEs that are installed on the system
  */
 export async function promptTools(): Promise<string[]> {
+  // Build options based on what's installed
+  const options: { value: string; label: string; hint?: string }[] = [];
+  
+  // OpenCode - only show if installed
+  if (isOpenCodeInstalled()) {
+    options.push({ value: 'opencode', label: 'OpenCode' });
+  }
+  
+  // Copilot/VSCode - only show if installed
+  if (isVSCodeInstalled()) {
+    options.push({ value: 'copilot', label: 'GitHub Copilot', hint: 'VSCode' });
+  }
+  
+  // Antigravity - only show if installed
+  if (isAntigravityInstalled()) {
+    options.push({ value: 'antigravity', label: 'Antigravity IDE' });
+  }
+  
+  // If no IDEs detected, show info message
+  if (options.length === 0) {
+    options.push({ value: 'none', label: 'No supported IDEs detected', hint: 'Skip' });
+  }
+  
   const result = await multiselect({
     message: 'Which AI tools do you use?',
-    options: [
-      { value: 'copilot', label: 'GitHub Copilot', hint: 'VSCode' },
-      { value: 'antigravity', label: 'Antigravity IDE' },
-    ],
+    options,
     required: false,
   });
   
@@ -68,7 +90,7 @@ export async function promptTools(): Promise<string[]> {
     process.exit(0);
   }
   
-  return result as string[];
+  return (result as string[]).filter(t => t !== 'none');
 }
 
 /**

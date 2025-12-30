@@ -488,3 +488,31 @@ export function getTargetLabel(target: InstallTarget): string {
       return target;
   }
 }
+
+/**
+ * Check if OpenCode is installed on the system
+ * (checks if config directory or config file exists)
+ */
+export function isOpenCodeInstalled(): boolean {
+  const configDir = path.join(os.homedir(), '.config/opencode');
+  const configFile = path.join(configDir, 'opencode.json');
+  return fs.existsSync(configDir) || fs.existsSync(configFile);
+}
+
+/**
+ * Check if Antigravity is installed on the system
+ * (checks if config directory exists)
+ */
+export function isAntigravityInstalled(): boolean {
+  const configDir = path.join(os.homedir(), '.gemini/antigravity');
+  return fs.existsSync(configDir);
+}
+
+/**
+ * Check if VSCode is installed on the system
+ * (checks if global config directory exists)
+ */
+export function isVSCodeInstalled(): boolean {
+  const configDir = path.join(os.homedir(), '.config/Code/User');
+  return fs.existsSync(configDir);
+}
