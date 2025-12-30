@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { stringify } from 'yaml';
 import { ensureDir } from '../../lib/paths';
 import type { ParsedPrompt } from '../../types/prompt';
 
@@ -16,6 +17,29 @@ export function copyPromptsToDir(prompts: ParsedPrompt[], targetDir: string, ext
     const content = fs.readFileSync(prompt.filePath, 'utf-8');
     fs.writeFileSync(targetPath, content);
   }
+}
+
+/**
+ * Convert a ParsedPrompt to OpenCode Markdown agent format
+ */
+export function convertToOpenCodeAgent(prompt: ParsedPrompt): string {
+  const { frontmatter, content } = prompt;
+  
+  // Build tools map with rrce_ prefix
+  const tools: Record<string, boolean> = {};
+  if (frontmatter.tools) {
+    for (const tool of frontmatter.tools) {
+      tools[`rrce_${tool}`] = true;
+    }
+  }
+
+  const opencodeFrontmatter = {
+    description: frontmatter.description,
+    mode: 'primary',
+    tools: Object.keys(tools).length > 0 ? tools : undefined
+  };
+
+  return `---\n${stringify(opencodeFrontmatter)}---\n${content}`;
 }
 
 /**

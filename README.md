@@ -66,19 +66,23 @@ The easiest way to connect is via the TUI (`npx rrce-workflow mcp` -> **Install*
 
 #### OpenCode
 
-Add to `~/.config/opencode/opencode.json`:
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "rrce": {
-      "type": "local",
-      "command": ["npx", "-y", "rrce-workflow", "mcp", "start"],
-      "enabled": true
+RRCE-Workflow integrates with OpenCode both as an MCP server and by providing **Custom Primary Agents**.
+
+1.  **Register MCP Server**: Add the following to `~/.config/opencode/opencode.json`:
+    ```json
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "mcp": {
+        "rrce": {
+          "type": "local",
+          "command": ["npx", "-y", "rrce-workflow", "mcp", "start"],
+          "enabled": true
+        }
+      }
     }
-  }
-}
-```
+    ```
+
+2.  **Install Agents**: Run `npx rrce-workflow` and select **OpenCode** as a tool. This will generate specialized primary agents (Research, Planning, etc.) in `.opencode/agent/` that you can cycle through using the **Tab** key in the OpenCode TUI.
 
 #### VSCode (with MCP Extension)
 Add to `.vscode/mcp.json`:

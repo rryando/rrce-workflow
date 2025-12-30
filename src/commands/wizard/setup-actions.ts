@@ -17,7 +17,7 @@ import {
   getDefaultRRCEHome
 } from '../../lib/paths';
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
-import { copyPromptsToDir } from './utils';
+import { copyPromptsToDir, convertToOpenCodeAgent } from './utils';
 import { generateVSCodeWorkspace } from './vscode';
 import { installToConfig, getTargetLabel, type InstallTarget } from '../../mcp/install';
 
@@ -59,20 +59,37 @@ export function installAgentPrompts(
   copyDirToAllStoragePaths(path.join(agentCoreDir, 'templates'), 'templates', dataPaths);
   copyDirToAllStoragePaths(path.join(agentCoreDir, 'prompts'), 'prompts', dataPaths);
   
-  // Load and copy prompts to IDE-specific locations
-  if (config.storageMode === 'workspace') {
+  // Load prompts for IDE-specific generation if needed
+  const needsIDEPrompts = (config.storageMode === 'workspace' && (config.tools.includes('copilot') || config.tools.includes('antigravity'))) || 
+                         config.tools.includes('opencode');
+  
+  if (needsIDEPrompts) {
     const prompts = loadPromptsFromDir(getAgentCorePromptsDir());
-    
-    if (config.tools.includes('copilot')) {
-      const copilotPath = getAgentPromptPath(workspacePath, 'copilot');
-      ensureDir(copilotPath);
-      copyPromptsToDir(prompts, copilotPath, '.agent.md');
+
+    // Workspace mode IDE prompts (Copilot/Antigravity)
+    if (config.storageMode === 'workspace') {
+      if (config.tools.includes('copilot')) {
+        const copilotPath = getAgentPromptPath(workspacePath, 'copilot');
+        ensureDir(copilotPath);
+        copyPromptsToDir(prompts, copilotPath, '.agent.md');
+      }
+      
+      if (config.tools.includes('antigravity')) {
+        const antigravityPath = getAgentPromptPath(workspacePath, 'antigravity');
+        ensureDir(antigravityPath);
+        copyPromptsToDir(prompts, antigravityPath, '.md');
+      }
     }
-    
-    if (config.tools.includes('antigravity')) {
-      const antigravityPath = getAgentPromptPath(workspacePath, 'antigravity');
-      ensureDir(antigravityPath);
-      copyPromptsToDir(prompts, antigravityPath, '.md');
+
+    // OpenCode agents (always workspace-local if OpenCode is selected)
+    if (config.tools.includes('opencode')) {
+      const opencodePath = path.join(workspacePath, '.opencode', 'agent');
+      ensureDir(opencodePath);
+      for (const prompt of prompts) {
+        const baseName = path.basename(prompt.filePath, '.md');
+        const content = convertToOpenCodeAgent(prompt);
+        fs.writeFileSync(path.join(opencodePath, `${baseName}.md`), content);
+      }
     }
   }
 }
