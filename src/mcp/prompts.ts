@@ -1,4 +1,7 @@
 import { loadPromptsFromDir, getAgentCorePromptsDir } from '../lib/prompts';
+import { detectActiveProject } from './resources';
+import { getEffectiveGlobalPath } from '../lib/paths';
+import * as path from 'path';
 
 export interface PromptArgument {
   name: string;
@@ -69,6 +72,55 @@ export function getPromptDef(name: string): AgentPromptDef | undefined {
       p.name.toLowerCase() === search || 
       p.id.toLowerCase() === search
   );
+}
+
+/**
+ * Render a prompt template with arguments, including automatic system context injection
+ */
+export function renderPromptWithContext(content: string, args: Record<string, string>): { rendered: string, context: Record<string, string> } {
+  const renderArgs = { ...args };
+  
+  // Resolve Project Paths & Context
+  const activeProject = detectActiveProject();
+  const DEFAULT_RRCE_HOME = getEffectiveGlobalPath();
+  
+  let resolvedRrceData = '.rrce-workflow/'; // Default to local if no project found
+  let resolvedRrceHome = DEFAULT_RRCE_HOME;
+  let resolvedWorkspaceRoot = process.cwd();
+  let resolvedWorkspaceName = 'current-project';
+
+  if (activeProject) {
+    resolvedRrceData = activeProject.dataPath;
+    // Ensure trailing slash for data path consistency in prompts
+    if (!resolvedRrceData.endsWith('/') && !resolvedRrceData.endsWith('\\')) {
+        resolvedRrceData += '/';
+    }
+    
+    resolvedWorkspaceRoot = activeProject.sourcePath || activeProject.path || activeProject.dataPath;
+    resolvedWorkspaceName = activeProject.name;
+    
+    // If it's a global project, infer RRCE_HOME from its data path
+    if (activeProject.source === 'global') {
+       const workspacesDir = path.dirname(activeProject.dataPath);
+       resolvedRrceHome = path.dirname(workspacesDir);
+    }
+  }
+
+  // Inject system variables if not provided by user
+  if (!renderArgs['RRCE_DATA']) renderArgs['RRCE_DATA'] = resolvedRrceData;
+  if (!renderArgs['RRCE_HOME']) renderArgs['RRCE_HOME'] = resolvedRrceHome;
+  if (!renderArgs['WORKSPACE_ROOT']) renderArgs['WORKSPACE_ROOT'] = resolvedWorkspaceRoot;
+  if (!renderArgs['WORKSPACE_NAME']) renderArgs['WORKSPACE_NAME'] = resolvedWorkspaceName;
+
+  return {
+    rendered: renderPrompt(content, renderArgs),
+    context: {
+        RRCE_DATA: resolvedRrceData,
+        RRCE_HOME: resolvedRrceHome,
+        WORKSPACE_ROOT: resolvedWorkspaceRoot,
+        WORKSPACE_NAME: resolvedWorkspaceName
+    }
+  };
 }
 
 /**

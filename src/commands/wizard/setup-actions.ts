@@ -17,7 +17,7 @@ import {
   getDefaultRRCEHome
 } from '../../lib/paths';
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
-import { copyPromptsToDir, convertToOpenCodeAgent } from './utils';
+import { copyPromptsToDir, convertToOpenCodeAgent, copyDirRecursive } from './utils';
 import { generateVSCodeWorkspace } from './vscode';
 import { installToConfig, getTargetLabel, type InstallTarget } from '../../mcp/install';
 
@@ -58,6 +58,14 @@ export function installAgentPrompts(
   syncMetadataToAll(agentCoreDir, dataPaths);
   copyDirToAllStoragePaths(path.join(agentCoreDir, 'templates'), 'templates', dataPaths);
   copyDirToAllStoragePaths(path.join(agentCoreDir, 'prompts'), 'prompts', dataPaths);
+  copyDirToAllStoragePaths(path.join(agentCoreDir, 'docs'), 'docs', dataPaths);
+  
+  // Populate global RRCE_HOME with shared assets (templates and docs) as fallback
+  const rrceHome = config.globalPath || getDefaultRRCEHome();
+  ensureDir(path.join(rrceHome, 'templates'));
+  ensureDir(path.join(rrceHome, 'docs'));
+  copyDirRecursive(path.join(agentCoreDir, 'templates'), path.join(rrceHome, 'templates'));
+  copyDirRecursive(path.join(agentCoreDir, 'docs'), path.join(rrceHome, 'docs'));
   
   // Load prompts for IDE-specific generation if needed
   const needsIDEPrompts = (config.storageMode === 'workspace' && (config.tools.includes('copilot') || config.tools.includes('antigravity'))) || 

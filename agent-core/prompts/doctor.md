@@ -20,7 +20,7 @@ You are the Project Doctor for RRCE-Workflow. Perform a health check on the code
 
 ## Path Resolution
 Use the pre-resolved paths from the "System Resolved Paths" table in the context preamble.
-For details, see: `{{RRCE_HOME}}/docs/path-resolution.md`
+For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 
 ## Pipeline Position
 - **Input**: Can be triggered at any time for project health analysis
@@ -142,7 +142,7 @@ Rank findings using this matrix:
 ### Step 6: Generate Output
 
 1. Create task directory: `{{RRCE_DATA}}/tasks/doctor-{{YYYYMMDD}}/`
-2. Write diagnosis using template: `{{RRCE_HOME}}/templates/doctor_output.md`
+2. Write diagnosis using template: `{{RRCE_DATA}}/templates/doctor_output.md`
 3. Save to: `{{RRCE_DATA}}/tasks/doctor-{{YYYYMMDD}}/diagnosis.md`
 
 **Output includes:**
@@ -176,7 +176,7 @@ Report:
 ## Deliverable
 
 - **File**: `{{RRCE_DATA}}/tasks/doctor-{{YYYYMMDD}}/diagnosis.md`
-- **Template**: `{{RRCE_HOME}}/templates/doctor_output.md`
+- **Template**: `{{RRCE_DATA}}/templates/doctor_output.md`
 - **Outcome**: Structured diagnosis with prioritized, actionable tasks
 
 ## Focus Area Deep Dive

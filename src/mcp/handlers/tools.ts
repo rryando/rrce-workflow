@@ -5,7 +5,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../logger';
 import { getExposedProjects, getProjectContext, searchKnowledge, indexKnowledge, detectActiveProject, getContextPreamble } from '../resources';
-import { getAllPrompts, getPromptDef, renderPrompt } from '../prompts';
+import { getAllPrompts, getPromptDef, renderPrompt, renderPromptWithContext } from '../prompts';
 
 /**
  * Register MCP tool handlers
@@ -150,10 +150,6 @@ export function registerToolHandlers(server: Server): void {
             const available = getAllPrompts().map(p => `${p.name} (id: ${p.id})`).join(', ');
             throw new Error(`Agent not found: ${agentName}. Available agents: ${available}`);
           }
-
-          // Generate Prompt with Context Injection (Reusing logic from GetPrompt handler would be ideal, but for now duplicate the injection to ensure consistency)
-          // Actually, I should probably extract the "generatePromptWithContext" logic to a helper function to avoid duplication.
-          // But for now, let's reuse the logic from prompts.ts (renderPrompt) and add strict context.
           
           // Render content
           const renderArgs = params.args || {};
@@ -163,11 +159,22 @@ export function registerToolHandlers(server: Server): void {
             stringArgs[key] = String(val);
           }
            
-          const content = renderPrompt(promptDef.content, stringArgs);
+          const { rendered, context } = renderPromptWithContext(promptDef.content, stringArgs);
           
           // Context Injection (Same as GetPromptRequest)
-          const contextPreamble = getContextPreamble();
-          return { content: [{ type: 'text', text: contextPreamble + content }] };
+          let contextPreamble = getContextPreamble();
+          
+          // Add Pre-Resolved Paths section to guide the agent
+          contextPreamble += `
+### System Resolved Paths (OVERRIDE)
+The system has pre-resolved the configuration for this project. Use these values instead of manual resolution:
+- **RRCE_DATA**: \`${context.RRCE_DATA}\` (Stores knowledge, tasks, refs)
+- **WORKSPACE_ROOT**: \`${context.WORKSPACE_ROOT}\` (Source code location)
+- **RRCE_HOME**: \`${context.RRCE_HOME}\`
+- **Current Project**: ${context.WORKSPACE_NAME}
+`;
+
+          return { content: [{ type: 'text', text: contextPreamble + rendered }] };
         }
 
         case 'help_setup': {

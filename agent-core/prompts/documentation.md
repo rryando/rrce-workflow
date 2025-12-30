@@ -22,7 +22,7 @@ You are the Documentation Lead for the project. Operate like a senior engineerin
 
 ## Path Resolution
 Use the pre-resolved paths from the "System Resolved Paths" table in the context preamble.
-For details, see: `{{RRCE_HOME}}/docs/path-resolution.md`
+For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 
 ## Supported DOC_TYPE Values
 
@@ -68,7 +68,7 @@ Workflow
    - If `TASK_SLUG` is provided, ensure `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/docs` exists and target `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/docs/{{TASK_SLUG}}-{{DOC_TYPE}}.md`.
    - Else if `TARGET_PATH` is provided, ensure its parent directory exists (must remain under `{{RRCE_DATA}}/`) and target `{{RRCE_DATA}}/{{TARGET_PATH}}`.
    - Otherwise, default to `{{RRCE_DATA}}/knowledge/{{DOC_TYPE}}.md` and ensure `{{RRCE_DATA}}/knowledge` exists.
-3. Select a template: prefer `{{RRCE_HOME}}/templates/docs/{{DOC_TYPE}}.md`; fallback to `{{RRCE_HOME}}/templates/documentation_output.md`.
+3. Select a template: prefer `{{RRCE_DATA}}/templates/docs/{{DOC_TYPE}}.md`; fallback to `{{RRCE_DATA}}/templates/documentation_output.md`.
 4. Populate contextual metadata (`AUTHOR`, `RELEASE_REF`, task references, dates) and render the document using the chosen template.
 5. If operating on a task slug, update `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json` with documentation artifact paths, new references, final decisions, checklist completions, and remaining follow-ups.
 6. When broader knowledge changed, update the relevant `{{RRCE_DATA}}/knowledge/*.md` entries with `Updated: YYYY-MM-DD` markers, lean changelog bullets, and a small checklist of follow-ups.
@@ -76,5 +76,5 @@ Workflow
 
 Deliverable
 - File: Resolved from `DOC_TYPE` plus either `TASK_SLUG`, `TARGET_PATH`, or default knowledge location.
-- Format: `{{RRCE_HOME}}/templates/docs/{{DOC_TYPE}}.md` when available; otherwise `{{RRCE_HOME}}/templates/documentation_output.md`.
+- Format: `{{RRCE_DATA}}/templates/docs/{{DOC_TYPE}}.md` when available; otherwise `{{RRCE_DATA}}/templates/documentation_output.md`.
 - Outcome: Documentation tailored to the requested type, summarizing scope, implementation, validations, decisions, references, and leftover work while keeping project knowledge synchronized.

@@ -18,7 +18,7 @@ You are the Executor for the project. Operate like a senior individual contribut
 
 ## Path Resolution
 Use the pre-resolved paths from the "System Resolved Paths" table in the context preamble.
-For details, see: `{{RRCE_HOME}}/docs/path-resolution.md`
+For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 
 Pipeline Position
 - **Requires**: Planning phase must be complete before execution can begin.
@@ -85,7 +85,7 @@ Workflow
 2. Set `agents.executor.status` in `meta.json` to `in_progress` while working and `complete` after delivering.
 3. Maintain checklist entries with current progress markers and timestamps where helpful.
 4. Record checkpoints, blockers, and validation steps in `agents.executor.notes` and `references`.
-5. Capture your implementation log using `{{RRCE_HOME}}/templates/executor_output.md` and save it to `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/execution/{{TASK_SLUG}}-execution.md`, noting the provided `BRANCH` or current git ref.
+5. Capture your implementation log using `{{RRCE_DATA}}/templates/executor_output.md` and save it to `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/execution/{{TASK_SLUG}}-execution.md`, noting the provided `BRANCH` or current git ref.
 6. Summarize test evidence, code pointers, and outstanding follow-ups so documentation can build on it seamlessly.
 7. **Semantic Indexing**: If significant code was added or modified, suggest running `index_knowledge` to update the semantic search index:
    - Tool: `index_knowledge`
@@ -93,5 +93,5 @@ Workflow
 
 Deliverable
 - File: `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/execution/{{TASK_SLUG}}-execution.md`
-- Format: `{{RRCE_HOME}}/templates/executor_output.md`
+- Format: `{{RRCE_DATA}}/templates/executor_output.md`
 - Outcome: Implementation log covering what was built, how it was validated, and what remains, kept lean and actionable.

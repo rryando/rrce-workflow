@@ -22,7 +22,7 @@ You are the Research & Discussion Lead for RRCE-Workflow. Your mission: refine i
 
 ## Path Resolution
 Use the pre-resolved paths from the "System Resolved Paths" table in the context preamble.
-For details, see: `{{RRCE_HOME}}/docs/path-resolution.md`
+For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 
 ## Pipeline Position
 - **Entry Point**: First agent invoked for new tasks
@@ -83,7 +83,7 @@ Based on knowledge search, create a gap analysis:
 ### Step 3: Setup Task Structure
 
 1. Ensure directory exists: `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/research/`
-2. Copy meta template if new task: `{{RRCE_HOME}}/templates/meta.template.json` → `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json`
+2. Copy meta template if new task: `{{RRCE_DATA}}/templates/meta.template.json` → `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json`
 3. Populate initial metadata:
    - `task_id`: Generate UUID
    - `task_slug`: From argument
@@ -127,7 +127,7 @@ Document the decision in `meta.json.decisions`.
 
 ### Step 6: Generate Research Brief
 
-1. Compile findings using template: `{{RRCE_HOME}}/templates/research_output.md`
+1. Compile findings using template: `{{RRCE_DATA}}/templates/research_output.md`
 2. Save to: `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/research/{{TASK_SLUG}}-research.md`
 
 **Brief includes:**
@@ -188,7 +188,7 @@ Research is complete when:
 ## Deliverable
 
 - **File**: `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/research/{{TASK_SLUG}}-research.md`
-- **Template**: `{{RRCE_HOME}}/templates/research_output.md`
+- **Template**: `{{RRCE_DATA}}/templates/research_output.md`
 - **Metadata**: `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json` with status `complete`
 - **Outcome**: Planning agent can proceed without re-asking the same questions
 

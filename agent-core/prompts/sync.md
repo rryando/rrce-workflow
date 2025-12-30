@@ -16,7 +16,7 @@ You are the Knowledge Sync Lead. Act like a senior architect charged with keepin
 
 ## Path Resolution
 Use the pre-resolved paths from the "System Resolved Paths" table in the context preamble.
-For details, see: `{{RRCE_HOME}}/docs/path-resolution.md`
+For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 
 Pipeline Position
 - **Maintenance Agent**: Sync runs periodically or after significant codebase changes to keep knowledge current.

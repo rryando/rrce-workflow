@@ -17,7 +17,7 @@ You are the Project Initializer for RRCE-Workflow. Your mission: create a compre
 
 ## Path Resolution
 Use the pre-resolved paths from the "System Resolved Paths" table in the context preamble.
-For details, see: `{{RRCE_HOME}}/docs/path-resolution.md`
+For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 
 ## Pipeline Position
 - **Entry Point**: Run before any other agent for new projects
@@ -122,7 +122,7 @@ Scan in this priority order. Stop early if sufficient information gathered:
 ### Step 3: Generate Project Context
 
 1. Ensure `{{RRCE_DATA}}/knowledge/` directory exists (create if absent)
-2. Compile findings using template: `{{RRCE_HOME}}/templates/init_output.md`
+2. Compile findings using template: `{{RRCE_DATA}}/templates/init_output.md`
 3. Save to: `{{RRCE_DATA}}/knowledge/project-context.md`
 4. Update `{{RRCE_DATA}}/workspace.json` with project metadata if it exists
 
@@ -160,7 +160,7 @@ Provide a brief summary:
 ## Deliverable
 
 - **File**: `{{RRCE_DATA}}/knowledge/project-context.md`
-- **Template**: `{{RRCE_HOME}}/templates/init_output.md`
+- **Template**: `{{RRCE_DATA}}/templates/init_output.md`
 - **Index**: `{{RRCE_DATA}}/knowledge/embeddings.json`
 - **Outcome**: Comprehensive project context + searchable semantic index
 
