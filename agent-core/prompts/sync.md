@@ -2,7 +2,7 @@
 name: RRCE Sync
 description: Reconcile project state with the RRCE knowledge base and update semantic index.
 argument-hint: "[SCOPE=<path|module>]"
-tools: ['search_knowledge', 'get_project_context', 'index_knowledge', 'list_projects']
+tools: ['search_knowledge', 'get_project_context', 'index_knowledge', 'list_projects', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
 required-args: []
 optional-args:
   - name: SCOPE
@@ -22,6 +22,16 @@ Pipeline Position
 - **Maintenance Agent**: Sync runs periodically or after significant codebase changes to keep knowledge current.
 - **Requires**: Init must have been run at least once (project-context.md must exist).
 - **Triggers Init**: If sync detects major structural changes, recommend running `/init` to update project context.
+
+## Technical Protocol (STRICT)
+1. **Path Resolution**: Always use the "System Resolved Paths" from the context preamble.
+   - Use `{{RRCE_DATA}}` for all RRCE-specific storage.
+   - Use `{{WORKSPACE_ROOT}}` for project source code.
+2. **File Writing**: When using the `write` tool:
+   - The `content` parameter **MUST be a string**.
+   - If writing JSON (like `meta.json`), you **MUST stringify it** first.
+   - Example: `write(filePath, JSON.stringify(data, null, 2))`
+3. **Directory Safety**: Use `bash` with `mkdir -p` to ensure parent directories exist before writing files if they might be missing.
 
 Prerequisites (STRICT)
 1. **Project Context Exists**: Check `{{RRCE_DATA}}/knowledge/project-context.md` exists.

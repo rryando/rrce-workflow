@@ -89,14 +89,17 @@ export function installAgentPrompts(
       }
     }
 
-    // OpenCode agents (always workspace-local if OpenCode is selected)
+    // OpenCode agents (respects storage mode)
     if (config.tools.includes('opencode')) {
-      const opencodePath = path.join(workspacePath, '.opencode', 'agent');
-      ensureDir(opencodePath);
-      for (const prompt of prompts) {
-        const baseName = path.basename(prompt.filePath, '.md');
-        const content = convertToOpenCodeAgent(prompt);
-        fs.writeFileSync(path.join(opencodePath, `${baseName}.md`), content);
+      const primaryDataPath = dataPaths[0];
+      if (primaryDataPath) {
+        const opencodePath = path.join(primaryDataPath, '.opencode', 'agent');
+        ensureDir(opencodePath);
+        for (const prompt of prompts) {
+          const baseName = path.basename(prompt.filePath, '.md');
+          const content = convertToOpenCodeAgent(prompt);
+          fs.writeFileSync(path.join(opencodePath, `${baseName}.md`), content);
+        }
       }
     }
   }

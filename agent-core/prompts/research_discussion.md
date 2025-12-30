@@ -2,7 +2,7 @@
 name: RRCE Research
 description: Research and clarify requirements by leveraging existing project knowledge before asking for clarification.
 argument-hint: REQUEST="<user prompt>" [TASK_SLUG=<slug>] [TITLE="<task title>"] [SOURCE=<url>]
-tools: ['search_knowledge', 'get_project_context', 'list_projects']
+tools: ['search_knowledge', 'get_project_context', 'list_projects', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter a task slug (kebab-case identifier)"
@@ -29,6 +29,16 @@ For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 - **Output**: Research brief ready for Planning agent
 - **Recommendation**: If `project-context.md` doesn't exist, suggest `/init` first for best results
 - **Next Step**: After research is complete, hand off to `/plan TASK_SLUG={{TASK_SLUG}}`
+
+## Technical Protocol (STRICT)
+1. **Path Resolution**: Always use the "System Resolved Paths" from the context preamble.
+   - Use `{{RRCE_DATA}}` for all RRCE-specific storage.
+   - Use `{{WORKSPACE_ROOT}}` for project source code.
+2. **File Writing**: When using the `write` tool:
+   - The `content` parameter **MUST be a string**.
+   - If writing JSON (like `meta.json`), you **MUST stringify it** first.
+   - Example: `write(filePath, JSON.stringify(data, null, 2))`
+3. **Directory Safety**: Use `bash` with `mkdir -p` to ensure parent directories exist before writing files if they might be missing.
 
 ## Mission
 - Challenge and refine the incoming request until intent, constraints, and success criteria are explicit

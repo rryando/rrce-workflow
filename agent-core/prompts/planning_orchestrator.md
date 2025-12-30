@@ -2,7 +2,7 @@
 name: RRCE Planning
 description: Transform clarified requirements into an actionable execution plan.
 argument-hint: "TASK_SLUG=<slug>"
-tools: ['search_knowledge', 'get_project_context', 'list_projects']
+tools: ['search_knowledge', 'get_project_context', 'list_projects', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter the task slug to create a plan for"
@@ -21,6 +21,16 @@ Pipeline Position
 - **Requires**: Research phase must be complete before planning can begin.
 - **Correlation**: Planning works with Init to maintain project context. If planning reveals significant architectural changes, recommend running `/init` to update project context.
 - **Next Step**: After planning is complete, hand off to `/execute` (Executor agent).
+
+## Technical Protocol (STRICT)
+1. **Path Resolution**: Always use the "System Resolved Paths" from the context preamble.
+   - Use `{{RRCE_DATA}}` for all RRCE-specific storage.
+   - Use `{{WORKSPACE_ROOT}}` for project source code.
+2. **File Writing**: When using the `write` tool:
+   - The `content` parameter **MUST be a string**.
+   - If writing JSON (like `meta.json`), you **MUST stringify it** first.
+   - Example: `write(filePath, JSON.stringify(data, null, 2))`
+3. **Directory Safety**: Use `bash` with `mkdir -p` to ensure parent directories exist before writing files if they might be missing.
 
 Prerequisites (STRICT)
 Before proceeding, verify ALL of the following:

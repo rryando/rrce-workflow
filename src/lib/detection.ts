@@ -357,8 +357,18 @@ export function getProjectFolders(project: DetectedProject): Array<{
  * Returns the project with the longest matching path prefix
  */
 export function findClosestProject(projects: DetectedProject[], cwd: string = process.cwd()): DetectedProject | undefined {
-  const matches = projects.filter(p => cwd.startsWith(p.path));
-  // Sort by path length descending (most specific match first)
-  matches.sort((a, b) => b.path.length - a.path.length);
-  return matches[0];
+  const matches = projects.map(p => {
+    let matchPath = '';
+    // Check both the primary path and sourcePath (for global projects)
+    if (cwd.startsWith(p.path)) {
+      matchPath = p.path;
+    } else if (p.sourcePath && cwd.startsWith(p.sourcePath)) {
+      matchPath = p.sourcePath;
+    }
+    return { project: p, matchPath };
+  }).filter(m => m.matchPath !== '');
+
+  // Sort by match path length descending (most specific match first)
+  matches.sort((a, b) => b.matchPath.length - a.matchPath.length);
+  return matches[0]?.project;
 }

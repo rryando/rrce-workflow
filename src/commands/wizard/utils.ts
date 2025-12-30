@@ -25,8 +25,19 @@ export function copyPromptsToDir(prompts: ParsedPrompt[], targetDir: string, ext
 export function convertToOpenCodeAgent(prompt: ParsedPrompt): string {
   const { frontmatter, content } = prompt;
   
-  // Build tools map with rrce_ prefix
-  const tools: Record<string, boolean> = {};
+  // Build tools map
+  const tools: Record<string, boolean> = {
+    // Enable standard host tools by default
+    'read': true,
+    'write': true,
+    'edit': true,
+    'bash': true,
+    'grep': true,
+    'glob': true,
+    'webfetch': true
+  };
+
+  // Add MCP tools with rrce_ prefix
   if (frontmatter.tools) {
     for (const tool of frontmatter.tools) {
       tools[`rrce_${tool}`] = true;
@@ -36,7 +47,7 @@ export function convertToOpenCodeAgent(prompt: ParsedPrompt): string {
   const opencodeFrontmatter = {
     description: frontmatter.description,
     mode: 'primary',
-    tools: Object.keys(tools).length > 0 ? tools : undefined
+    tools
   };
 
   return `---\n${stringify(opencodeFrontmatter)}---\n${content}`;
