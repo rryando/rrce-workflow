@@ -1,11 +1,27 @@
 <!--
-  RRCE Template Variables:
-  - {{RRCE_DATA}}: Primary storage path (resolves based on storage mode in .rrce-workflow/config.yaml)
-      - global: {{RRCE_HOME}}/workspaces/<workspace-name>/
-      - workspace: <workspace>/.rrce-workflow/
-  - {{RRCE_HOME}}: Global home (default: ~/.rrce-workflow, customizable via storage.globalPath in config)
-  - {{WORKSPACE_ROOT}}: Workspace root directory
-  - {{WORKSPACE_NAME}}: Workspace name from config or directory name
+  TEMPLATE: Handover Note / Documentation
+  
+  HOW TO USE:
+  1. Copy to destination based on DOC_TYPE:
+     - With TASK_SLUG: {{RRCE_DATA}}/tasks/{{TASK_SLUG}}/docs/{{TASK_SLUG}}-{{DOC_TYPE}}.md
+     - With TARGET_PATH: {{RRCE_DATA}}/{{TARGET_PATH}}
+     - Default: {{RRCE_DATA}}/knowledge/{{DOC_TYPE}}.md
+  2. Replace {{variable}} placeholders with actual values
+  3. Remove empty sections
+  
+  AUTO-FILLED VARIABLES (from System Resolved Paths):
+  - {{RRCE_DATA}}: Storage path for knowledge/tasks
+  - {{WORKSPACE_NAME}}: Project name
+  
+  AGENT-FILLED VARIABLES:
+  - {{task_id}}: UUID for the task (if applicable)
+  - {{task_slug}}: kebab-case task identifier (if applicable)
+  - {{task_title}}: Human-readable task title
+  - {{author}}: Git user or agent name
+  - {{date}}: ISO date (YYYY-MM-DD)
+  - {{execution_artifact}}: Path to execution log
+  - {{release_ref}}: Release tag or commit SHA
+  - {{workspace_name}}: Project name
 -->
 # Handover Note – {{task_title}}
 

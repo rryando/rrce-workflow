@@ -1,11 +1,22 @@
 <!--
-  RRCE Template Variables:
-  - {{RRCE_DATA}}: Primary storage path (resolves based on storage mode in .rrce-workflow/config.yaml)
-      - global: {{RRCE_HOME}}/workspaces/<workspace-name>/
-      - workspace: <workspace>/.rrce-workflow/
-  - {{RRCE_HOME}}: Global home (default: ~/.rrce-workflow, customizable via storage.globalPath in config)
-  - {{WORKSPACE_ROOT}}: Workspace root directory
-  - {{WORKSPACE_NAME}}: Workspace name from config or directory name
+  TEMPLATE: Project Diagnosis
+  
+  HOW TO USE:
+  1. Copy to: {{RRCE_DATA}}/tasks/doctor-{{YYYYMMDD}}/diagnosis.md
+  2. Replace {{variable}} placeholders with actual values
+  3. Add findings under appropriate priority sections
+  4. Remove empty sections and placeholder rows
+  
+  AUTO-FILLED VARIABLES (from System Resolved Paths):
+  - {{RRCE_DATA}}: Storage path for knowledge/tasks
+  - {{WORKSPACE_ROOT}}: Source code directory
+  
+  AGENT-FILLED VARIABLES:
+  - {{project_name}}: Name of the project
+  - {{date}}: ISO date (YYYY-MM-DD)
+  - {{author}}: Git user or agent name (analyst)
+  - {{workspace_root}}: Source code directory
+  - {{focus_area}}: Focus area parameter or "General"
 -->
 # Project Diagnosis – {{project_name}}
 

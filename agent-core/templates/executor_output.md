@@ -1,11 +1,25 @@
 <!--
-  RRCE Template Variables:
-  - {{RRCE_DATA}}: Primary storage path (resolves based on storage mode in .rrce-workflow/config.yaml)
-      - global: {{RRCE_HOME}}/workspaces/<workspace-name>/
-      - workspace: <workspace>/.rrce-workflow/
-  - {{RRCE_HOME}}: Global home (default: ~/.rrce-workflow, customizable via storage.globalPath in config)
-  - {{WORKSPACE_ROOT}}: Workspace root directory
-  - {{WORKSPACE_NAME}}: Workspace name from config or directory name
+  TEMPLATE: Execution Log
+  
+  HOW TO USE:
+  1. Copy to: {{RRCE_DATA}}/tasks/{{TASK_SLUG}}/execution/{{TASK_SLUG}}-execution.md
+  2. Replace {{variable}} placeholders with actual values
+  3. Update Implementation Steps table as work progresses
+  4. Remove empty sections
+  
+  AUTO-FILLED VARIABLES (from System Resolved Paths):
+  - {{RRCE_DATA}}: Storage path for knowledge/tasks
+  - {{WORKSPACE_NAME}}: Project name
+  
+  AGENT-FILLED VARIABLES:
+  - {{task_id}}: UUID for the task
+  - {{task_slug}}: kebab-case task identifier
+  - {{task_title}}: Human-readable task title
+  - {{author}}: Git user or agent name (executor)
+  - {{date}}: ISO date (YYYY-MM-DD)
+  - {{plan_artifact}}: Path to execution plan
+  - {{git_ref}}: Branch name or commit SHA
+  - {{workspace_name}}: Project name
 -->
 # Execution Log – {{task_title}}
 

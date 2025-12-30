@@ -18,7 +18,10 @@ export function registerToolHandlers(server: Server): void {
         description: 'Search across all exposed project knowledge bases',
         inputSchema: {
           type: 'object',
-          properties: { query: { type: 'string', description: 'Search query to find in knowledge files' } },
+          properties: { 
+            query: { type: 'string', description: 'Search query to find in knowledge files' },
+            project: { type: 'string', description: 'Optional: limit search to specific project name' }
+          },
           required: ['query'],
         },
       },
@@ -88,7 +91,8 @@ export function registerToolHandlers(server: Server): void {
     try {
       switch (name) {
         case 'search_knowledge': {
-          const results = await searchKnowledge((args as { query: string }).query);
+          const params = args as { query: string; project?: string };
+          const results = await searchKnowledge(params.query, params.project);
           return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
         }
 

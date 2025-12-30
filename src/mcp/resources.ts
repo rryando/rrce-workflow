@@ -204,8 +204,10 @@ export function getProjectTasks(projectName: string): object[] {
 
 /**
  * Search across all exposed project knowledge bases
+ * @param query Search query string
+ * @param projectFilter Optional: limit search to specific project name
  */
-export async function searchKnowledge(query: string): Promise<Array<{
+export async function searchKnowledge(query: string, projectFilter?: string): Promise<Array<{
   project: string;
   file: string;
   matches: string[];
@@ -218,6 +220,9 @@ export async function searchKnowledge(query: string): Promise<Array<{
   const queryLower = query.toLowerCase();
 
   for (const project of projects) {
+    // Skip if project filter specified and doesn't match
+    if (projectFilter && project.name !== projectFilter) continue;
+    
     const permissions = getProjectPermissions(config, project.name, project.dataPath);
     
     if (!permissions.knowledge || !project.knowledgePath) continue;
@@ -420,38 +425,59 @@ export async function indexKnowledge(projectName: string, force: boolean = false
 
 /**
  * Generate standard context preamble for agents
- * Lists available projects and identifies active workspace
+ * Lists available projects, identifies active workspace, and pre-resolves path variables
  */
 export function getContextPreamble(): string {
   const projects = getExposedProjects();
   const activeProject = detectActiveProject();
+  
+  let contextPreamble = '';
+  
+  // Pre-resolved paths section (helps agents avoid manual path resolution)
+  if (activeProject) {
+    const rrceHome = process.env.RRCE_HOME || path.join(require('os').homedir(), '.rrce-workflow');
+    const workspaceRoot = activeProject.sourcePath || activeProject.path || activeProject.dataPath;
+    const rrceData = activeProject.dataPath;
+    
+    contextPreamble += `
+## System Resolved Paths
+Use these values directly in your operations. Do NOT manually resolve paths.
+
+| Variable | Value |
+|----------|-------|
+| \`WORKSPACE_ROOT\` | \`${workspaceRoot}\` |
+| \`WORKSPACE_NAME\` | \`${activeProject.name}\` |
+| \`RRCE_DATA\` | \`${rrceData}\` |
+| \`RRCE_HOME\` | \`${rrceHome}\` |
+
+`;
+  }
   
   const projectList = projects.map(p => {
     const isActive = activeProject && p.dataPath === activeProject.dataPath;
     return `- ${p.name} (${p.source}) ${isActive ? '**[ACTIVE]**' : ''}`;
   }).join('\n');
   
-  let contextPreamble = `
-Context - Available Projects (MCP Hub):
+  contextPreamble += `
+## Available Projects
 ${projectList}
 `;
 
   if (projects.length === 0) {
     contextPreamble += `
 WARNING: No projects are currently exposed to the MCP server.
-The user needs to run 'npx rrce-workflow mcp configure' in their terminal to select projects to expose.
-Please advise the user to do this if they expect to see project context.
+Run 'npx rrce-workflow mcp configure' to select projects to expose.
 `;
   }
 
   if (activeProject) {
-    contextPreamble += `\nCurrent Active Workspace: ${activeProject.name} (${activeProject.path})\n`;
-    contextPreamble += `IMPORTANT: Treat '${activeProject.path}' as the {{WORKSPACE_ROOT}}. All relative path operations (file reads/writes) MUST be performed relative to this directory.\n`;
+    contextPreamble += `
+Current Active Workspace: ${activeProject.name}
+All file operations should be relative to WORKSPACE_ROOT shown above.
+`;
   }
 
   contextPreamble += `
-Note: If the user's request refers to a project not listed here, ask them to expose it via 'rrce-workflow mcp configure'.
-
 ---
 `;
 
