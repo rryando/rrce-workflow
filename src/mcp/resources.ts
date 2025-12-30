@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadMCPConfig, isProjectExposed, getProjectPermissions } from './config';
+import { normalizeProjectPath } from './config-utils';
 import { type DetectedProject, findClosestProject } from '../lib/detection';
 import { projectService } from '../lib/detection-service';
 import { RAGService } from './services/rag';
@@ -23,23 +24,11 @@ export function getExposedProjects(): DetectedProject[] {
 
   const allProjects = projectService.scan({ knownPaths });
   
-  // 1. Get globally exposed projects
-  const globalProjects = allProjects.filter(project => isProjectExposed(config, project.name, project.dataPath));
-  
-  // 2. Get locally linked projects (smart resolution)
-  const activeProject = detectActiveProject(globalProjects); // Pass preliminary list
-  let linkedProjects: DetectedProject[] = [];
+  // 1. Resolve linked projects first to get the full pool of potential projects
+  const activeProject = detectActiveProject(allProjects); 
+  const potentialProjects = [...allProjects];
 
   if (activeProject) {
-    const localConfigPath = path.join(activeProject.dataPath, 'config.yaml'); // New config location
-    // Also check legacy .rrce-workflow.yaml? 'paths.ts' handles that, but here we need quick read.
-    // Let's rely on standard paths.
-    
-    // We need to resolve the path properly. Let's use getConfigPath helper if we can, but 
-    // we need to import it. Since we can't easily import circular deps or new deps without checking,
-    // let's stick to reading the config file found in the active project path.
-    
-    // Check both locations just to be safe/compliant with paths.ts logic
     let cfgContent: string | null = null;
     if (fs.existsSync(path.join(activeProject.dataPath, '.rrce-workflow', 'config.yaml'))) {
        cfgContent = fs.readFileSync(path.join(activeProject.dataPath, '.rrce-workflow', 'config.yaml'), 'utf-8');
@@ -48,9 +37,7 @@ export function getExposedProjects(): DetectedProject[] {
     }
 
     if (cfgContent) {
-      if (cfgContent.includes('linked_projects:')) { // Simple check
-         // Parse linked projects manually to avoid heavy yaml parser dep if not already present?
-         // config.ts uses simple regex/line parsing. Let's do similar.
+      if (cfgContent.includes('linked_projects:')) {
          const lines = cfgContent.split('\n');
          let inLinked = false;
          for (const line of lines) {
@@ -63,24 +50,17 @@ export function getExposedProjects(): DetectedProject[] {
                 if (trimmed.startsWith('-') || trimmed.startsWith('linked_projects')) { 
                     // continue parsing 
                 } else if (trimmed !== '' && !trimmed.startsWith('#')) {
-                    // exited section
                     inLinked = false;
                 }
                 
                 if (inLinked && trimmed.startsWith('-')) {
-                    // Extract name. format: "- name" or "- name:source"
                     const val = trimmed.replace(/^-\s*/, '').trim();
-                    const [pName] = val.split(':'); // Take name part
+                    const [pName] = val.split(':');
                     
-                    // Find this project in allProjects
-                    // Avoid duplicates
-                    if (!globalProjects.some(p => p.name === pName) && 
-                        !linkedProjects.some(p => p.name === pName)) {
+                    if (!potentialProjects.some(p => p.name === pName)) {
                         const found = allProjects.find(p => p.name === pName);
                         if (found) {
-                            // Mark as linked for context clarity? DetectedProject doesn't have a 'linked' flag.
-                            // We return it as is.
-                            linkedProjects.push(found);
+                            potentialProjects.push(found);
                         }
                     }
                 }
@@ -90,7 +70,9 @@ export function getExposedProjects(): DetectedProject[] {
     }
   }
 
-  return [...globalProjects, ...linkedProjects];
+  // 2. Filter ALL potential projects through the SSOT configuration
+  // Use project.path (the root) for standardized lookup
+  return potentialProjects.filter(project => isProjectExposed(config, project.name, project.path));
 }
 
 /**
@@ -115,8 +97,8 @@ export function detectActiveProject(knownProjects?: DetectedProject[]): Detected
         .filter((p): p is string => !!p);
         
      const all = projectService.scan({ knownPaths });
-     // Only consider global ones for base detection to start with
-     scanList = all.filter(project => isProjectExposed(config, project.name, project.dataPath));
+      // Only consider global ones for base detection to start with
+      scanList = all.filter(project => isProjectExposed(config, project.name, project.path));
   }
   
   return findClosestProject(scanList);
@@ -130,13 +112,13 @@ export function getProjectContext(projectName: string): string | null {
   const projects = projectService.scan();
   
   // Find the SPECIFIC project that is exposed (disambiguate by path if need be)
-  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.dataPath));
+  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.path));
   
   if (!project) {
     return null;
   }
 
-  const permissions = getProjectPermissions(config, projectName, project.dataPath);
+  const permissions = getProjectPermissions(config, projectName, project.path);
   if (!permissions.knowledge) {
     return null;
   }
@@ -161,13 +143,13 @@ export function getProjectTasks(projectName: string): object[] {
   const config = loadMCPConfig();
   const projects = projectService.scan();
   
-  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.dataPath));
+  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.path));
   
   if (!project) {
     return [];
   }
 
-  const permissions = getProjectPermissions(config, projectName, project.dataPath);
+  const permissions = getProjectPermissions(config, projectName, project.path);
   if (!permissions.tasks) {
     return [];
   }
@@ -223,13 +205,13 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
     // Skip if project filter specified and doesn't match
     if (projectFilter && project.name !== projectFilter) continue;
     
-    const permissions = getProjectPermissions(config, project.name, project.dataPath);
+    const permissions = getProjectPermissions(config, project.name, project.path);
     
     if (!permissions.knowledge || !project.knowledgePath) continue;
 
     // Check for RAG configuration
     const projConfig = config.projects.find(p => 
-        (p.path && p.path === project.dataPath) || (!p.path && p.name === project.name)
+        (p.path && normalizeProjectPath(p.path) === normalizeProjectPath(project.path)) || (!p.path && p.name === project.name)
     );
     const useRAG = projConfig?.semanticSearch?.enabled;
 
@@ -304,7 +286,7 @@ export async function indexKnowledge(projectName: string, force: boolean = false
 
     // Find config with fallback for global projects
     const projConfig = config.projects.find(p => 
-        (p.path && p.path === project.dataPath) || (!p.path && p.name === project.name)
+        (p.path && normalizeProjectPath(p.path) === normalizeProjectPath(project.path)) || (!p.path && p.name === project.name)
     ) || (project.source === 'global' ? { semanticSearch: { enabled: true, model: 'Xenova/all-MiniLM-L6-v2' } } : undefined);
     
     // Check if RAG is actually enabled (either in config or detected)
@@ -454,7 +436,7 @@ Use these values directly in your operations. Do NOT manually resolve paths.
   }
   
   const projectList = projects.map(p => {
-    const isActive = activeProject && p.dataPath === activeProject.dataPath;
+    const isActive = activeProject && normalizeProjectPath(p.path) === normalizeProjectPath(activeProject.path);
     return `- ${p.name} (${p.source}) ${isActive ? '**[ACTIVE]**' : ''}`;
   }).join('\n');
   

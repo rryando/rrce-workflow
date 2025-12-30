@@ -8,11 +8,12 @@ import { LogViewer } from './LogViewer';
 import { StatusBoard } from './StatusBoard';
 import { IndexingStatus } from './IndexingStatus';
 import { TabBar, type Tab } from './components/TabBar';
-import { loadMCPConfig } from '../config';
+import { loadMCPConfig, isProjectExposed } from '../config';
 import { findProjectConfig } from '../config-utils';
 import { scanForProjects } from '../../lib/detection';
 import { getLogFilePath } from '../logger';
 import { stopMCPServer, startMCPServer, getMCPServerStatus } from '../server';
+import { getExposedProjects } from '../resources';
 import { checkInstallStatus } from '../install';
 import { detectWorkspaceRoot } from '../../lib/paths';
 import fs from 'fs';
@@ -42,20 +43,10 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     setProjects(scanForProjects());
   }, []);
   
-  // Memoize exposed projects calculation
+  // Memoize exposed projects calculation - use unified logic from resources.ts if possible
+  // or at least use isProjectExposed helper
   const exposedProjects = useMemo(() => 
-    projects.filter(p => {
-      // Find config: check path match first, then name match
-      const cfg = config.projects.find(c => 
-        (c.path && c.path === p.path) || 
-        (p.source === 'global' && c.name === p.name) ||
-        (!c.path && c.name === p.name)
-      );
-      
-      // If found, use config.exposed. 
-      // If not found, use default.
-      return cfg?.expose ?? config.defaults.includeNew;
-    }),
+    projects.filter(p => isProjectExposed(config, p.name, p.path)),
     [projects, config]
   );
 

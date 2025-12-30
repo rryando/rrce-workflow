@@ -47,7 +47,7 @@ export const DEFAULT_MCP_CONFIG: MCPConfig = {
   },
   projects: [],
   defaults: {
-    includeNew: true,
+    includeNew: false,
     permissions: {
       knowledge: true,
       tasks: true,

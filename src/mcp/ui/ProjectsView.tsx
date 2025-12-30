@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { SimpleSelect } from './components/SimpleSelect';
 import { saveMCPConfig, setProjectConfig } from '../config';
 import type { MCPConfig } from '../types';
@@ -15,6 +15,21 @@ interface ProjectsViewProps {
 export const ProjectsView = ({ config: initialConfig, projects: allProjects, onConfigChange }: ProjectsViewProps) => {
   const [config, setConfig] = useState(initialConfig);
   
+  useInput((input) => {
+    if (input === 'a') {
+      const newConfig = { 
+        ...config, 
+        defaults: { 
+          ...config.defaults, 
+          includeNew: !config.defaults.includeNew 
+        } 
+      };
+      saveMCPConfig(newConfig);
+      setConfig(newConfig);
+      if (onConfigChange) onConfigChange();
+    }
+  });
+
   // Merge with config to determine status
   const projectItems = allProjects.map(p => {
     // Check if explicitly configured
@@ -29,8 +44,8 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
     
     return {
         label: p.name + ` (${p.source})` + (p.path ? ` - ${p.path}` : ''),
-        value: p.dataPath, // Unique ID
-        key: p.dataPath,
+        value: p.path, // Standardized ID: Use root path
+        key: p.path,
         exposed: isExposed
     };
   });
@@ -45,13 +60,11 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
     // For each detected project, check if it's in the selectedIds list
     projectItems.forEach(item => {
         const isSelected = selectedIds.includes(item.value);
-        const project = allProjects.find(p => p.dataPath === item.value);
+        const project = allProjects.find(p => p.path === item.value);
         
         // Only update if changed or new
-        // Actually, the simplest way is to ensure all are recorded if we want persistence
         if (project) {
              // For global projects, check if we already have a configured path (the local path)
-             // We don't want to overwrite the local path with the global storage path
              const existingConfig = newConfig.projects.find(p => p.name === project.name);
              const projectPath = (project.source === 'global' && existingConfig?.path) 
                 ? existingConfig.path 
@@ -74,18 +87,28 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
 
   return (
     <Box flexDirection="column" padding={1} borderStyle="round" borderColor="cyan" flexGrow={1}>
-       <Text bold color="cyan"> Exposed Projects </Text>
+       <Box justifyContent="space-between">
+         <Text bold color="cyan"> Exposed Projects </Text>
+         <Box>
+           <Text dimColor>Auto-expose new: </Text>
+           <Text color={config.defaults.includeNew ? "green" : "red"}>
+             {config.defaults.includeNew ? "ON" : "OFF"}
+           </Text>
+           <Text dimColor> (Press 'a' to toggle)</Text>
+         </Box>
+       </Box>
+       
        <Text color="dim"> Select projects to expose via the MCP server. Use Space to toggle, Enter to save.</Text>
        <Box marginTop={1} flexDirection="column">
         <SimpleSelect 
-            key={JSON.stringify(initialSelected)} // Force re-render on external updates if any
-            message="" // No header needed inside the view
+            key={JSON.stringify(initialSelected) + config.defaults.includeNew} // Force re-render on selection OR default changes
+            message="" 
             items={projectItems}
             isMulti={true}
             initialSelected={initialSelected}
             onSelect={() => {}} 
             onSubmit={handleSubmit}
-            onCancel={() => {}} // No cancel in tab view, just switch tabs
+            onCancel={() => {}} 
         />
        </Box>
     </Box>

@@ -10,16 +10,60 @@ import YAML from 'yaml';
 import { getEffectiveRRCEHome, detectWorkspaceRoot, getEffectiveGlobalPath } from '../lib/paths';
 import type { MCPConfig, MCPProjectConfig, MCPPermissions, MCPSemanticSearchConfig } from './types';
 import { DEFAULT_MCP_CONFIG, DEFAULT_PERMISSIONS } from './types';
-import { findProjectConfig } from './config-utils';
+import { findProjectConfig, normalizeProjectPath } from './config-utils';
+
+/**
+ * Migrate configuration to latest format
+ * - Converts data paths (.rrce-workflow) to project root paths
+ */
+function migrateConfig(config: MCPConfig): MCPConfig {
+  let changed = false;
+  
+  config.projects = config.projects.map(p => {
+    if (p.path) {
+      const normalized = normalizeProjectPath(p.path);
+      if (normalized !== p.path) {
+        changed = true;
+        return { ...p, path: normalized };
+      }
+    }
+    return p;
+  });
+
+  return config;
+}
 
 /**
  * Get path to MCP config file
- * Uses effective RRCE home (respects custom globalPath from workspace config)
  */
 export function getMCPConfigPath(): string {
   const workspaceRoot = detectWorkspaceRoot();
   const rrceHome = getEffectiveRRCEHome(workspaceRoot);
   return path.join(rrceHome, 'mcp.yaml');
+}
+
+/**
+ * Load MCP configuration from disk
+ * Returns default config if file doesn't exist
+ */
+export function loadMCPConfig(): MCPConfig {
+  const configPath = getMCPConfigPath();
+  
+  if (!fs.existsSync(configPath)) {
+    return { ...DEFAULT_MCP_CONFIG };
+  }
+
+  try {
+    const content = fs.readFileSync(configPath, 'utf-8');
+    let config = parseMCPConfig(content);
+    
+    // Apply migration
+    config = migrateConfig(config);
+    
+    return config;
+  } catch {
+    return { ...DEFAULT_MCP_CONFIG };
+  }
 }
 
 /**
@@ -68,25 +112,6 @@ export function ensureMCPGlobalPath(): GlobalPathCheckResult {
     configured: true,
     path: rrceHome,
   };
-}
-
-/**
- * Load MCP configuration from disk
- * Returns default config if file doesn't exist
- */
-export function loadMCPConfig(): MCPConfig {
-  const configPath = getMCPConfigPath();
-  
-  if (!fs.existsSync(configPath)) {
-    return { ...DEFAULT_MCP_CONFIG };
-  }
-
-  try {
-    const content = fs.readFileSync(configPath, 'utf-8');
-    return parseMCPConfig(content);
-  } catch {
-    return { ...DEFAULT_MCP_CONFIG };
-  }
 }
 
 /**
