@@ -87,7 +87,7 @@ async function runExpressSetup(
     `• Storage: ${storageMode === 'global' ? 'Global' : 'Workspace'}\n` +
     `• MCP Server: Enabled\n` +
     `• Semantic Search (RAG): Enabled\n` +
-    `• Git ignore entries: Added (as comments)\n` +
+    `• Git ignore entries: Added\n` +
     `• AI Tools: ${toolsText}`,
     'Configuration Preview'
   );
@@ -114,7 +114,7 @@ async function runExpressSetup(
     globalPath: customGlobalPath,
     tools: defaultTools,
     linkedProjects: [],
-    addToGitignore: false,
+    addToGitignore: true,
     exposeToMCP: true,
     enableRAG: true,
   };

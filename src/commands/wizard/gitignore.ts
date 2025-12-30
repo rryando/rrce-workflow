@@ -20,6 +20,9 @@ export function updateGitignore(workspacePath: string, storageMode: StorageMode,
     entries.push('.rrce-workflow/');
   }
   
+  // Always add .opencode/ as it's the primary tool
+  entries.push('.opencode/');
+  
   // Add tool-specific entries
   if (tools.includes('copilot')) {
     entries.push('.github/agents/');
@@ -27,10 +30,6 @@ export function updateGitignore(workspacePath: string, storageMode: StorageMode,
   
   if (tools.includes('antigravity')) {
     entries.push('.agent/workflows/');
-  }
-  
-  if (tools.includes('opencode')) {
-    entries.push('.opencode/');
   }
   
   // Add VSCode workspace file
@@ -53,11 +52,10 @@ export function updateGitignore(workspacePath: string, storageMode: StorageMode,
     return false;
   }
   
-  // Build new section with commented entries (user can uncomment if needed)
+  // Build new section with entries
   const newSection = `
 ${sectionMarker}
-# Uncomment the following lines if you want to ignore rrce-workflow generated files:
-${entries.map(e => `# ${e}`).join('\n')}
+${entries.join('\n')}
 `;
 
   // Append to .gitignore
