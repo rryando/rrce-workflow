@@ -29,6 +29,10 @@ export function updateGitignore(workspacePath: string, storageMode: StorageMode,
     entries.push('.agent/workflows/');
   }
   
+  if (tools.includes('opencode')) {
+    entries.push('.opencode/');
+  }
+  
   // Add VSCode workspace file
   entries.push('*.code-workspace');
   

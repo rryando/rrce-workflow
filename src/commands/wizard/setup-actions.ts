@@ -100,6 +100,32 @@ export function installAgentPrompts(
           const content = convertToOpenCodeAgent(prompt);
           fs.writeFileSync(path.join(opencodePath, `${baseName}.md`), content);
         }
+
+        // If in global mode, create a symlink in the workspace
+        if (config.storageMode === 'global') {
+          const workspaceOpencode = path.join(workspacePath, '.opencode');
+          const globalOpencode = path.join(primaryDataPath, '.opencode');
+          
+          try {
+            // Remove existing if it's there (file, dir, or link)
+            if (fs.existsSync(workspaceOpencode)) {
+              fs.rmSync(workspaceOpencode, { recursive: true, force: true });
+            } else {
+              try {
+                // Check if it's a broken symlink
+                if (fs.lstatSync(workspaceOpencode).isSymbolicLink()) {
+                   fs.unlinkSync(workspaceOpencode);
+                }
+              } catch (e) {
+                // Ignore if not found
+              }
+            }
+            // Create symlink
+            fs.symlinkSync(globalOpencode, workspaceOpencode, 'dir');
+          } catch (e) {
+            console.error(`Warning: Could not create OpenCode symlink at ${workspaceOpencode}:`, e instanceof Error ? e.message : String(e));
+          }
+        }
       }
     }
   }
