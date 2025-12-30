@@ -1,0 +1,1 @@
+The quick brown fox jumps over the lazy dog. Authentication is handled by JWT.

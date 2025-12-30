@@ -1,23 +1,27 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import { SimpleSelect } from './components/SimpleSelect';
-import { loadMCPConfig, saveMCPConfig, setProjectConfig } from '../config';
-import { scanForProjects } from '../../lib/detection';
+import { saveMCPConfig, setProjectConfig } from '../config';
+import type { MCPConfig } from '../types';
+import type { DetectedProject } from '../../lib/detection';
 
 interface ProjectsViewProps {
+  config: MCPConfig;
+  projects: DetectedProject[];
   onConfigChange?: () => void;
 }
 
-export const ProjectsView = ({ onConfigChange }: ProjectsViewProps) => {
-  const [config, setConfig] = useState(loadMCPConfig());
-  const allProjects = scanForProjects();
+export const ProjectsView = ({ config: initialConfig, projects: allProjects, onConfigChange }: ProjectsViewProps) => {
+  const [config, setConfig] = useState(initialConfig);
   
   // Merge with config to determine status
   const projectItems = allProjects.map(p => {
     // Check if explicitly configured
     const projectConfig = config.projects.find(c => 
-        (c.path && c.path === p.path) || (!c.path && c.name === p.name)
+        (c.path && c.path === p.path) || 
+        (p.source === 'global' && c.name === p.name) ||
+        (!c.path && c.name === p.name)
     );
     // Is exposed?
     // If explicit config exists, use it. Else use default.
@@ -46,12 +50,19 @@ export const ProjectsView = ({ onConfigChange }: ProjectsViewProps) => {
         // Only update if changed or new
         // Actually, the simplest way is to ensure all are recorded if we want persistence
         if (project) {
+             // For global projects, check if we already have a configured path (the local path)
+             // We don't want to overwrite the local path with the global storage path
+             const existingConfig = newConfig.projects.find(p => p.name === project.name);
+             const projectPath = (project.source === 'global' && existingConfig?.path) 
+                ? existingConfig.path 
+                : project.path;
+
              newConfig = setProjectConfig(
                 newConfig,
                 project.name,
                 isSelected,
                 undefined, 
-                project.path 
+                projectPath
             );
         }
     });

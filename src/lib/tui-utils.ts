@@ -8,6 +8,7 @@ import pc from 'picocolors';
 import * as path from 'path';
 import { checkWriteAccess, getDefaultRRCEHome } from './paths';
 import { directoryPrompt, isCancelled } from './autocomplete-prompt';
+import { loadUserPreferences, saveUserPreferences } from './preferences';
 
 /**
  * Prompt user to select or enter a global storage path
@@ -16,7 +17,8 @@ import { directoryPrompt, isCancelled } from './autocomplete-prompt';
  * Used by both the wizard setup and MCP configuration
  */
 export async function resolveGlobalPath(): Promise<string | undefined> {
-  const defaultPath = getDefaultRRCEHome();
+  const prefs = loadUserPreferences();
+  const defaultPath = prefs.defaultGlobalPath || getDefaultRRCEHome();
   const isDefaultWritable = checkWriteAccess(defaultPath);
   
   const options: { value: string; label: string; hint?: string }[] = [
@@ -54,7 +56,7 @@ export async function resolveGlobalPath(): Promise<string | undefined> {
   }
 
   // Custom path with bash-like Tab completion
-  const suggestedPath = path.join(process.env.HOME || '~', '.local', 'share', 'rrce-workflow');
+  const suggestedPath = path.join(process.env.HOME || '~', '.rrce-workflow');
   const customPath = await directoryPrompt({
     message: 'Enter custom global path (Tab to autocomplete):',
     defaultValue: suggestedPath,
@@ -78,6 +80,9 @@ export async function resolveGlobalPath(): Promise<string | undefined> {
   if (!expandedPath.endsWith('.rrce-workflow')) {
     expandedPath = path.join(expandedPath, '.rrce-workflow');
   }
+
+  // Save as preference for next time (with flag to indicate custom path was chosen)
+  saveUserPreferences({ defaultGlobalPath: expandedPath, useCustomGlobalPath: true });
   
   return expandedPath;
 }

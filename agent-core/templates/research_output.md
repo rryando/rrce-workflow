@@ -1,11 +1,23 @@
 <!--
-  RRCE Template Variables:
-  - {{RRCE_DATA}}: Primary storage path (resolves based on storage mode in .rrce-workflow/config.yaml)
-      - global: {{RRCE_HOME}}/workspaces/<workspace-name>/
-      - workspace: <workspace>/.rrce-workflow/
-  - {{RRCE_HOME}}: Global home (default: ~/.rrce-workflow, customizable via storage.globalPath in config)
-  - {{WORKSPACE_ROOT}}: Workspace root directory
-  - {{WORKSPACE_NAME}}: Workspace name from config or directory name
+  TEMPLATE: Research Brief
+  
+  HOW TO USE:
+  1. Copy to: {{RRCE_DATA}}/tasks/{{TASK_SLUG}}/research/{{TASK_SLUG}}-research.md
+  2. Replace {{variable}} placeholders with actual values
+  3. Delete sections that are empty after population
+  
+  AUTO-FILLED VARIABLES (from System Resolved Paths):
+  - {{RRCE_DATA}}: Storage path for knowledge/tasks
+  - {{WORKSPACE_NAME}}: Project name
+  
+  AGENT-FILLED VARIABLES:
+  - {{task_id}}: UUID for the task
+  - {{task_slug}}: kebab-case task identifier
+  - {{task_title}}: Human-readable task title
+  - {{author}}: Git user or agent name
+  - {{date}}: ISO date (YYYY-MM-DD)
+  - {{source}}: URL or reference to original request
+  - {{workspace_name}}: Project name
 -->
 # Research Brief – {{task_title}}
 

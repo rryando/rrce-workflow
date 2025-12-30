@@ -4,8 +4,10 @@ import {
   GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../logger';
-import { getExposedProjects, detectActiveProject } from '../resources';
+import { getExposedProjects, detectActiveProject, getContextPreamble } from '../resources';
 import { getAllPrompts, getPromptDef, renderPrompt } from '../prompts';
+import { getEffectiveGlobalPath } from '../../lib/paths';
+import * as path from 'path';
 
 /**
  * Register MCP prompt handlers
@@ -56,44 +58,52 @@ export function registerPromptHandlers(server: Server): void {
         renderArgs[key] = String(val);
       }
 
-      const content = renderPrompt(promptDef.content, renderArgs);
 
-      // Inject Available Projects Context
-      const projects = getExposedProjects();
+
+      // Resolve Project Paths & Context
+      // This is crucial for fixing the "Global Project" issue where agents default to local dir
       const activeProject = detectActiveProject();
+      const DEFAULT_RRCE_HOME = getEffectiveGlobalPath();
       
-      const projectList = projects.map(p => {
-        const isActive = activeProject && p.dataPath === activeProject.dataPath;
-        // Check if project is globally exposed or just linked
-        // Actually, we can check source property or check if it's in config
-        // But simply showing the source attribute is enough? p.source should tell us.
-        // Wait, scanForProjects sets source to 'global' or 'workspace'.
-        // If it's linked, it might still have source='global' if it lives in global folder.
-        // But for context, we want to know if it's available.
-        return `- ${p.name} (${p.source}) ${isActive ? '**[ACTIVE]**' : ''}`;
-      }).join('\n');
-      
-      let contextPreamble = `
-Context - Available Projects (MCP Hub):
-${projectList}
-`;
-      if (projects.length === 0) {
-        contextPreamble += `
-WARNING: No projects are currently exposed to the MCP server.
-The user needs to run 'npx rrce-workflow mcp configure' in their terminal to select projects to expose.
-Please advise the user to do this if they expect to see project context.
-`;
-      }
+      let resolvedRrceData = '.rrce-workflow/'; // Default to local if no project found
+      let resolvedRrceHome = DEFAULT_RRCE_HOME;
+      let resolvedWorkspaceRoot = process.cwd();
+      let resolvedWorkspaceName = 'current-project';
 
       if (activeProject) {
-        contextPreamble += `\nCurrent Active Workspace: ${activeProject.name} (${activeProject.path})\n`;
-        contextPreamble += `IMPORTANT: Treat '${activeProject.path}' as the {{WORKSPACE_ROOT}}. All relative path operations (file reads/writes) MUST be performed relative to this directory.\n`;
+        resolvedRrceData = activeProject.dataPath + '/'; // Ensure trailing slash
+        resolvedWorkspaceRoot = activeProject.sourcePath || activeProject.path || activeProject.dataPath;
+        resolvedWorkspaceName = activeProject.name;
+        
+        // If it's a global project, usually we want to know the global home too
+        if (activeProject.source === 'global') {
+           // We can infer RRCE_HOME as parent of workspaces dir
+           // path = /home/user/.rrce-workflow/workspaces/proj
+           const workspacesDir = path.dirname(activeProject.dataPath);
+           resolvedRrceHome = path.dirname(workspacesDir);
+        }
       }
 
-      contextPreamble += `
-Note: If the user's request refers to a project not listed here, ask them to expose it via 'rrce-workflow mcp configure'.
+      // Inject system variables if not provided by user
+      if (!renderArgs['RRCE_DATA']) renderArgs['RRCE_DATA'] = resolvedRrceData;
+      if (!renderArgs['RRCE_HOME']) renderArgs['RRCE_HOME'] = resolvedRrceHome;
+      if (!renderArgs['WORKSPACE_ROOT']) renderArgs['WORKSPACE_ROOT'] = resolvedWorkspaceRoot;
+      if (!renderArgs['WORKSPACE_NAME']) renderArgs['WORKSPACE_NAME'] = resolvedWorkspaceName;
 
----
+      // Render content with these variables
+      const content = renderPrompt(promptDef.content, renderArgs);
+
+      // Inject Available Projects Context using shared utility
+      let contextPreamble = getContextPreamble();
+      
+      // Add Pre-Resolved Paths section to guide the agent
+      contextPreamble += `
+### System Resolved Paths (OVERRIDE)
+The system has pre-resolved the configuration for this project. Use these values instead of manual resolution:
+- **RRCE_DATA**: \`${resolvedRrceData}\` (Stores knowledge, tasks, refs)
+- **WORKSPACE_ROOT**: \`${resolvedWorkspaceRoot}\` (Source code location)
+- **RRCE_HOME**: \`${resolvedRrceHome}\`
+- **Current Project**: ${resolvedWorkspaceName}
 `;
 
       return {

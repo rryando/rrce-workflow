@@ -1,11 +1,31 @@
 <!--
-  RRCE Template Variables:
-  - {{RRCE_DATA}}: Primary storage path (resolves based on storage mode in .rrce-workflow/config.yaml)
-      - global: {{RRCE_HOME}}/workspaces/<workspace-name>/
-      - workspace: <workspace>/.rrce-workflow/
-  - {{RRCE_HOME}}: Global home (default: ~/.rrce-workflow, customizable via storage.globalPath in config)
-  - {{WORKSPACE_ROOT}}: Workspace root directory
-  - {{WORKSPACE_NAME}}: Workspace name from config or directory name
+  TEMPLATE: Project Context (Init Output)
+  
+  HOW TO USE:
+  1. Copy to: {{RRCE_DATA}}/knowledge/project-context.md
+  2. Replace {{variable}} placeholders with actual values
+  3. Delete sections marked (OPTIONAL) if empty after population
+  4. Fill in remaining sections with discovered information
+  
+  AUTO-FILLED VARIABLES (from System Resolved Paths):
+  - {{WORKSPACE_ROOT}}: Source code directory
+  - {{WORKSPACE_NAME}}: Project name  
+  - {{RRCE_DATA}}: Storage path for knowledge/tasks
+  - {{RRCE_HOME}}: Global RRCE home directory
+  
+  AGENT-FILLED VARIABLES:
+  - {{project_name}}: Name of the project
+  - {{date}}: ISO date (YYYY-MM-DD)
+  - {{author}}: Git user or agent name
+  - {{workspace_root}}: Same as WORKSPACE_ROOT
+  
+  DYNAMIC VARIABLES:
+  - {{test_unit_command}}: Command to run unit tests
+  - {{test_integration_command}}: Command to run integration tests
+  - {{test_e2e_command}}: Command to run e2e tests
+  - {{coverage_command}}: Command to generate coverage report
+  - {{last_indexed_date}}: Last semantic index update
+  - {{index_path}}: Path to embeddings.json
 -->
 # Project Context – {{project_name}}
 
@@ -256,9 +276,25 @@ Based on the tech stack analysis, the Executor agent should have proficiency in:
 |----------|----------|-------|
 |  | high/medium/low |  |
 
+
+---
+
+## 11. Semantic Index Status
+
+| Attribute | Value |
+|-----------|-------|
+| **Enabled** | yes / no |
+| **Last Indexed** | `{{last_indexed_date}}` |
+| **Index Location** | `{{index_path}}` |
+| **Total Files** |  |
+| **Total Chunks** |  |
+
+*If semantic search is enabled, run `index_knowledge` to update the index after significant changes.*
+
 ---
 
 ## Checklist
+
 
 - [ ] Tech stack fully documented
 - [ ] Coding conventions captured

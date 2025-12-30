@@ -1,13 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Box, useInput, useApp } from 'ink';
 import { Overview } from './Overview';
 import { ProjectsView } from './ProjectsView';
 import { InstallView } from './InstallView';
 import { LogViewer } from './LogViewer';
 import { StatusBoard } from './StatusBoard';
+import { IndexingStatus } from './IndexingStatus';
 import { TabBar, type Tab } from './components/TabBar';
 import { loadMCPConfig } from '../config';
+import { findProjectConfig } from '../config-utils';
 import { scanForProjects } from '../../lib/detection';
 import { getLogFilePath } from '../logger';
 import { stopMCPServer, startMCPServer, getMCPServerStatus } from '../server';
@@ -20,16 +22,9 @@ interface AppProps {
   initialPort: number;
 }
 
-const TABS: Tab[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'logs', label: 'Logs' },
-    { id: 'projects', label: 'Projects' },
-    { id: 'install', label: 'Install' }
-];
-
 export const App = ({ onExit, initialPort }: AppProps) => {
   const { exit } = useApp();
-  const [activeTab, setActiveTab] = useState('logs');
+  const [activeTab, setActiveTab] = useState('overview');
   const [logs, setLogs] = useState<string[]>([]);
   const [serverInfo, setServerInfo] = useState({ 
     port: initialPort, 
@@ -37,16 +32,55 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     running: false 
   });
   
-  // Stats and Config
-  const [configVersion, setConfigVersion] = useState(0); // Used to trigger re-renders
-  const config = loadMCPConfig(); // Config re-reads on render, or we force update
-  const projects = scanForProjects();
-  const exposedProjects = projects.filter(p => {
-    const cfg = config.projects.find(c => 
-      (c.path && c.path === p.path) || (!c.path && c.name === p.name)
-    );
-    return cfg?.expose ?? config.defaults.includeNew;
-  });
+  // Stats and Config - cached in state
+  const [config, setConfig] = useState(() => loadMCPConfig());
+  const [projects, setProjects] = useState(() => scanForProjects());
+  
+  // Refresh callback for manual updates
+  const refreshData = useCallback(() => {
+    setConfig(loadMCPConfig());
+    setProjects(scanForProjects());
+  }, []);
+  
+  // Memoize exposed projects calculation
+  const exposedProjects = useMemo(() => 
+    projects.filter(p => {
+      // Find config: check path match first, then name match
+      const cfg = config.projects.find(c => 
+        (c.path && c.path === p.path) || 
+        (p.source === 'global' && c.name === p.name) ||
+        (!c.path && c.name === p.name)
+      );
+      
+      // If found, use config.exposed. 
+      // If not found, use default.
+      return cfg?.expose ?? config.defaults.includeNew;
+    }),
+    [projects, config]
+  );
+
+  // Check if any exposed project has RAG enabled
+  const isRAGEnabled = useMemo(() => {
+      return exposedProjects.some(p => {
+          const cfg = findProjectConfig(config, { name: p.name, path: p.path });
+          // Check config first, then fallback to detected status (important for global projects)
+          return cfg?.semanticSearch?.enabled || p.semanticSearchEnabled;
+      });
+  }, [exposedProjects, config]);
+
+  const tabs = useMemo<Tab[]>(() => {
+      const baseTabs = [
+        { id: 'overview', label: 'Overview' },
+        { id: 'logs', label: 'Logs' },
+        { id: 'projects', label: 'Projects' },
+        { id: 'install', label: 'Install' },
+      ];
+      if (isRAGEnabled) {
+          // Insert after projects
+          baseTabs.splice(3, 0, { id: 'indexing', label: 'Indexing' });
+      }
+      return baseTabs;
+  }, [isRAGEnabled]);
 
   const workspacePath = detectWorkspaceRoot();
   const installStatus = checkInstallStatus(workspacePath);
@@ -105,12 +139,26 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Input Handling for Exit
-  useInput((input, key) => {
+  // Input Handling for Exit and Restart
+  useInput(async (input, key) => {
     if (input === 'q' || (key.ctrl && input === 'c')) {
       stopMCPServer();
       onExit();
       exit();
+    }
+    
+    if (input === 'r') {
+      setLogs(prev => [...prev, '[INFO] Restarting server...']);
+      stopMCPServer();
+      setServerInfo(prev => ({ ...prev, running: false }));
+      
+      try {
+        const res = await startMCPServer({ interactive: true });
+        setServerInfo(prev => ({ ...prev, running: true, port: res.port, pid: res.pid }));
+        setLogs(prev => [...prev, '[INFO] Server restarted successfully']);
+      } catch (e) {
+        setLogs(prev => [...prev, `[ERROR] Failed to restart: ${e}`]);
+      }
     }
   }); 
 
@@ -119,14 +167,13 @@ export const App = ({ onExit, initialPort }: AppProps) => {
   // Reduce content height to account for TabBar (header) AND StatusBoard (footer)
   const contentHeight = termHeight - 8; 
 
-  const handleConfigChange = () => {
-      // Force re-render to update stats
-      setConfigVersion(prev => prev + 1);
-  };
+  const handleConfigChange = useCallback(() => {
+    refreshData();
+  }, [refreshData]);
 
   return (
     <Box flexDirection="column" padding={0} height={termHeight}>
-       <TabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+       <TabBar tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
        
        <Box marginTop={1} flexGrow={1}>
            {activeTab === 'overview' && (
@@ -139,7 +186,8 @@ export const App = ({ onExit, initialPort }: AppProps) => {
                  }} 
                />
            )}
-           {activeTab === 'projects' && <ProjectsView onConfigChange={handleConfigChange} />}
+           {activeTab === 'projects' && <ProjectsView config={config} projects={projects} onConfigChange={handleConfigChange} />}
+           {activeTab === 'indexing' && <IndexingStatus config={config} projects={exposedProjects} />}
            {activeTab === 'install' && <InstallView />}
            {activeTab === 'logs' && <LogViewer logs={logs} height={contentHeight} />}
        </Box>

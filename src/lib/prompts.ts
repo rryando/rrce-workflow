@@ -61,8 +61,17 @@ export function loadPromptsFromDir(dirPath: string): ParsedPrompt[] {
  * When bundled: dist/index.js -> go up one level to project root -> agent-core
  */
 export function getAgentCoreDir(): string {
-  // After esbuild bundling, the file is at dist/index.js
-  // We need to go up one level to project root, then into agent-core
+  // Check if we are running from source (src/lib)
+  if (__dirname.includes('/src/') || __dirname.includes('\\src\\')) {
+      // Find the project root from src/lib (2 levels up)
+      // Or safer: check if agent-core exists at process.cwd() (often true in dev)
+      if (fs.existsSync(path.join(process.cwd(), 'agent-core'))) {
+          return path.join(process.cwd(), 'agent-core');
+      }
+      return path.resolve(__dirname, '../..', 'agent-core');
+  }
+
+  // Default for bundled build (dist/index.js -> .. -> agent-core)
   return path.join(__dirname, '..', 'agent-core');
 }
 

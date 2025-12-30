@@ -15,6 +15,7 @@ import { handleStartServer } from './commands/start';
 import { handleConfigure, handleConfigureGlobalPath } from './commands/configure';
 import { handleShowStatus } from './commands/status';
 import { runInstallWizard } from './commands/install-wizard';
+import { runUninstallWizard } from './commands/uninstall-wizard';
 import { showHelp } from './commands/help';
 
 /**
@@ -22,6 +23,9 @@ import { showHelp } from './commands/help';
  * Can be invoked directly or with a subcommand
  */
 export async function runMCP(subcommand?: string): Promise<void> {
+  // Detect workspace (needed for some commands)
+  const workspacePath = detectWorkspaceRoot();
+
   // Handle direct subcommands (likely from CLI args)
   if (subcommand) {
     switch (subcommand) {
@@ -39,6 +43,9 @@ export async function runMCP(subcommand?: string): Promise<void> {
       case 'status':
         await handleShowStatus();
         return;
+      case 'uninstall':
+        await runUninstallWizard(workspacePath);
+        return;
       case 'help':
         showHelp();
         return;
@@ -50,9 +57,6 @@ export async function runMCP(subcommand?: string): Promise<void> {
         break;
     }
   }
-
-  // Detect workspace
-  const workspacePath = detectWorkspaceRoot();
 
   // 1. Check Global Path (Required)
   const globalPathCheck = await ensureMCPGlobalPath();

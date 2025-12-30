@@ -63,19 +63,23 @@ export async function runUpdateFlow(
     }
 
     // Also update tool-specific locations if configured
+    // Also update tool-specific locations if configured
     const configFilePath = getConfigPath(workspacePath);
-    const configContent = fs.readFileSync(configFilePath, 'utf-8');
+    
+    if (fs.existsSync(configFilePath)) {
+        const configContent = fs.readFileSync(configFilePath, 'utf-8');
 
-    if (configContent.includes('copilot: true')) {
-      const copilotPath = getAgentPromptPath(workspacePath, 'copilot');
-      ensureDir(copilotPath);
-      copyPromptsToDir(prompts, copilotPath, '.agent.md');
-    }
+        if (configContent.includes('copilot: true')) {
+        const copilotPath = getAgentPromptPath(workspacePath, 'copilot');
+        ensureDir(copilotPath);
+        copyPromptsToDir(prompts, copilotPath, '.agent.md');
+        }
 
-    if (configContent.includes('antigravity: true')) {
-      const antigravityPath = getAgentPromptPath(workspacePath, 'antigravity');
-      ensureDir(antigravityPath);
-      copyPromptsToDir(prompts, antigravityPath, '.md');
+        if (configContent.includes('antigravity: true')) {
+        const antigravityPath = getAgentPromptPath(workspacePath, 'antigravity');
+        ensureDir(antigravityPath);
+        copyPromptsToDir(prompts, antigravityPath, '.md');
+        }
     }
 
     s.stop('Update complete');

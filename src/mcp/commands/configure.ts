@@ -1,4 +1,4 @@
-import { spinner, note, multiselect, isCancel } from '@clack/prompts';
+import { spinner, note, multiselect, isCancel, confirm } from '@clack/prompts';
 import pc from 'picocolors';
 import { loadMCPConfig, saveMCPConfig, setProjectConfig } from '../config';
 import { scanForProjects } from '../../lib/detection';
@@ -12,7 +12,11 @@ export async function handleConfigure(): Promise<void> {
   s.start('Scanning for projects...');
 
   const config = loadMCPConfig();
-  const projects = scanForProjects();
+  
+  // Ensure we include projects already in config
+  const knownPaths = config.projects.map(p => p.path).filter((p): p is string => !!p);
+  const projects = scanForProjects({ knownPaths });
+  
   logger.info('Configure: Loaded config', { projects: config.projects, defaultMode: config.defaults.includeNew });
 
   s.stop('Projects found');
@@ -62,10 +66,50 @@ export async function handleConfigure(): Promise<void> {
   const selectedPaths = selected as string[];
   logger.info('Configure: User selected projects by path', selectedPaths);
 
+  // Ask for Semantic Search opt-in if any projects selected
+  let enableSemanticSearch = false;
+  if (selectedPaths.length > 0) {
+      const shouldEnable = await confirm({
+          message: 'Enable Semantic Search (Local Mini RAG)?',
+          initialValue: false,
+      });
+
+      if (isCancel(shouldEnable)) return;
+      
+      enableSemanticSearch = shouldEnable as boolean;
+
+      if (enableSemanticSearch) {
+           note(
+               `This enables "search_knowledge" tool for agents.\n` + 
+               `First use will download a ~100MB embedding model (all-MiniLM-L6-v2)\n` +
+               `to your local device (one-time).`, 
+               'Semantic Search Enabled'
+           );
+      }
+  }
+
   for (const project of projects) {
     const shouldExpose = selectedPaths.includes(project.dataPath);
+    
+    // Determine semantic config: 
+    // If enabling, set it. If disabling (or not selected), passing undefined keeps existing?
+    // setProjectConfig logic: "if (semanticSearch) existing.semanticSearch = semanticSearch"
+    // So passing undefined preserves existing. 
+    // But if we want to explicitly enable/disable based on this session?
+    // The user flow "Enable Semantic Search?" applies to the selected batch.
+    // If user says NO, should we disable it if it was enabled? or just not touch it?
+    // "Enable ...?" implies turning it on. 
+    // Let's assume: if user says YES, we turn it ON for all selected.
+    // If user says NO, we leave it as is? Or we ask "Enable or Disable"?
+    // Simpler: Apply "Enable" to selected.
+    
+    let semanticConfig = undefined;
+    if (shouldExpose && enableSemanticSearch) {
+        semanticConfig = { enabled: true };
+    }
+    
     // Pass strictly strictly defined dataPath as the unique ID for this config entry
-    setProjectConfig(config, project.name, shouldExpose, undefined, project.dataPath);
+    setProjectConfig(config, project.name, shouldExpose, undefined, project.dataPath, semanticConfig);
   }
 
   saveMCPConfig(config);
