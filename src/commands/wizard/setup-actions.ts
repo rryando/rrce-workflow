@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import pc from 'picocolors';
 import { note } from '@clack/prompts';
+import { stringify } from 'yaml';
 import type { StorageMode } from '../../types/prompt';
 import type { DetectedProject } from '../../lib/detection';
 import { 
@@ -19,7 +20,7 @@ import {
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
 import { copyPromptsToDir, convertToOpenCodeAgent, copyDirRecursive } from './utils';
 import { generateVSCodeWorkspace } from './vscode';
-import { installToConfig, getTargetLabel, type InstallTarget } from '../../mcp/install';
+import { installToConfig, getTargetLabel, type InstallTarget, OPENCODE_CONFIG_DIR, OPENCODE_CONFIG } from '../../mcp/install';
 
 export interface SetupConfig {
   storageMode: StorageMode;
@@ -47,11 +48,11 @@ export function createDirectoryStructure(dataPaths: string[]): void {
 /**
  * Install agent prompts and metadata
  */
-export function installAgentPrompts(
+export async function installAgentPrompts(
   config: SetupConfig,
   workspacePath: string,
   dataPaths: string[]
-): void {
+): Promise<void> {
   const agentCoreDir = getAgentCoreDir();
   
   // Sync metadata to all storage locations
@@ -93,37 +94,40 @@ export function installAgentPrompts(
     if (config.tools.includes('opencode')) {
       const primaryDataPath = dataPaths[0];
       if (primaryDataPath) {
-        const opencodePath = path.join(primaryDataPath, '.opencode', 'agent');
-        ensureDir(opencodePath);
-        for (const prompt of prompts) {
-          const baseName = path.basename(prompt.filePath, '.md');
-          const content = convertToOpenCodeAgent(prompt);
-          fs.writeFileSync(path.join(opencodePath, `${baseName}.md`), content);
-        }
-
-        // If in global mode, create a symlink in the workspace
+        // Determine where to put OpenCode agents
         if (config.storageMode === 'global') {
-          const workspaceOpencode = path.join(workspacePath, '.opencode');
-          const globalOpencode = path.join(primaryDataPath, '.opencode');
-          
+          // Global mode: Install directly to opencode.json
           try {
-            // Remove existing if it's there (file, dir, or link)
-            if (fs.existsSync(workspaceOpencode)) {
-              fs.rmSync(workspaceOpencode, { recursive: true, force: true });
-            } else {
-              try {
-                // Check if it's a broken symlink
-                if (fs.lstatSync(workspaceOpencode).isSymbolicLink()) {
-                   fs.unlinkSync(workspaceOpencode);
-                }
-              } catch (e) {
-                // Ignore if not found
-              }
+            let opencodeConfig: any = { $schema: "https://opencode.ai/config.json" };
+            if (fs.existsSync(OPENCODE_CONFIG)) {
+              opencodeConfig = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf-8'));
             }
-            // Create symlink
-            fs.symlinkSync(globalOpencode, workspaceOpencode, 'dir');
+            if (!opencodeConfig.agent) opencodeConfig.agent = {};
+            
+            for (const prompt of prompts) {
+              const baseName = path.basename(prompt.filePath, '.md');
+              const agentConfig = convertToOpenCodeAgent(prompt);
+              opencodeConfig.agent[baseName] = agentConfig;
+            }
+            
+            fs.writeFileSync(OPENCODE_CONFIG, JSON.stringify(opencodeConfig, null, 2) + '\n');
           } catch (e) {
-            console.error(`Warning: Could not create OpenCode symlink at ${workspaceOpencode}:`, e instanceof Error ? e.message : String(e));
+            console.error('Failed to update global OpenCode config with agents:', e);
+          }
+        } else {
+          // Workspace mode: put them in .rrce-workflow/.opencode/agent
+          const opencodeBaseDir = path.join(primaryDataPath, '.opencode', 'agent');
+          ensureDir(opencodeBaseDir);
+          for (const prompt of prompts) {
+            const baseName = path.basename(prompt.filePath, '.md');
+            const agentConfig = convertToOpenCodeAgent(prompt);
+            // In workspace mode, we keep individual markdown files with frontmatter
+            const content = `---\n${stringify({
+              description: agentConfig.description,
+              mode: agentConfig.mode,
+              tools: agentConfig.tools
+            })}---\n${agentConfig.prompt}`;
+            fs.writeFileSync(path.join(opencodeBaseDir, `${baseName}.md`), content);
           }
         }
       }

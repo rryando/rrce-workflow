@@ -22,7 +22,7 @@ export function copyPromptsToDir(prompts: ParsedPrompt[], targetDir: string, ext
 /**
  * Convert a ParsedPrompt to OpenCode Markdown agent format
  */
-export function convertToOpenCodeAgent(prompt: ParsedPrompt): string {
+export function convertToOpenCodeAgent(prompt: ParsedPrompt): any {
   const { frontmatter, content } = prompt;
   
   // Build tools map
@@ -44,13 +44,12 @@ export function convertToOpenCodeAgent(prompt: ParsedPrompt): string {
     }
   }
 
-  const opencodeFrontmatter = {
+  return {
     description: frontmatter.description,
     mode: 'primary',
+    prompt: content,
     tools
   };
-
-  return `---\n${stringify(opencodeFrontmatter)}---\n${content}`;
 }
 
 /**

@@ -87,7 +87,7 @@ async function runExpressSetup(
     `• Storage: ${storageMode === 'global' ? 'Global' : 'Workspace'}\n` +
     `• MCP Server: Enabled\n` +
     `• Semantic Search (RAG): Enabled\n` +
-    `• Git ignore entries: Added\n` +
+    (storageMode === 'workspace' ? `• Git ignore entries: Added\n` : '') +
     `• AI Tools: ${toolsText}`,
     'Configuration Preview'
   );
@@ -121,6 +121,12 @@ async function runExpressSetup(
   
   // Execute setup
   await executeSetup(config, workspacePath, workspaceName, existingProjects, s);
+  
+  // Update .gitignore if needed (workspace mode only)
+  if (config.storageMode === 'workspace') {
+    const { updateGitignore } = await import('./gitignore');
+    updateGitignore(workspacePath, config.storageMode, config.tools);
+  }
   
   // Offer to start MCP server
   const startMCP = await confirm({
@@ -191,7 +197,7 @@ export async function runSetupFlow(
     linkedProjects = await promptLinkedProjects(existingProjects);
   }
   
-  const addToGitignore = await promptGitignore();
+  const addToGitignore = storageMode === 'workspace' ? await promptGitignore() : false;
   const enableRAG = await promptRAG();
   const confirmed = await promptConfirmation();
   
@@ -213,6 +219,12 @@ export async function runSetupFlow(
   
   // Execute setup
   await executeSetup(config, workspacePath, workspaceName, existingProjects, s);
+  
+  // Update .gitignore if needed (workspace mode only)
+  if (config.storageMode === 'workspace' && config.addToGitignore) {
+    const { updateGitignore } = await import('./gitignore');
+    updateGitignore(workspacePath, config.storageMode, config.tools);
+  }
   
   // Post-setup flow
   await handlePostSetup(config, workspacePath, workspaceName, linkedProjects);
@@ -237,13 +249,13 @@ async function executeSetup(
     createDirectoryStructure(dataPaths);
     
     // Install agent prompts and metadata
-    installAgentPrompts(config, workspacePath, dataPaths);
+    await installAgentPrompts(config, workspacePath, dataPaths);
     
     // Create workspace config (only for workspace mode)
     createWorkspaceConfig(config, workspacePath, workspaceName);
     
-    // Update .gitignore if requested
-    if (config.addToGitignore) {
+    // Update .gitignore if requested (workspace mode only)
+    if (config.storageMode === 'workspace' && config.addToGitignore) {
       const { updateGitignore } = await import('./gitignore');
       updateGitignore(workspacePath, config.storageMode, config.tools);
     }

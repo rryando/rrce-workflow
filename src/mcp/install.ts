@@ -5,10 +5,11 @@ import * as os from 'os';
 /**
  * Standard Config Locations
  */
-const ANTIGRAVITY_CONFIG = path.join(os.homedir(), '.gemini/antigravity/mcp_config.json');
-const CLAUDE_CONFIG = path.join(os.homedir(), '.config/claude/claude_desktop_config.json');
-const VSCODE_GLOBAL_CONFIG = path.join(os.homedir(), '.config/Code/User/settings.json');
-const OPENCODE_CONFIG = path.join(os.homedir(), '.config/opencode/opencode.json');
+export const ANTIGRAVITY_CONFIG = path.join(os.homedir(), '.gemini/antigravity/mcp_config.json');
+export const CLAUDE_CONFIG = path.join(os.homedir(), '.config/claude/claude_desktop_config.json');
+export const VSCODE_GLOBAL_CONFIG = path.join(os.homedir(), '.config/Code/User/settings.json');
+export const OPENCODE_CONFIG_DIR = path.join(os.homedir(), '.config/opencode');
+export const OPENCODE_CONFIG = path.join(OPENCODE_CONFIG_DIR, 'opencode.json');
 
 /**
  * Config Structures
