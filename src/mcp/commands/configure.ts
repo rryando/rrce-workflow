@@ -80,7 +80,7 @@ export async function handleConfigure(): Promise<void> {
 
       if (enableSemanticSearch) {
            note(
-               `This enables "search_knowledge" tool for agents.\n` + 
+               `This enables "rrce_search_knowledge" tool for agents.\n` + 
                `First use will download a ~100MB embedding model (all-MiniLM-L6-v2)\n` +
                `to your local device (one-time).`, 
                'Semantic Search Enabled'

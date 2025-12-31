@@ -2,7 +2,7 @@
 name: RRCE Doctor
 description: Analyze codebase health using semantic search; identify issues and recommend improvement tasks.
 argument-hint: "[PROJECT_NAME=<name>] [FOCUS_AREA=<area>]"
-tools: ['search_knowledge', 'get_project_context', 'index_knowledge', 'list_projects']
+tools: ['search_knowledge', 'get_project_context', 'index_knowledge', 'list_projects', 'create_task']
 required-args: []
 optional-args:
   - name: PROJECT_NAME
@@ -55,7 +55,7 @@ For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 ### Step 1: Load Project Context
 
 ```
-Tool: get_project_context
+Tool: rrce_get_project_context
 Args: { "project": "{{WORKSPACE_NAME}}" }
 ```
 
@@ -93,7 +93,7 @@ Use `search_knowledge` to efficiently find problem areas. Run queries based on F
 
 **Query Execution:**
 ```
-Tool: search_knowledge
+Tool: rrce_search_knowledge
 Args: { "query": "<query>", "project": "{{WORKSPACE_NAME}}" }
 ```
 

@@ -2,7 +2,7 @@
 name: RRCE Sync
 description: Reconcile project state with the RRCE knowledge base and update semantic index.
 argument-hint: "[SCOPE=<path|module>]"
-tools: ['search_knowledge', 'get_project_context', 'index_knowledge', 'list_projects', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
+tools: ['search_knowledge', 'get_project_context', 'index_knowledge', 'list_projects', 'update_task', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
 required-args: []
 optional-args:
   - name: SCOPE
@@ -27,11 +27,16 @@ Pipeline Position
 1. **Path Resolution**: Always use the "System Resolved Paths" from the context preamble.
    - Use `{{RRCE_DATA}}` for all RRCE-specific storage.
    - Use `{{WORKSPACE_ROOT}}` for project source code.
-2. **File Writing**: When using the `write` tool:
+2. **Metadata Updates**: For `meta.json` changes, use the MCP tool:
+   ```
+   Tool: rrce_update_task
+   Args: { "project": "{{WORKSPACE_NAME}}", "task_slug": "{{TASK_SLUG}}", "updates": { ... } }
+   ```
+   This tool saves the file automatically. Do NOT use `write` for meta.json.
+3. **File Writing**: When using the `write` tool for other files:
    - The `content` parameter **MUST be a string**.
-   - If writing JSON (like `meta.json`), you **MUST stringify it** first.
-   - Example: `write(filePath, JSON.stringify(data, null, 2))`
-3. **Directory Safety**: Use `bash` with `mkdir -p` to ensure parent directories exist before writing files if they might be missing.
+   - For JSON in other files, stringify first: `JSON.stringify(data, null, 2)`
+4. **Directory Safety**: Use `bash` with `mkdir -p` to ensure parent directories exist before writing files if they might be missing.
 
 Prerequisites (STRICT)
 1. **Project Context Exists**: Check `{{RRCE_DATA}}/knowledge/project-context.md` exists.
@@ -62,7 +67,7 @@ Workflow
 5. Summarize any unresolved questions or future sync needs at the bottom of the modified file(s) under a `Checklist` heading.
 6. **Semantic Indexing (MANDATORY)**: After updating any knowledge files, run the indexer to keep search current:
    ```
-   Tool: index_knowledge
+   Tool: rrce_index_knowledge
    Args: { "project": "{{WORKSPACE_NAME}}" }
    ```
 

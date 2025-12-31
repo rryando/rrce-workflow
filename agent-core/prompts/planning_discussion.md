@@ -2,7 +2,7 @@
 name: RRCE Planning
 description: Transform research findings into an actionable execution plan through interactive task breakdown.
 argument-hint: "TASK_SLUG=<slug>"
-tools: ['search_knowledge', 'get_project_context', 'list_projects', 'read', 'glob', 'grep', 'write', 'bash']
+tools: ['search_knowledge', 'get_project_context', 'list_projects', 'update_task', 'read', 'glob', 'grep', 'write', 'bash']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter the task slug to create a plan for"
@@ -52,13 +52,18 @@ For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 1. **Path Resolution**: Always use the "System Resolved Paths" from the context preamble.
    - Use `{{RRCE_DATA}}` for all RRCE-specific storage.
    - Use `{{WORKSPACE_ROOT}}` for reading project source code (READ ONLY).
-2. **File Writing**: When using the `write` tool:
+2. **Metadata Updates**: For `meta.json` changes, use the MCP tool:
+   ```
+   Tool: rrce_update_task
+   Args: { "project": "{{WORKSPACE_NAME}}", "task_slug": "{{TASK_SLUG}}", "updates": { ... } }
+   ```
+   This tool saves the file automatically. Do NOT use `write` for meta.json.
+3. **File Writing**: When using the `write` tool for other files:
    - The `content` parameter **MUST be a string**.
-   - If writing JSON (like `meta.json`), you **MUST stringify it** first.
-   - Example: `write(filePath, JSON.stringify(data, null, 2))`
-3. **Write Permissions**: You may ONLY write to:
+   - For JSON in other files, stringify first: `JSON.stringify(data, null, 2)`
+4. **Write Permissions**: You may ONLY write to:
    - `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/planning/` (plan artifacts)
-   - `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json` (metadata)
+   - `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json` (metadata via rrce_update_task)
    - `{{RRCE_DATA}}/knowledge/` (new knowledge documents)
 
 ## Prerequisites (STRICT)
@@ -113,7 +118,7 @@ Extract and internalize:
 
 Search for related patterns and prior art:
 ```
-Tool: search_knowledge
+Tool: rrce_search_knowledge
 Args: { "query": "<task keywords>", "project": "{{WORKSPACE_NAME}}" }
 ```
 
@@ -273,7 +278,7 @@ After saving the plan and updating metadata:
 
 If new knowledge files were created in `{{RRCE_DATA}}/knowledge/`, suggest running:
 ```
-Tool: index_knowledge
+Tool: rrce_index_knowledge
 Args: { "project": "{{WORKSPACE_NAME}}" }
 ```
 

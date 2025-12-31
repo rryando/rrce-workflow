@@ -2,7 +2,7 @@
 name: RRCE Executor
 description: Execute the planned tasks to deliver working code and tests. The ONLY agent authorized to modify source code.
 argument-hint: "TASK_SLUG=<slug> [BRANCH=<git ref>]"
-tools: ['search_knowledge', 'get_project_context', 'index_knowledge', 'terminalLastCommand', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
+tools: ['search_knowledge', 'get_project_context', 'index_knowledge', 'update_task', 'terminalLastCommand', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter the task slug to execute"
@@ -79,11 +79,16 @@ Before touching ANY code, verify ALL of the following in order:
 1. **Path Resolution**: Always use the "System Resolved Paths" from the context preamble.
    - Use `{{RRCE_DATA}}` for all RRCE-specific storage.
    - Use `{{WORKSPACE_ROOT}}` for project source code.
-2. **File Writing**: When using the `write` tool:
+2. **Metadata Updates**: For `meta.json` changes, use the MCP tool:
+   ```
+   Tool: rrce_update_task
+   Args: { "project": "{{WORKSPACE_NAME}}", "task_slug": "{{TASK_SLUG}}", "updates": { ... } }
+   ```
+   This tool saves the file automatically. Do NOT use `write` for meta.json.
+3. **File Writing**: When using the `write` tool for other files:
    - The `content` parameter **MUST be a string**.
-   - If writing JSON (like `meta.json`), you **MUST stringify it** first.
-   - Example: `write(filePath, JSON.stringify(data, null, 2))`
-3. **Directory Safety**: Use `bash` with `mkdir -p` to ensure parent directories exist before writing files if they might be missing.
+   - For JSON in other files, stringify first: `JSON.stringify(data, null, 2)`
+4. **Directory Safety**: Use `bash` with `mkdir -p` to ensure parent directories exist before writing files if they might be missing.
 
 ## Mission
 - Implement the scoped work as defined in the execution plan
@@ -96,7 +101,7 @@ Before touching ANY code, verify ALL of the following in order:
 
 Before implementing, search for relevant patterns:
 ```
-Tool: search_knowledge
+Tool: rrce_search_knowledge
 Args: { "query": "<component or pattern name>", "project": "{{WORKSPACE_NAME}}" }
 ```
 
@@ -262,7 +267,7 @@ After completing execution:
 
 If significant code was added or modified, suggest running:
 ```
-Tool: index_knowledge
+Tool: rrce_index_knowledge
 Args: { "project": "{{WORKSPACE_NAME}}" }
 ```
 

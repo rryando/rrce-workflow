@@ -2,7 +2,7 @@
 name: RRCE Documentation
 description: Produce project documentation aligned with the latest delivery.
 argument-hint: "DOC_TYPE=<type> [TASK_SLUG=<slug> | TARGET_PATH=<relative>] [RELEASE_REF=<tag/sha>]"
-tools: ['search_knowledge', 'get_project_context', 'list_projects', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
+tools: ['search_knowledge', 'get_project_context', 'list_projects', 'update_task', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
 required-args:
   - name: DOC_TYPE
     prompt: "Enter the documentation type (e.g., api, architecture, runbook, changelog)"
@@ -44,11 +44,16 @@ Pipeline Position
 1. **Path Resolution**: Always use the "System Resolved Paths" from the context preamble.
    - Use `{{RRCE_DATA}}` for all RRCE-specific storage.
    - Use `{{WORKSPACE_ROOT}}` for project source code.
-2. **File Writing**: When using the `write` tool:
+2. **Metadata Updates**: For `meta.json` changes, use the MCP tool:
+   ```
+   Tool: rrce_update_task
+   Args: { "project": "{{WORKSPACE_NAME}}", "task_slug": "{{TASK_SLUG}}", "updates": { ... } }
+   ```
+   This tool saves the file automatically. Do NOT use `write` for meta.json.
+3. **File Writing**: When using the `write` tool for other files:
    - The `content` parameter **MUST be a string**.
-   - If writing JSON (like `meta.json`), you **MUST stringify it** first.
-   - Example: `write(filePath, JSON.stringify(data, null, 2))`
-3. **Directory Safety**: Use `bash` with `mkdir -p` to ensure parent directories exist before writing files if they might be missing.
+   - For JSON in other files, stringify first: `JSON.stringify(data, null, 2)`
+4. **Directory Safety**: Use `bash` with `mkdir -p` to ensure parent directories exist before writing files if they might be missing.
 
 Prerequisites (RECOMMENDED)
 If a `TASK_SLUG` is provided:

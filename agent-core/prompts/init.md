@@ -132,7 +132,7 @@ Scan in this priority order. Stop early if sufficient information gathered:
 **Always run after generating/updating context:**
 
 ```
-Tool: index_knowledge
+Tool: rrce_index_knowledge
 Args: { "project": "{{WORKSPACE_NAME}}" }
 ```
 
