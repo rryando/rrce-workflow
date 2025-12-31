@@ -26,7 +26,7 @@ export function registerToolHandlers(server: Server): void {
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const tools = [
       {
-        name: 'rrce_search_knowledge',
+        name: 'search_knowledge',
         description: 'Search across all exposed project knowledge bases',
         inputSchema: {
           type: 'object',
@@ -38,7 +38,7 @@ export function registerToolHandlers(server: Server): void {
         },
       },
       {
-        name: 'rrce_index_knowledge',
+        name: 'index_knowledge',
         description: 'Update the semantic search index for a specific project',
         inputSchema: {
             type: 'object',
@@ -50,12 +50,12 @@ export function registerToolHandlers(server: Server): void {
         }
       },
       {
-        name: 'rrce_list_projects',
+        name: 'list_projects',
         description: 'List all projects exposed via MCP. Use these names for project-specific tools.',
         inputSchema: { type: 'object', properties: {} },
       },
       {
-        name: 'rrce_get_project_context',
+        name: 'get_project_context',
         description: 'Get the project context/architecture for a specific project',
         inputSchema: {
           type: 'object',
@@ -64,12 +64,12 @@ export function registerToolHandlers(server: Server): void {
         },
       },
       {
-        name: 'rrce_list_agents',
+        name: 'list_agents',
         description: 'List available agents (e.g. init, plan) and their arguments. Use this to discover which agent to call.',
         inputSchema: { type: 'object', properties: {} },
       },
       {
-        name: 'rrce_get_agent_prompt',
+        name: 'get_agent_prompt',
         description: 'Get the system prompt for a specific agent. Accepts agent Name (e.g. "RRCE Init") or ID (e.g. "init").',
         inputSchema: {
           type: 'object',
@@ -81,7 +81,7 @@ export function registerToolHandlers(server: Server): void {
         },
       },
       {
-        name: 'rrce_list_tasks',
+        name: 'list_tasks',
         description: 'List all tasks for a project',
         inputSchema: {
           type: 'object',
@@ -90,7 +90,7 @@ export function registerToolHandlers(server: Server): void {
         },
       },
       {
-        name: 'rrce_get_task',
+        name: 'get_task',
         description: 'Get details of a specific task',
         inputSchema: {
           type: 'object',
@@ -102,7 +102,7 @@ export function registerToolHandlers(server: Server): void {
         },
       },
       {
-        name: 'rrce_create_task',
+        name: 'create_task',
         description: 'Create a new task in the project',
         inputSchema: {
           type: 'object',
@@ -116,7 +116,7 @@ export function registerToolHandlers(server: Server): void {
         },
       },
       {
-        name: 'rrce_update_task',
+        name: 'update_task',
         description: 'Update an existing task',
         inputSchema: {
           type: 'object',
@@ -129,7 +129,7 @@ export function registerToolHandlers(server: Server): void {
         },
       },
       {
-        name: 'rrce_delete_task',
+        name: 'delete_task',
         description: 'Delete a task from the project',
         inputSchema: {
           type: 'object',
@@ -147,7 +147,7 @@ export function registerToolHandlers(server: Server): void {
     if (projects.length === 0) {
         // @ts-ignore - Dynamic tool addition
         tools.push({
-            name: 'rrce_help_setup',
+            name: 'help_setup',
             description: 'Get help on how to configure projects for the RRCE MCP Server',
             inputSchema: { type: 'object', properties: {} },
         });
@@ -162,31 +162,31 @@ export function registerToolHandlers(server: Server): void {
 
     try {
       switch (name) {
-        case 'rrce_search_knowledge': {
+        case 'search_knowledge': {
           const params = args as { query: string; project?: string };
           const results = await searchKnowledge(params.query, params.project);
           return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
         }
 
-        case 'rrce_index_knowledge': {
+        case 'index_knowledge': {
             const params = args as { project: string; force?: boolean };
             const result = await indexKnowledge(params.project, params.force);
             return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
 
-        case 'rrce_list_projects': {
+        case 'list_projects': {
           const projects = getExposedProjects();
           const list = projects.map(p => ({ name: p.name, source: p.source, path: p.path }));
           return {
             content: [{
               type: 'text',
               text: JSON.stringify(list, null, 2) + 
-                "\n\nTip: Use these project names for tools like `rrce_get_project_context` or `rrce_index_knowledge`.",
+                "\n\nTip: Use these project names for tools like `get_project_context` or `index_knowledge`.",
             }],
           };
         }
 
-        case 'rrce_get_project_context': {
+        case 'get_project_context': {
           const context = getProjectContext((args as { project: string }).project);
           if (!context) {
             const projects = getExposedProjects().map(p => p.name).join(', ');
@@ -197,7 +197,7 @@ export function registerToolHandlers(server: Server): void {
           return { content: [{ type: 'text', text: context }] };
         }
 
-        case 'rrce_list_agents': {
+        case 'list_agents': {
           const prompts = getAllPrompts();
           return {
             content: [{
@@ -208,12 +208,12 @@ export function registerToolHandlers(server: Server): void {
                 description: p.description,
                 arguments: p.arguments 
               })), null, 2) +
-              "\n\nTip: Retrieve the prompt for an agent using `rrce_get_agent_prompt` with its name or ID.",
+              "\n\nTip: Retrieve the prompt for an agent using `get_agent_prompt` with its name or ID.",
             }],
           };
         }
 
-        case 'rrce_get_agent_prompt': {
+        case 'get_agent_prompt': {
           const params = args as { agent: string; args?: Record<string, string> };
           const agentName = params.agent;
           const promptDef = getPromptDef(agentName);
@@ -249,13 +249,13 @@ The system has pre-resolved the configuration for this project. Use these values
           return { content: [{ type: 'text', text: contextPreamble + rendered }] };
         }
 
-        case 'rrce_list_tasks': {
+        case 'list_tasks': {
           const params = args as { project: string };
           const tasks = getProjectTasks(params.project);
           return { content: [{ type: 'text', text: JSON.stringify(tasks, null, 2) }] };
         }
 
-        case 'rrce_get_task': {
+        case 'get_task': {
           const params = args as { project: string; task_slug: string };
           const task = getTask(params.project, params.task_slug);
           if (!task) {
@@ -264,7 +264,7 @@ The system has pre-resolved the configuration for this project. Use these values
           return { content: [{ type: 'text', text: JSON.stringify(task, null, 2) }] };
         }
 
-        case 'rrce_create_task': {
+        case 'create_task': {
           const params = args as { project: string; task_slug: string; title?: string; summary?: string };
           const taskData = {
               title: params.title || params.task_slug,
@@ -274,19 +274,19 @@ The system has pre-resolved the configuration for this project. Use these values
           return { content: [{ type: 'text', text: `✓ Task '${params.task_slug}' created. meta.json saved.\n${JSON.stringify(task, null, 2)}` }] };
         }
 
-        case 'rrce_update_task': {
+        case 'update_task': {
           const params = args as { project: string; task_slug: string; updates: any };
           const task = await updateTask(params.project, params.task_slug, params.updates);
           return { content: [{ type: 'text', text: `✓ Task '${params.task_slug}' updated. meta.json saved.\n${JSON.stringify(task, null, 2)}` }] };
         }
 
-        case 'rrce_delete_task': {
+        case 'delete_task': {
           const params = args as { project: string; task_slug: string };
           const success = deleteTask(params.project, params.task_slug);
           return { content: [{ type: 'text', text: success ? `✓ Task '${params.task_slug}' deleted.` : `✗ Failed to delete '${params.task_slug}'.` }] };
         }
 
-        case 'rrce_help_setup': {
+        case 'help_setup': {
             const msg = `
 RRCE MCP Server is running, but no projects are configured/exposed.
 

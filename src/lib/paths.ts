@@ -73,28 +73,63 @@ export function getConfigPath(workspaceRoot: string): string {
     if (fs.existsSync(mcpConfigPath)) {
       // Basic manual parsing to avoid heavy deps/imports cycle in paths.ts
       const mcpContent = fs.readFileSync(mcpConfigPath, 'utf-8');
-      
-      // Look for a project entry with this path
-      // Simple regex approach to avoid cyclical import of YAML parser or types
-      // Pattern: - name: foo ... path: /workspace/root
-      
-      // We need to find the name associated with this workspaceRoot
-      // This is a naive heuristic but should cover standard generated mcp.yaml
       const lines = mcpContent.split('\n');
+      
+      let inProjects = false;
       let currentName = '';
+      let currentPath = '';
       
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]?.trim();
-        if (!line) continue;
-        if (line.startsWith('- name:')) {
-          currentName = line.replace('- name:', '').trim();
-        } else if (line.startsWith('path:')) {
-          const p = line.replace('path:', '').trim();
-          if (p === workspaceRoot || p === `"${workspaceRoot}"` || p === `'${workspaceRoot}'`) {
-             // Found match! Return global config path
-             return path.join(rrceHome, 'workspaces', currentName, 'config.yaml');
-          }
+        const line = lines[i];
+        const trimmed = line.trim();
+        
+        if (trimmed.startsWith('projects:')) {
+            inProjects = true;
+            continue;
         }
+        
+        // If we hit another top-level key (no indentation), stop
+        if (inProjects && line.match(/^[a-zA-Z0-9_-]+:/)) {
+            inProjects = false;
+        }
+
+        if (!inProjects) continue;
+
+        // New item
+        if (trimmed.startsWith('-')) {
+            // Check previous item
+            if (currentName && currentPath) {
+                 if (currentPath === workspaceRoot || currentPath === `"${workspaceRoot}"` || currentPath === `'${workspaceRoot}'`) {
+                     return path.join(rrceHome, 'workspaces', currentName, 'config.yaml');
+                 }
+            }
+            
+            // Start new
+            currentName = '';
+            currentPath = '';
+            
+            // Check if this line also has properties (e.g. - name: foo)
+            const contentAfterDash = trimmed.substring(1).trim();
+            if (contentAfterDash.startsWith('name:')) {
+                currentName = contentAfterDash.replace('name:', '').trim();
+            } else if (contentAfterDash.startsWith('path:')) {
+                currentPath = contentAfterDash.replace('path:', '').trim();
+            }
+        } else {
+            // Continuation of item
+            if (trimmed.startsWith('name:')) {
+                currentName = trimmed.replace('name:', '').trim();
+            } else if (trimmed.startsWith('path:')) {
+                currentPath = trimmed.replace('path:', '').trim();
+            }
+        }
+      }
+      
+      // Check last item
+      if (currentName && currentPath) {
+           if (currentPath === workspaceRoot || currentPath === `"${workspaceRoot}"` || currentPath === `'${workspaceRoot}'`) {
+               return path.join(rrceHome, 'workspaces', currentName, 'config.yaml');
+           }
       }
     }
   } catch (e) {
