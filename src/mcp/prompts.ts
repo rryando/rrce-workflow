@@ -1,7 +1,9 @@
 import { loadPromptsFromDir, getAgentCorePromptsDir } from '../lib/prompts';
 import { detectActiveProject } from './resources';
-import { getEffectiveGlobalPath } from '../lib/paths';
+import { getEffectiveGlobalPath, detectWorkspaceRoot } from '../lib/paths';
+import { projectService } from '../lib/detection-service';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export interface PromptArgument {
   name: string;
@@ -81,7 +83,14 @@ export function renderPromptWithContext(content: string, args: Record<string, st
   const renderArgs = { ...args };
   
   // Resolve Project Paths & Context
-  const activeProject = detectActiveProject();
+  let activeProject = detectActiveProject();
+  
+  // If not found, force refresh the cache and try again
+  if (!activeProject) {
+      projectService.refresh();
+      activeProject = detectActiveProject();
+  }
+
   const DEFAULT_RRCE_HOME = getEffectiveGlobalPath();
   
   let resolvedRrceData = '.rrce-workflow/'; // Default to local if no project found
@@ -103,6 +112,27 @@ export function renderPromptWithContext(content: string, args: Record<string, st
     if (activeProject.source === 'global') {
        const workspacesDir = path.dirname(activeProject.dataPath);
        resolvedRrceHome = path.dirname(workspacesDir);
+    }
+  } else {
+    // Fallback: Try to identify if we are in a likely global project that wasn't detected
+    // This happens if detection fails (e.g. path mismatch) but the user selected global storage
+    try {
+        const workspaceRoot = detectWorkspaceRoot();
+        const workspaceName = path.basename(workspaceRoot);
+        const globalWorkspacePath = path.join(DEFAULT_RRCE_HOME, 'workspaces', workspaceName);
+        
+        // If a global workspace directory exists for this folder name, use it
+        if (fs.existsSync(globalWorkspacePath)) {
+            resolvedRrceData = globalWorkspacePath;
+            resolvedWorkspaceRoot = workspaceRoot;
+            resolvedWorkspaceName = workspaceName;
+            
+            if (!resolvedRrceData.endsWith('/') && !resolvedRrceData.endsWith('\\')) {
+                resolvedRrceData += '/';
+            }
+        }
+    } catch (e) {
+        // Ignore errors in fallback logic
     }
   }
 
