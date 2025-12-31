@@ -57,7 +57,7 @@ export class RAGService {
         return RAGService.loadPromise;
     }
 
-    logger.info(`RAG: Initializing model ${this.modelName}...`);
+    logger.info(`[RAG] Initializing model ${this.modelName}...`);
     
     RAGService.activeModelName = this.modelName;
     
@@ -70,10 +70,10 @@ export class RAGService {
             
             const pipe = await pipeline('feature-extraction', this.modelName);
             RAGService.pipelineInstance = pipe;
-            logger.info(`RAG: Model ${this.modelName} initialized successfully.`);
+            logger.info(`[RAG] Model ${this.modelName} initialized successfully.`);
             return pipe;
         } catch (error) {
-            logger.error(`RAG: Failed to initialize model ${this.modelName}`, error);
+            logger.error(`[RAG] Failed to initialize model ${this.modelName}`, error);
             RAGService.pipelineInstance = null;
             RAGService.activeModelName = null;
             RAGService.loadPromise = null;
@@ -94,9 +94,9 @@ export class RAGService {
       try {
         const data = fs.readFileSync(this.indexPath, 'utf-8');
         this.index = JSON.parse(data);
-        logger.info(`RAG: Loaded index from ${this.indexPath} with ${this.index?.chunks.length} chunks.`);
+        logger.info(`[RAG] Loaded index from ${this.indexPath} with ${this.index?.chunks.length} chunks.`);
       } catch (error) {
-        logger.error(`RAG: Failed to load index from ${this.indexPath}`, error);
+        logger.error(`[RAG] Failed to load index from ${this.indexPath}`, error);
         // Start fresh on error
         this.index = {
           version: INDEX_VERSION,
@@ -110,7 +110,7 @@ export class RAGService {
         baseModel: this.modelName,
         chunks: []
       };
-      logger.info(`RAG: Created new empty index at ${this.indexPath}`);
+      logger.info(`[RAG] Created new empty index at ${this.indexPath}`);
     }
   }
 
@@ -125,9 +125,9 @@ export class RAGService {
         fs.mkdirSync(dir, { recursive: true });
       }
       fs.writeFileSync(this.indexPath, JSON.stringify(this.index, null, 2));
-      logger.info(`RAG: Saved index to ${this.indexPath} with ${this.index.chunks.length} chunks.`);
+      logger.info(`[RAG] Saved index to ${this.indexPath} with ${this.index.chunks.length} chunks.`);
     } catch (error) {
-      logger.error(`RAG: Failed to save index to ${this.indexPath}`, error);
+      logger.error(`[RAG] Failed to save index to ${this.indexPath}`, error);
     }
   }
 
@@ -141,7 +141,7 @@ export class RAGService {
       const output = await pipe(text, { pooling: 'mean', normalize: true });
       return Array.from(output.data);
     } catch (error) {
-      logger.error('RAG: Error generating embedding', error);
+      logger.error('[RAG] Error generating embedding', error);
       throw error;
     }
   }
@@ -166,12 +166,12 @@ export class RAGService {
     if (mtime !== undefined && this.index.fileMetadata[filePath]) {
       const existingMeta = this.index.fileMetadata[filePath];
       if (existingMeta.mtime === mtime) {
-        logger.debug(`RAG: Skipping unchanged file ${filePath}`);
+        logger.debug(`[RAG] Skipping unchanged file ${filePath}`);
         return false;
       }
     }
 
-    logger.info(`RAG: Indexing file ${filePath}`);
+    logger.info(`[RAG] Indexing file ${filePath}`);
 
     // Clear existing chunks for this file
     this.index.chunks = this.index.chunks.filter(c => c.filePath !== filePath);
@@ -216,7 +216,7 @@ export class RAGService {
     }
     
     if (this.index.chunks.length !== initialCount) {
-      logger.info(`RAG: Removed file ${filePath} from index (${initialCount - this.index.chunks.length} chunks removed)`);
+      logger.info(`[RAG] Removed file ${filePath} from index (${initialCount - this.index.chunks.length} chunks removed)`);
       this.saveIndex();
     }
   }
@@ -252,11 +252,11 @@ export class RAGService {
   async search(query: string, limit: number = 5): Promise<(RAGChunk & { score: number })[]> {
     this.loadIndex();
     if (!this.index || this.index.chunks.length === 0) {
-        logger.warn('RAG: Search called on empty index');
+        logger.warn('[RAG] Search called on empty index');
         return [];
     }
 
-    logger.info(`RAG: Searching for "${query}" (limit: ${limit})`);
+    logger.info(`[RAG] Searching for "${query}" (limit: ${limit})`);
     
     const queryEmbedding = await this.generateEmbedding(query);
     
@@ -269,7 +269,7 @@ export class RAGService {
     results.sort((a, b) => b.score - a.score);
 
     const topResults = results.slice(0, limit);
-    logger.info(`RAG: Search returned ${topResults.length} matches. Top score: ${topResults[0]?.score.toFixed(4)}`);
+    logger.info(`[RAG] Search returned ${topResults.length} matches. Top score: ${topResults[0]?.score.toFixed(4)}`);
     
     return topResults;
   }

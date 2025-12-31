@@ -218,6 +218,7 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
     const useRAG = projConfig?.semanticSearch?.enabled;
 
     if (useRAG) {
+        logger.info(`[RAG] Using semantic search for project '${project.name}'`);
         try {
             const indexPath = path.join(project.knowledgePath, 'embeddings.json');
             const rag = new RAGService(indexPath, projConfig?.semanticSearch?.model);
@@ -231,12 +232,11 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
                     score: r.score
                 });
             }
+            continue; // Skip text search since RAG succeeded
         } catch (e) {
-            // Fallback or log?
+            logger.error(`[RAG] Semantic search failed for project '${project.name}', falling back to text search`, e);
+            // Fall through to text search
         }
-        continue; // Skip text search if RAG enabled (or maybe do both?)
-        // Design choice: If RAG is enabled, we trust it? Or we combine?
-        // Mini RAG implies strict semantic. Let's stick to RAG if enabled.
     }
     
     try {

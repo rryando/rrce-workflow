@@ -15,6 +15,7 @@ export const LogViewer = ({ logs, height }: { logs: string[], height: number }) 
   const padding = Array(emptyLines).fill('');
 
   const formatLog = (log: string) => {
+      if (log.includes('[RAG]')) return <Text color="cyan">{log}</Text>;
       if (log.includes('[ERROR]')) return <Text color="red">{log}</Text>;
       if (log.includes('[WARN]')) return <Text color="yellow">{log}</Text>;
       if (log.includes('[INFO]')) return <Text color="green">{log}</Text>;
