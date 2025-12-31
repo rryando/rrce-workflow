@@ -23,6 +23,7 @@ export interface ScanOptions {
   excludeWorkspace?: string;  // Current workspace name to exclude
   workspacePath?: string;     // Current workspace path to exclude
   knownPaths?: string[];      // Explicit paths to scan (from MCP config)
+  knownProjects?: { name: string; path: string }[]; // Explicit projects (Name + Path)
 }
 
 // Directories to skip during home scan (for performance)
@@ -51,12 +52,22 @@ const SKIP_DIRECTORIES = new Set([
  * Scan for rrce-workflow projects in global storage, home directory, and known paths
  */
 export function scanForProjects(options: ScanOptions = {}): DetectedProject[] {
-  const { excludeWorkspace, workspacePath, knownPaths } = options;
+  const { excludeWorkspace, workspacePath, knownPaths, knownProjects } = options;
   const projects: DetectedProject[] = [];
   const seenPaths = new Set<string>();
 
-  // 1. Scan known paths (fastest & most reliable for MCP)
-  if (knownPaths && knownPaths.length > 0) {
+  // 1. Scan known projects (Preferred - Name + Path known)
+  if (knownProjects && knownProjects.length > 0) {
+    const explicitProjects = scanKnownProjects(knownProjects, excludeWorkspace);
+    for (const project of explicitProjects) {
+        if (!seenPaths.has(project.dataPath)) {
+            seenPaths.add(project.dataPath);
+            projects.push(project);
+        }
+    }
+  }
+  // 1b. Scan known paths (Legacy - Only Path known)
+  else if (knownPaths && knownPaths.length > 0) {
     const explicitProjects = scanKnownPaths(knownPaths, excludeWorkspace);
     for (const project of explicitProjects) {
         if (!seenPaths.has(project.dataPath)) {
@@ -86,6 +97,75 @@ export function scanForProjects(options: ScanOptions = {}): DetectedProject[] {
   }
 
   return projects;
+}
+
+/**
+ * Scan explicit known projects (Name + Path known)
+ * Handles both Local and Global projects robustly
+ */
+function scanKnownProjects(projects: { name: string; path: string }[], excludeWorkspace?: string): DetectedProject[] {
+    const results: DetectedProject[] = [];
+    const rrceHome = getEffectiveGlobalPath();
+    
+    for (const p of projects) {
+        try {
+            if (!p.path || !fs.existsSync(p.path)) continue;
+            if (p.name === excludeWorkspace) continue;
+            
+            // 1. Local Mode Check
+            const localConfigPath = path.join(p.path, '.rrce-workflow', 'config.yaml');
+            if (fs.existsSync(localConfigPath)) {
+                const config = parseWorkspaceConfig(localConfigPath);
+                
+                const fullPath = path.join(p.path, '.rrce-workflow');
+                const knowledgePath = path.join(fullPath, 'knowledge');
+                const refsPath = path.join(fullPath, 'refs');
+                const tasksPath = path.join(fullPath, 'tasks');
+                
+                results.push({
+                    name: p.name, // Use MCP name
+                    path: p.path,
+                    dataPath: fullPath,
+                    source: 'local',
+                    storageMode: config?.storageMode || 'workspace',
+                    knowledgePath: fs.existsSync(knowledgePath) ? knowledgePath : undefined,
+                    refsPath: fs.existsSync(refsPath) ? refsPath : undefined,
+                    tasksPath: fs.existsSync(tasksPath) ? tasksPath : undefined,
+                    semanticSearchEnabled: config?.semanticSearchEnabled
+                });
+                continue;
+            }
+
+            // 2. Global Mode Check
+            // We know the project name from MCP config, so we can find its data in global storage
+            const globalDataPath = path.join(rrceHome, 'workspaces', p.name);
+            if (fs.existsSync(globalDataPath)) {
+                const knowledgePath = path.join(globalDataPath, 'knowledge');
+                const refsPath = path.join(globalDataPath, 'refs');
+                const tasksPath = path.join(globalDataPath, 'tasks');
+                
+                // Read config to check features (like semantic search)
+                const configPath = path.join(globalDataPath, 'config.yaml');
+                const config = parseWorkspaceConfig(configPath);
+
+                results.push({
+                    name: p.name,
+                    path: p.path, // We know this is the source path
+                    sourcePath: p.path,
+                    dataPath: globalDataPath,
+                    source: 'global',
+                    storageMode: 'global',
+                    knowledgePath: fs.existsSync(knowledgePath) ? knowledgePath : undefined,
+                    refsPath: fs.existsSync(refsPath) ? refsPath : undefined,
+                    tasksPath: fs.existsSync(tasksPath) ? tasksPath : undefined,
+                    semanticSearchEnabled: config?.semanticSearchEnabled
+                });
+            }
+        } catch {
+            // Ignore errors
+        }
+    }
+    return results;
 }
 
 /**
@@ -123,14 +203,6 @@ function scanKnownPaths(paths: string[], excludeWorkspace?: string): DetectedPro
                 });
                 continue;
             }
-            
-            // Note: Global projects in explicit paths?
-            // Usually 'knownPaths' from MCP config point to the project ROOT.
-            // If it's a global project, the data is in ~/.rrce-workflow, not locally.
-            // But we might have the SOURCE path here.
-            
-            // If the user manually added a path that is actually a global storage path?
-            // Unlikely, but possible.
         } catch {
             // ignore
         }
@@ -166,12 +238,9 @@ function scanGlobalStorage(excludeWorkspace?: string): DetectedProject[] {
       const configPath = path.join(projectDataPath, 'config.yaml');
       const config = parseWorkspaceConfig(configPath);
       
-      // If no config found, skip or default? 
-      // We should probably still list it but we won't know the source path.
-      
       projects.push({
         name: config?.name || entry.name,
-        path: projectDataPath,  // Still use dataPath as defaults, BUT...
+        path: projectDataPath,  // Default to dataPath if sourcePath unknown
         sourcePath: config?.sourcePath, // ...expose sourcePath if available
         dataPath: projectDataPath,
         source: 'global',
@@ -271,13 +340,13 @@ export function parseWorkspaceConfig(configPath: string): {
     const content = fs.readFileSync(configPath, 'utf-8');
     
     // Simple YAML parsing (we don't want to add a full YAML library)
-    const nameMatch = content.match(/name:\s*["']?([^"'\n]+)["']?/);
-    const sourcePathMatch = content.match(/sourcePath:\s*["']?([^"'\n]+)["']?/);
+    const nameMatch = content.match(/name:\s*["']?([^"'\n\r]+)["']?/);
+    const sourcePathMatch = content.match(/sourcePath:\s*["']?([^"'\n\r]+)["']?/);
     const modeMatch = content.match(/mode:\s*(global|workspace)/);
     
     // Parse linked projects
     const linkedProjects: string[] = [];
-    const linkedMatch = content.match(/linked_projects:\s*\n((?:\s+-\s+[^\n]+\n?)+)/);
+    const linkedMatch = content.match(/linked_projects:\s*\n((?:\s+-\s+[^\n\r]+\n?)+)/);
     if (linkedMatch && linkedMatch[1]) {
       const lines = linkedMatch[1].split('\n');
       for (const line of lines) {
