@@ -20,15 +20,23 @@ export function copyPromptsToDir(prompts: ParsedPrompt[], targetDir: string, ext
 }
 
 /**
- * Convert a ParsedPrompt to OpenCode Markdown agent format
+ * Convert a ParsedPrompt to OpenCode agent config
  * 
  * IMPORTANT: This respects the tool restrictions defined in each prompt's frontmatter.
  * Different agents have different tool access based on their role in the pipeline:
  * - research/planning: read-only for workspace, can write to RRCE_DATA
  * - executor: full access including edit/bash for code changes
  * - doctor/init: read-only, no code modifications
+ * 
+ * @param prompt - The parsed prompt
+ * @param useFileReference - If true, returns a file reference instead of inline content
+ * @param promptFilePath - The path to reference (used when useFileReference is true)
  */
-export function convertToOpenCodeAgent(prompt: ParsedPrompt): any {
+export function convertToOpenCodeAgent(
+  prompt: ParsedPrompt, 
+  useFileReference: boolean = false,
+  promptFilePath?: string
+): any {
   const { frontmatter, content } = prompt;
   
   // Build tools map based on frontmatter.tools
@@ -58,7 +66,7 @@ export function convertToOpenCodeAgent(prompt: ParsedPrompt): any {
   return {
     description: frontmatter.description,
     mode: 'primary',
-    prompt: content,
+    prompt: useFileReference && promptFilePath ? `{file:${promptFilePath}}` : content,
     tools
   };
 }

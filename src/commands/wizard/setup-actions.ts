@@ -96,8 +96,11 @@ export async function installAgentPrompts(
       if (primaryDataPath) {
         // Determine where to put OpenCode agents
         if (config.storageMode === 'global') {
-          // Global mode: Install directly to opencode.json
+          // Global mode: Write prompt files to ~/.config/opencode/prompts/ and reference them
           try {
+            const promptsDir = path.join(path.dirname(OPENCODE_CONFIG), 'prompts');
+            ensureDir(promptsDir);
+            
             let opencodeConfig: any = { $schema: "https://opencode.ai/config.json" };
             if (fs.existsSync(OPENCODE_CONFIG)) {
               opencodeConfig = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf-8'));
@@ -106,7 +109,14 @@ export async function installAgentPrompts(
             
             for (const prompt of prompts) {
               const baseName = path.basename(prompt.filePath, '.md');
-              const agentConfig = convertToOpenCodeAgent(prompt);
+              const promptFileName = `rrce-${baseName}.md`;
+              const promptFilePath = path.join(promptsDir, promptFileName);
+              
+              // Write the prompt content to a separate file
+              fs.writeFileSync(promptFilePath, prompt.content);
+              
+              // Create agent config with file reference
+              const agentConfig = convertToOpenCodeAgent(prompt, true, `./prompts/${promptFileName}`);
               opencodeConfig.agent[baseName] = agentConfig;
             }
             
