@@ -74,7 +74,7 @@ export function getExposedProjects(): DetectedProject[] {
 
   // 2. Filter ALL potential projects through the SSOT configuration
   // Use project.path (the root) for standardized lookup
-  return potentialProjects.filter(project => isProjectExposed(config, project.name, project.path));
+  return potentialProjects.filter(project => isProjectExposed(config, project.name, project.sourcePath || project.path));
 }
 
 /**
@@ -100,7 +100,7 @@ export function detectActiveProject(knownProjects?: DetectedProject[]): Detected
         
      const all = projectService.scan({ knownPaths });
       // Only consider global ones for base detection to start with
-      scanList = all.filter(project => isProjectExposed(config, project.name, project.path));
+      scanList = all.filter(project => isProjectExposed(config, project.name, project.sourcePath || project.path));
   }
   
   return findClosestProject(scanList);
@@ -114,13 +114,13 @@ export function getProjectContext(projectName: string): string | null {
   const projects = projectService.scan();
   
   // Find the SPECIFIC project that is exposed (disambiguate by path if need be)
-  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.path));
+  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   
   if (!project) {
     return null;
   }
 
-  const permissions = getProjectPermissions(config, projectName, project.path);
+  const permissions = getProjectPermissions(config, projectName, project.sourcePath || project.path);
   if (!permissions.knowledge) {
     return null;
   }
@@ -145,13 +145,13 @@ export function getProjectTasks(projectName: string): object[] {
   const config = loadMCPConfig();
   const projects = projectService.scan();
   
-  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.path));
+  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   
   if (!project) {
     return [];
   }
 
-  const permissions = getProjectPermissions(config, projectName, project.path);
+  const permissions = getProjectPermissions(config, projectName, project.sourcePath || project.path);
   if (!permissions.tasks) {
     return [];
   }
@@ -207,13 +207,13 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
     // Skip if project filter specified and doesn't match
     if (projectFilter && project.name !== projectFilter) continue;
     
-    const permissions = getProjectPermissions(config, project.name, project.path);
+    const permissions = getProjectPermissions(config, project.name, project.sourcePath || project.path);
     
     if (!permissions.knowledge || !project.knowledgePath) continue;
 
     // Check for RAG configuration
     const projConfig = config.projects.find(p => 
-        (p.path && normalizeProjectPath(p.path) === normalizeProjectPath(project.path)) || (!p.path && p.name === project.name)
+        (p.path && normalizeProjectPath(p.path) === normalizeProjectPath(project.sourcePath || project.path)) || (!p.path && p.name === project.name)
     );
     const useRAG = projConfig?.semanticSearch?.enabled;
 
@@ -288,7 +288,7 @@ export async function indexKnowledge(projectName: string, force: boolean = false
 
     // Find config with fallback for global projects
     const projConfig = config.projects.find(p => 
-        (p.path && normalizeProjectPath(p.path) === normalizeProjectPath(project.path)) || (!p.path && p.name === project.name)
+        (p.path && normalizeProjectPath(p.path) === normalizeProjectPath(project.sourcePath || project.path)) || (!p.path && p.name === project.name)
     ) || (project.source === 'global' ? { semanticSearch: { enabled: true, model: 'Xenova/all-MiniLM-L6-v2' } } : undefined);
     
     // Check if RAG is actually enabled (either in config or detected)
@@ -474,7 +474,7 @@ All file operations should be relative to WORKSPACE_ROOT shown above.
 export function getTask(projectName: string, taskSlug: string): object | null {
   const config = loadMCPConfig();
   const projects = projectService.scan();
-  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.path));
+  const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   
   if (!project || !project.tasksPath) return null;
 
@@ -494,7 +494,7 @@ export function getTask(projectName: string, taskSlug: string): object | null {
 export async function createTask(projectName: string, taskSlug: string, taskData: any): Promise<object | null> {
     const config = loadMCPConfig();
     const projects = projectService.scan();
-    const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.path));
+    const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
     
     if (!project || !project.tasksPath) {
         throw new Error(`Project '${projectName}' not found or not configured with a tasks path.`);
@@ -568,7 +568,7 @@ export async function updateTask(projectName: string, taskSlug: string, taskData
 
     const config = loadMCPConfig();
     const projects = projectService.scan();
-    const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.path));
+    const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
     
     if (!project || !project.tasksPath) return null;
 
@@ -584,7 +584,7 @@ export async function updateTask(projectName: string, taskSlug: string, taskData
 export function deleteTask(projectName: string, taskSlug: string): boolean {
     const config = loadMCPConfig();
     const projects = projectService.scan();
-    const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.path));
+    const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
     
     if (!project || !project.tasksPath) return false;
 
