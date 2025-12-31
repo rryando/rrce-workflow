@@ -4,7 +4,19 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../logger';
-import { getExposedProjects, getProjectContext, searchKnowledge, indexKnowledge, detectActiveProject, getContextPreamble } from '../resources';
+import { 
+  getExposedProjects, 
+  getProjectContext, 
+  searchKnowledge, 
+  indexKnowledge, 
+  detectActiveProject, 
+  getContextPreamble,
+  getProjectTasks,
+  getTask,
+  createTask,
+  updateTask,
+  deleteTask
+} from '../resources';
 import { getAllPrompts, getPromptDef, renderPrompt, renderPromptWithContext } from '../prompts';
 
 /**
@@ -66,6 +78,66 @@ export function registerToolHandlers(server: Server): void {
             args: { type: 'object', description: 'Arguments for the agent prompt', additionalProperties: true },
           },
           required: ['agent'],
+        },
+      },
+      {
+        name: 'list_tasks',
+        description: 'List all tasks for a project',
+        inputSchema: {
+          type: 'object',
+          properties: { project: { type: 'string', description: 'Name of the project' } },
+          required: ['project'],
+        },
+      },
+      {
+        name: 'get_task',
+        description: 'Get details of a specific task',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            project: { type: 'string', description: 'Name of the project' },
+            task_slug: { type: 'string', description: 'The slug of the task' },
+          },
+          required: ['project', 'task_slug'],
+        },
+      },
+      {
+        name: 'create_task',
+        description: 'Create a new task in the project',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            project: { type: 'string', description: 'Name of the project' },
+            task_slug: { type: 'string', description: 'The slug for the new task (kebab-case)' },
+            title: { type: 'string', description: 'The title of the task' },
+            summary: { type: 'string', description: 'Brief summary of the task' },
+          },
+          required: ['project', 'task_slug'],
+        },
+      },
+      {
+        name: 'update_task',
+        description: 'Update an existing task',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            project: { type: 'string', description: 'Name of the project' },
+            task_slug: { type: 'string', description: 'The slug of the task' },
+            updates: { type: 'object', description: 'The fields to update in meta.json', additionalProperties: true },
+          },
+          required: ['project', 'task_slug', 'updates'],
+        },
+      },
+      {
+        name: 'delete_task',
+        description: 'Delete a task from the project',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            project: { type: 'string', description: 'Name of the project' },
+            task_slug: { type: 'string', description: 'The slug of the task to delete' },
+          },
+          required: ['project', 'task_slug'],
         },
       },
     ];
@@ -175,6 +247,43 @@ The system has pre-resolved the configuration for this project. Use these values
 `;
 
           return { content: [{ type: 'text', text: contextPreamble + rendered }] };
+        }
+
+        case 'list_tasks': {
+          const params = args as { project: string };
+          const tasks = getProjectTasks(params.project);
+          return { content: [{ type: 'text', text: JSON.stringify(tasks, null, 2) }] };
+        }
+
+        case 'get_task': {
+          const params = args as { project: string; task_slug: string };
+          const task = getTask(params.project, params.task_slug);
+          if (!task) {
+            return { content: [{ type: 'text', text: `Task '${params.task_slug}' not found in project '${params.project}'.` }], isError: true };
+          }
+          return { content: [{ type: 'text', text: JSON.stringify(task, null, 2) }] };
+        }
+
+        case 'create_task': {
+          const params = args as { project: string; task_slug: string; title?: string; summary?: string };
+          const taskData = {
+              title: params.title || params.task_slug,
+              summary: params.summary || ""
+          };
+          const task = await createTask(params.project, params.task_slug, taskData);
+          return { content: [{ type: 'text', text: JSON.stringify(task, null, 2) }] };
+        }
+
+        case 'update_task': {
+          const params = args as { project: string; task_slug: string; updates: any };
+          const task = await updateTask(params.project, params.task_slug, params.updates);
+          return { content: [{ type: 'text', text: JSON.stringify(task, null, 2) }] };
+        }
+
+        case 'delete_task': {
+          const params = args as { project: string; task_slug: string };
+          const success = deleteTask(params.project, params.task_slug);
+          return { content: [{ type: 'text', text: success ? `Task '${params.task_slug}' deleted.` : `Failed to delete task '${params.task_slug}'.` }] };
         }
 
         case 'help_setup': {

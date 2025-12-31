@@ -23,10 +23,26 @@ Use the pre-resolved paths from the "System Resolved Paths" table in the context
 For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 
 ## Pipeline Position
-- **Input**: Can be triggered at any time for project health analysis
-- **Output**: Structured diagnosis with ready-to-use task definitions for Planning agent
-- **Dependency**: Relies on `project-context.md` from Init agent for baseline understanding
-- **Triggers Init**: If project-context.md is stale (>30 days), recommend running `/init`
+
+- **Standalone Agent**: Can be invoked at any time, independent of the research → plan → execute pipeline
+- **No Prerequisites**: Does not require prior research or planning phases
+- **Input**: Existing codebase and project context (benefits from `project-context.md` if available)
+- **Output**: Structured diagnosis with ready-to-use task definitions
+- **Triggers Other Agents**: May recommend running `/init` (if context stale/missing) or suggest new tasks for `/research`
+- **Read-Only**: This agent analyzes but does NOT modify source code
+
+**Relationship to Main Pipeline:**
+```
+┌─────────────────────────────────────────────────────────┐
+│  Main Pipeline: /research → /plan → /execute           │
+└─────────────────────────────────────────────────────────┘
+                         ↑
+                         │ (suggests tasks)
+                         │
+┌─────────────────────────────────────────────────────────┐
+│  /doctor (standalone - run anytime for health check)   │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## Mission
 - Analyze the codebase for health issues, technical debt, and improvement opportunities

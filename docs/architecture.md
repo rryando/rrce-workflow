@@ -7,7 +7,9 @@
 RRCE-Workflow is a TUI-based agentic code workflow generator designed to work seamlessly across:
 - **GitHub Copilot CLI**
 - **Antigravity IDE** (Google's agentic coding environment)
+- **OpenCode** (Native agentic TUI environment)
 - **VS Code** (with Copilot and other AI extensions)
+- **Claude Desktop**
 
 The system provides a structured multi-agent pipeline for software development tasks, with persistent knowledge caching and workspace-aware context management.
 
@@ -243,6 +245,7 @@ RRCE-Workflow prompts are designed to work across multiple AI coding tools:
 | Tool | Prompt Location | Extension | Notes |
 |------|----------------|-----------|-------|
 | **Antigravity IDE** | `.agent/workflows/` | `.md` | Native workflow support |
+| **OpenCode** | `.opencode/agent/` | `.md` | Custom Primary Agents |
 | **GitHub Copilot (VSCode)** | `.github/agents/` | `.agent.md` | Custom agents format |
 | **Copilot CLI** | Any location | `.md` | Reference via file path |
 
@@ -296,6 +299,17 @@ When you run `rrce-workflow wizard`, it creates:
 ├── executor.md
 ├── documentation.md
 └── sync.md
+```
+
+**For OpenCode:**
+```
+.opencode/agent/
+├── rrce-init.md
+├── rrce-research.md
+├── rrce-planning.md
+├── rrce-executor.md
+├── rrce-documentation.md
+└── rrce-sync.md
 ```
 
 ### Copilot-Specific Features

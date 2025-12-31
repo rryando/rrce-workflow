@@ -21,28 +21,39 @@ export function copyPromptsToDir(prompts: ParsedPrompt[], targetDir: string, ext
 
 /**
  * Convert a ParsedPrompt to OpenCode Markdown agent format
+ * 
+ * IMPORTANT: This respects the tool restrictions defined in each prompt's frontmatter.
+ * Different agents have different tool access based on their role in the pipeline:
+ * - research/planning: read-only for workspace, can write to RRCE_DATA
+ * - executor: full access including edit/bash for code changes
+ * - doctor/init: read-only, no code modifications
  */
 export function convertToOpenCodeAgent(prompt: ParsedPrompt): any {
   const { frontmatter, content } = prompt;
   
-  // Build tools map
-  const tools: Record<string, boolean> = {
-    // Enable standard host tools by default
-    'read': true,
-    'write': true,
-    'edit': true,
-    'bash': true,
-    'grep': true,
-    'glob': true,
-    'webfetch': true
-  };
+  // Build tools map based on frontmatter.tools
+  // DO NOT enable all tools by default - respect the prompt's tool restrictions
+  const tools: Record<string, boolean> = {};
 
-  // Add MCP tools with rrce_ prefix
+  // Map frontmatter tools to OpenCode tool names
+  // Some tools are host tools (read, write, edit, bash, grep, glob)
+  // Some are MCP tools (search_knowledge, get_project_context, etc.)
+  const hostTools = ['read', 'write', 'edit', 'bash', 'grep', 'glob', 'webfetch', 'terminalLastCommand'];
+  
   if (frontmatter.tools) {
     for (const tool of frontmatter.tools) {
-      tools[`rrce_${tool}`] = true;
+      if (hostTools.includes(tool)) {
+        // Host tool - use as-is
+        tools[tool] = true;
+      } else {
+        // MCP tool - add rrce_ prefix
+        tools[`rrce_${tool}`] = true;
+      }
     }
   }
+
+  // Always enable webfetch for documentation lookup (safe, read-only)
+  tools['webfetch'] = true;
 
   return {
     description: frontmatter.description,

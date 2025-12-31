@@ -2,7 +2,7 @@
 name: RRCE Init
 description: Initialize project context and semantic search index by analyzing codebase structure, tech stack, and conventions.
 argument-hint: "[PROJECT_NAME=<name>]"
-tools: ['search_knowledge', 'index_knowledge', 'get_project_context', 'list_projects']
+tools: ['search_knowledge', 'index_knowledge', 'get_project_context', 'list_projects', 'read', 'write', 'bash', 'glob', 'grep']
 required-args: []
 optional-args:
   - name: PROJECT_NAME
@@ -24,6 +24,7 @@ For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 - **Output**: `{{RRCE_DATA}}/knowledge/project-context.md` + semantic search index
 - **Correlation**: Planning may trigger Init updates when significant architectural changes are planned
 - **Foundation**: All other agents (Research, Executor, Documentation, Sync) rely on the context created here
+- **Write Scope**: Writes ONLY to `{{RRCE_DATA}}/` - does NOT modify source code in `{{WORKSPACE_ROOT}}`
 
 ## Mission
 - Analyze the workspace to extract tech stack, architecture patterns, coding conventions, and project structure
