@@ -9,15 +9,21 @@ import type { MCPConfig, MCPProjectConfig } from './types';
 /**
  * Normalize a project path for comparison
  * Converts data paths (.rrce-workflow) to project root paths
+ * Handles trailing slashes and cross-platform separators
  */
 export function normalizeProjectPath(projectPath: string): string {
-  if (projectPath.endsWith('.rrce-workflow')) {
-    return path.dirname(projectPath);
+  let normalized = projectPath;
+  
+  // Strip trailing slashes (except for root "/")
+  while (normalized.length > 1 && (normalized.endsWith('/') || normalized.endsWith('\\'))) {
+    normalized = normalized.slice(0, -1);
   }
-  if (projectPath.endsWith('.rrce-workflow/')) {
-    return path.dirname(projectPath.slice(0, -1));
+
+  if (normalized.endsWith('.rrce-workflow')) {
+    return path.dirname(normalized);
   }
-  return projectPath;
+  
+  return normalized;
 }
 
 /**
