@@ -1,5 +1,4 @@
 import { runWizard } from './commands/wizard/index';
-import { runSelector } from './commands/selector';
 import { runMCP } from './mcp/index';
 
 // Get command from args
@@ -11,5 +10,7 @@ if (!command || command === 'wizard') {
 } else if (command === 'mcp') {
   runMCP(subcommand);
 } else {
-  runSelector();
+  console.error(`Unknown command: ${command}`);
+  console.error('Usage: rrce-workflow [wizard|mcp]');
+  process.exit(1);
 }

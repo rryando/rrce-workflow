@@ -3,60 +3,32 @@
  * MCP Hub TUI - Interactive menu for managing MCP
  */
 
-import { intro, outro, confirm, note, cancel, isCancel } from '@clack/prompts';
+import { intro, outro, confirm, note, isCancel } from '@clack/prompts';
 import pc from 'picocolors';
-import { loadMCPConfig, ensureMCPGlobalPath } from './config';
-import { startMCPServer, getMCPServerStatus } from './server';
-import { checkInstallStatus, isInstalledAnywhere } from './install';
+import { ensureMCPGlobalPath } from './config';
+import { startMCPServer } from './server';
+import { isInstalledAnywhere } from './install';
 import { detectWorkspaceRoot } from '../lib/paths';
 
 // Import commands
 import { handleStartServer } from './commands/start';
-import { handleConfigure, handleConfigureGlobalPath } from './commands/configure';
-import { handleShowStatus } from './commands/status';
+import { handleConfigureGlobalPath } from './commands/configure';
 import { runInstallWizard } from './commands/install-wizard';
-import { runUninstallWizard } from './commands/uninstall-wizard';
-import { showHelp } from './commands/help';
 
 /**
  * Run the MCP TUI
- * Can be invoked directly or with a subcommand
+ * Launches the TUI dashboard directly
  */
 export async function runMCP(subcommand?: string): Promise<void> {
-  // Detect workspace (needed for some commands)
-  const workspacePath = detectWorkspaceRoot();
-
-  // Handle direct subcommands (likely from CLI args)
-  if (subcommand) {
-    switch (subcommand) {
-      case 'start':
-        if (process.stdout.isTTY) {
-            await handleStartServer();
-        } else {
-            await startMCPServer();
-            await new Promise(() => {}); // Never resolves
-        }
-        return;
-      case 'stop':
-        await handleStopServer();
-        return;
-      case 'status':
-        await handleShowStatus();
-        return;
-      case 'uninstall':
-        await runUninstallWizard(workspacePath);
-        return;
-      case 'help':
-        showHelp();
-        return;
-      case 'configure':
-        await handleConfigure();
-        return;
-      case 'menu':
-        // Force show the old menu if needed (hidden option)
-        break;
-    }
+  // Handle 'start' subcommand for non-TTY mode (used by IDE integrations)
+  if (subcommand === 'start' && !process.stdout.isTTY) {
+    await startMCPServer();
+    await new Promise(() => {}); // Never resolves - keep server running
+    return;
   }
+
+  // Detect workspace for installation check
+  const workspacePath = detectWorkspaceRoot();
 
   // 1. Check Global Path (Required)
   const globalPathCheck = await ensureMCPGlobalPath();
@@ -112,20 +84,4 @@ export async function runMCP(subcommand?: string): Promise<void> {
   }
 }
 
-/**
- * Stop the MCP server
- */
-async function handleStopServer(): Promise<void> {
-  const { stopMCPServer } = await import('./server');
-  const status = getMCPServerStatus();
-  
-  if (!status.running) {
-    console.log(pc.dim('MCP server is already stopped.'));
-    return;
-  }
-  
-  stopMCPServer();
-  console.log(pc.green('MCP server stopped.'));
-}
-
-export { handleStartServer, handleConfigure, handleConfigureGlobalPath };
+export { handleStartServer, handleConfigureGlobalPath };
