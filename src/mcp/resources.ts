@@ -12,6 +12,78 @@ import { normalizeProjectPath } from './config-utils';
 import { type DetectedProject, findClosestProject } from '../lib/detection';
 import { projectService } from '../lib/detection-service';
 import { RAGService } from './services/rag';
+import { 
+  getConfigPath, 
+  resolveDataPath, 
+  getRRCEHome, 
+  getEffectiveGlobalPath,
+  getWorkspaceName as getWorkspaceNameFromPath 
+} from '../lib/paths';
+
+/**
+ * Resolve configuration paths for a project
+ */
+export function resolveProjectPaths(project?: string, pathInput?: string): object {
+    const config = loadMCPConfig();
+    let workspaceRoot = pathInput;
+    let workspaceName = project;
+
+    // 1. Resolve workspaceRoot if only project name is given
+    if (!workspaceRoot && project) {
+        const projConfig = config.projects.find(p => p.name === project);
+        if (projConfig?.path) {
+            workspaceRoot = projConfig.path;
+        }
+    }
+
+    // 2. Resolve project name if only path is given
+    if (!workspaceName && workspaceRoot) {
+        // Check MCP config
+        const projConfig = config.projects.find(p => p.path && normalizeProjectPath(p.path) === normalizeProjectPath(workspaceRoot!));
+        workspaceName = projConfig?.name || getWorkspaceNameFromPath(workspaceRoot);
+    }
+
+    if (!workspaceName) {
+         workspaceName = 'unknown';
+    }
+
+    let rrceData = '';
+    let mode = 'global'; // Default
+    let configFilePath = '';
+
+    if (workspaceRoot) {
+        configFilePath = getConfigPath(workspaceRoot);
+        const rrceHome = getEffectiveGlobalPath();
+        
+        // Determine mode based on where config file is found
+        if (configFilePath.startsWith(rrceHome)) {
+            mode = 'global';
+        } else {
+            // It's local
+            mode = 'workspace';
+            // Check content for override
+            if (fs.existsSync(configFilePath)) {
+                 const content = fs.readFileSync(configFilePath, 'utf-8');
+                 if (content.includes('mode: global')) mode = 'global';
+                 if (content.includes('mode: workspace')) mode = 'workspace';
+            }
+        }
+        
+        rrceData = resolveDataPath(mode as any, workspaceName, workspaceRoot);
+    } else {
+        // Pure global project reference (no local source?)
+        rrceData = resolveDataPath('global', workspaceName, '');
+    }
+
+    return {
+        RRCE_HOME: getRRCEHome(),
+        RRCE_DATA: rrceData,
+        WORKSPACE_ROOT: workspaceRoot || null,
+        WORKSPACE_NAME: workspaceName,
+        storage_mode: mode,
+        config_path: configFilePath || null
+    };
+}
 
 /**
  * Get list of projects exposed via MCP

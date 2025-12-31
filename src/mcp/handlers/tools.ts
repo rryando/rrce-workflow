@@ -15,7 +15,8 @@ import {
   getTask,
   createTask,
   updateTask,
-  deleteTask
+  deleteTask,
+  resolveProjectPaths
 } from '../resources';
 import { getAllPrompts, getPromptDef, renderPrompt, renderPromptWithContext } from '../prompts';
 
@@ -25,6 +26,17 @@ import { getAllPrompts, getPromptDef, renderPrompt, renderPromptWithContext } fr
 export function registerToolHandlers(server: Server): void {
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const tools = [
+      {
+        name: 'resolve_path',
+        description: 'Resolve configuration paths (RRCE_DATA, etc.) for a project. Helps determine if a project is using global or local storage.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            project: { type: 'string', description: 'Name of the project' },
+            path: { type: 'string', description: 'Absolute path to the project root (WORKSPACE_ROOT)' },
+          },
+        },
+      },
       {
         name: 'search_knowledge',
         description: 'Search across all exposed project knowledge bases',
@@ -162,6 +174,12 @@ export function registerToolHandlers(server: Server): void {
 
     try {
       switch (name) {
+        case 'resolve_path': {
+            const params = args as { project?: string; path?: string };
+            const result = resolveProjectPaths(params.project, params.path);
+            return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        }
+
         case 'search_knowledge': {
           const params = args as { query: string; project?: string };
           const results = await searchKnowledge(params.query, params.project);

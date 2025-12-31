@@ -42,10 +42,23 @@ Tool: search_knowledge
 Args: { query: "your query", project: "<other-project>" }
 ```
 
-Using the tool is preferred because it:
-- Respects project permissions
-- Uses semantic search when enabled
-- Works across storage modes
+## Resolution via MCP Tool (Highly Recommended)
+
+If the "System Resolved Paths" table is missing or you suspect it might be outdated, use the `resolve_path` tool. This is the most robust way to determine the correct configuration, as it handles the logic for detecting global vs. local workspace modes.
+
+```
+Tool: resolve_path
+Args: { path: "/absolute/path/to/workspace/root" }
+```
+
+Or if you only know the project name:
+
+```
+Tool: resolve_path
+Args: { project: "project-name" }
+```
+
+The tool returns a JSON object containing `RRCE_DATA`, `RRCE_HOME`, `WORKSPACE_ROOT`, and `storage_mode`.
 
 ## Common Paths Reference
 
