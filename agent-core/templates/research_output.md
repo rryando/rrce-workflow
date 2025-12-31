@@ -6,8 +6,8 @@
   2. Replace {{variable}} placeholders with actual values
   3. Delete sections that are empty after population
   
-  AUTO-FILLED VARIABLES (from System Resolved Paths):
-  - {{RRCE_DATA}}: Storage path for knowledge/tasks
+  SYSTEM PATH VARIABLES (Must be replaced by agent using System Resolved Paths):
+  - {{RRCE_DATA}}: Storage path for knowledge/tasks (Use value from system context!)
   - {{WORKSPACE_NAME}}: Project name
   
   AGENT-FILLED VARIABLES:

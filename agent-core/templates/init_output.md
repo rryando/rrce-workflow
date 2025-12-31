@@ -7,10 +7,10 @@
   3. Delete sections marked (OPTIONAL) if empty after population
   4. Fill in remaining sections with discovered information
   
-  AUTO-FILLED VARIABLES (from System Resolved Paths):
+  SYSTEM PATH VARIABLES (Must be replaced by agent using System Resolved Paths):
   - {{WORKSPACE_ROOT}}: Source code directory
   - {{WORKSPACE_NAME}}: Project name  
-  - {{RRCE_DATA}}: Storage path for knowledge/tasks
+  - {{RRCE_DATA}}: Storage path for knowledge/tasks (Use value from system context!)
   - {{RRCE_HOME}}: Global RRCE home directory
   
   AGENT-FILLED VARIABLES:
@@ -138,8 +138,7 @@
 - **Async Patterns**: 
 - **Logging**: 
 - **Configuration**: 
-
-### Code Quality Gates
+- **Code Quality Gates**: 
 - [ ] Type checking enforced
 - [ ] Lint checks in CI
 - [ ] Code review required

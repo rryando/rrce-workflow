@@ -7,8 +7,8 @@
   3. Update Implementation Steps table as work progresses
   4. Remove empty sections
   
-  AUTO-FILLED VARIABLES (from System Resolved Paths):
-  - {{RRCE_DATA}}: Storage path for knowledge/tasks
+  SYSTEM PATH VARIABLES (Must be replaced by agent using System Resolved Paths):
+  - {{RRCE_DATA}}: Storage path for knowledge/tasks (Use value from system context!)
   - {{WORKSPACE_NAME}}: Project name
   
   AGENT-FILLED VARIABLES:

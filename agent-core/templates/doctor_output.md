@@ -7,8 +7,8 @@
   3. Add findings under appropriate priority sections
   4. Remove empty sections and placeholder rows
   
-  AUTO-FILLED VARIABLES (from System Resolved Paths):
-  - {{RRCE_DATA}}: Storage path for knowledge/tasks
+  SYSTEM PATH VARIABLES (Must be replaced by agent using System Resolved Paths):
+  - {{RRCE_DATA}}: Storage path for knowledge/tasks (Use value from system context!)
   - {{WORKSPACE_ROOT}}: Source code directory
   
   AGENT-FILLED VARIABLES:
