@@ -23,6 +23,9 @@ export interface RAGIndex {
   chunks: RAGChunk[];
   lastFullIndex?: number; // Timestamp of last full index
   fileMetadata?: Record<string, { mtime: number; chunkCount: number }>; // Per-file tracking
+  metadata?: {
+    lastSaveAt?: number;
+  };
 }
 
 const INDEX_VERSION = '1.0.0';
@@ -132,6 +135,39 @@ export class RAGService {
   }
 
   /**
+   * Save index to a temp file and atomically replace
+   */
+  private saveIndexAtomic(): void {
+    if (!this.index) return;
+
+    const dir = path.dirname(this.indexPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const tmpPath = `${this.indexPath}.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify(this.index, null, 2));
+    fs.renameSync(tmpPath, this.indexPath);
+  }
+
+  /**
+   * Save index only if enough time passed since last save
+   */
+  private maybeSaveIndex(force: boolean = false): void {
+    if (!this.index) return;
+
+    const now = Date.now();
+    const intervalMs = 1000;
+    const last = this.index.metadata?.lastSaveAt as number | undefined;
+
+    if (force || last === undefined || now - last >= intervalMs) {
+      this.index.metadata = { ...(this.index.metadata ?? {}), lastSaveAt: now };
+      this.saveIndexAtomic();
+      logger.info(`[RAG] Saved index (atomic) to ${this.indexPath} with ${this.index.chunks.length} chunks.`);
+    }
+  }
+
+  /**
    * Generate embedding for text
    */
   async generateEmbedding(text: string): Promise<number[]> {
@@ -196,7 +232,8 @@ export class RAGService {
       chunkCount: chunks.length
     };
 
-    this.saveIndex();
+    // Avoid saving on every file to reduce I/O churn
+    this.maybeSaveIndex();
     return true;
   }
 
@@ -217,7 +254,7 @@ export class RAGService {
     
     if (this.index.chunks.length !== initialCount) {
       logger.info(`[RAG] Removed file ${filePath} from index (${initialCount - this.index.chunks.length} chunks removed)`);
-      this.saveIndex();
+      this.maybeSaveIndex(true);
     }
   }
 
@@ -243,7 +280,7 @@ export class RAGService {
     this.loadIndex();
     if (!this.index) return;
     this.index.lastFullIndex = Date.now();
-    this.saveIndex();
+    this.maybeSaveIndex(true);
   }
 
   /**
@@ -282,9 +319,11 @@ export class RAGService {
     let normA = 0;
     let normB = 0;
     for (let i = 0; i < a.length; i++) {
-        dotProduct += a[i] * b[i];
-        normA += a[i] * a[i];
-        normB += b[i] * b[i];
+        const av = a[i] ?? 0;
+        const bv = b[i] ?? 0;
+        dotProduct += av * bv;
+        normA += av * av;
+        normB += bv * bv;
     }
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }

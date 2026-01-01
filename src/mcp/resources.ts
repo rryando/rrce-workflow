@@ -8,11 +8,13 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { logger } from './logger';
+import type { IndexJobState } from './services/indexing-jobs';
 import { loadMCPConfig, isProjectExposed, getProjectPermissions } from './config';
 import { normalizeProjectPath } from './config-utils';
 import { type DetectedProject, findClosestProject } from '../lib/detection';
 import { projectService } from '../lib/detection-service';
 import { RAGService } from './services/rag';
+import { indexingJobs } from './services/indexing-jobs';
 import { 
   getConfigPath, 
   resolveDataPath, 
@@ -269,10 +271,12 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
   file: string;
   matches: string[];
   score?: number;
+  indexingInProgress?: boolean;
+  advisoryMessage?: string;
 }>> {
   const config = loadMCPConfig();
   const projects = getExposedProjects();
-  const results: Array<{ project: string; file: string; matches: string[]; score?: number }> = [];
+  const results: Array<{ project: string; file: string; matches: string[]; score?: number; indexingInProgress?: boolean; advisoryMessage?: string }> = [];
   
   const queryLower = query.toLowerCase();
 
@@ -283,6 +287,11 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
     const permissions = getProjectPermissions(config, project.name, project.sourcePath || project.path);
     
     if (!permissions.knowledge || !project.knowledgePath) continue;
+
+    const indexingInProgress = indexingJobs.isRunning(project.name);
+    const advisoryMessage = indexingInProgress
+      ? 'Indexing in progress; results may be stale/incomplete.'
+      : undefined;
 
     // Check for RAG configuration
     const projConfig = config.projects.find(p => 
@@ -302,7 +311,9 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
                     project: project.name,
                     file: path.relative(project.knowledgePath, r.filePath),
                     matches: [r.content], // The chunk content is the match
-                    score: r.score
+                    score: r.score,
+                    indexingInProgress: indexingInProgress || undefined,
+                    advisoryMessage
                 });
             }
             continue; // Skip text search since RAG succeeded
@@ -336,6 +347,8 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
             project: project.name,
             file,
             matches: matches.slice(0, 5), // Limit to 5 matches per file
+            indexingInProgress: indexingInProgress || undefined,
+            advisoryMessage,
           });
         }
       }
@@ -350,14 +363,37 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
 /**
  * Trigger knowledge indexing for a project (scans entire codebase)
  */
-export async function indexKnowledge(projectName: string, force: boolean = false): Promise<{ success: boolean; message: string; filesIndexed: number; filesSkipped: number }> {
+export async function indexKnowledge(projectName: string, force: boolean = false): Promise<{
+  state: IndexJobState;
+  status: 'started' | 'already_running' | 'failed';
+  success: boolean;
+  message: string;
+  filesIndexed: number;
+  filesSkipped: number;
+  progress: {
+    itemsDone: number;
+    itemsTotal?: number;
+    currentItem?: string;
+    startedAt?: number;
+    completedAt?: number;
+    lastError?: string;
+  };
+}> {
     const config = loadMCPConfig();
     const projects = getExposedProjects();
     const project = projects.find(p => p.name === projectName || (p.path && p.path === projectName));
 
-    if (!project) {
-        return { success: false, message: `Project '${projectName}' not found`, filesIndexed: 0, filesSkipped: 0 };
-    }
+     if (!project) {
+         return {
+           state: 'failed',
+           status: 'failed',
+           success: false,
+           message: `Project '${projectName}' not found`,
+           filesIndexed: 0,
+           filesSkipped: 0,
+           progress: { itemsDone: 0 }
+         };
+     }
 
     // Find config with fallback for global projects
     const projConfig = config.projects.find(p => 
@@ -367,9 +403,17 @@ export async function indexKnowledge(projectName: string, force: boolean = false
     // Check if RAG is actually enabled (either in config or detected)
     const isEnabled = projConfig?.semanticSearch?.enabled || (project as any).semanticSearchEnabled;
 
-    if (!isEnabled) {
-        return { success: false, message: 'Semantic Search is not enabled for this project', filesIndexed: 0, filesSkipped: 0 };
-    }
+     if (!isEnabled) {
+         return {
+           state: 'failed',
+           status: 'failed',
+           success: false,
+           message: 'Semantic Search is not enabled for this project',
+           filesIndexed: 0,
+           filesSkipped: 0,
+           progress: { itemsDone: 0 }
+         };
+     }
 
     // Use project root for scanning
     // For global projects, project.path is the data path. We need to find the ACTUAL source path.
@@ -391,9 +435,17 @@ export async function indexKnowledge(projectName: string, force: boolean = false
     // Prefer explicit sourcePath (Global mode) or detect from path (Workspace mode)
     const scanRoot = project.sourcePath || project.path || project.dataPath;
 
-    if (!fs.existsSync(scanRoot)) {
-        return { success: false, message: 'Project root not found', filesIndexed: 0, filesSkipped: 0 };
-    }
+     if (!fs.existsSync(scanRoot)) {
+         return {
+           state: 'failed',
+           status: 'failed',
+           success: false,
+           message: 'Project root not found',
+           filesIndexed: 0,
+           filesSkipped: 0,
+           progress: { itemsDone: 0 }
+         };
+     }
 
     // Extensions to index (common source files)
     const INDEXABLE_EXTENSIONS = [
@@ -417,67 +469,117 @@ export async function indexKnowledge(projectName: string, force: boolean = false
     // Directories to skip
     const SKIP_DIRS = ['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', 'venv', '.venv', 'target', 'vendor'];
 
-    try {
-        const indexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'embeddings.json');
-        
-        // Fix lint error: ensure model is defined or provide default
-        const model = projConfig?.semanticSearch?.model || 'Xenova/all-MiniLM-L6-v2';
-        const rag = new RAGService(indexPath, model);
-        
-        let indexed = 0;
-        let skipped = 0;
+     const runIndexing = async (): Promise<void> => {
+         const indexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'embeddings.json');
+         
+         // Fix lint error: ensure model is defined or provide default
+         const model = projConfig?.semanticSearch?.model || 'Xenova/all-MiniLM-L6-v2';
+         const rag = new RAGService(indexPath, model);
+         
+         let indexed = 0;
+         let skipped = 0;
+         let itemsTotal = 0;
+         let itemsDone = 0;
 
-        // Recursive file scanner
-        const scanDir = async (dir: string) => {
-            const entries = fs.readdirSync(dir, { withFileTypes: true });
-            
-            for (const entry of entries) {
-                const fullPath = path.join(dir, entry.name);
-                
-                if (entry.isDirectory()) {
-                    // Skip excluded directories
-                    if (SKIP_DIRS.includes(entry.name) || entry.name.startsWith('.')) {
-                        continue;
-                    }
-                    await scanDir(fullPath);
-                } else if (entry.isFile()) {
-                    const ext = path.extname(entry.name).toLowerCase();
-                    if (!INDEXABLE_EXTENSIONS.includes(ext)) {
-                        continue;
-                    }
-                    
-                    try {
-                        const stat = fs.statSync(fullPath);
-                        const mtime = force ? undefined : stat.mtimeMs; // Force ignores mtime
-                        const content = fs.readFileSync(fullPath, 'utf-8');
-                        
-                        const wasIndexed = await rag.indexFile(fullPath, content, mtime);
-                        if (wasIndexed) {
-                            indexed++;
-                        } else {
-                            skipped++;
-                        }
-                    } catch (err) {
-                        // Skip files that can't be read (binary, permissions, etc.)
-                    }
-                }
-            }
-        };
+         const shouldSkipDir = (dirName: string) => SKIP_DIRS.includes(dirName) || dirName.startsWith('.');
 
-        await scanDir(scanRoot);
-        rag.markFullIndex();
-        
-        const stats = rag.getStats();
-        return { 
-            success: true, 
-            message: `Indexed ${indexed} files, skipped ${skipped} unchanged. Total: ${stats.totalChunks} chunks from ${stats.totalFiles} files.`, 
-            filesIndexed: indexed,
-            filesSkipped: skipped
-        };
+         const preCount = (dir: string) => {
+           const entries = fs.readdirSync(dir, { withFileTypes: true });
+           for (const entry of entries) {
+             const fullPath = path.join(dir, entry.name);
+             if (entry.isDirectory()) {
+               if (shouldSkipDir(entry.name)) continue;
+               preCount(fullPath);
+             } else if (entry.isFile()) {
+               const ext = path.extname(entry.name).toLowerCase();
+               if (!INDEXABLE_EXTENSIONS.includes(ext)) continue;
+               itemsTotal++;
+             }
+           }
+         };
 
-    } catch (error) {
-        return { success: false, message: `Indexing failed: ${error}`, filesIndexed: 0, filesSkipped: 0 };
-    }
+         preCount(scanRoot);
+         indexingJobs.update(project.name, { itemsTotal });
+
+         // Recursive file scanner
+         const scanDir = async (dir: string) => {
+             const entries = fs.readdirSync(dir, { withFileTypes: true });
+             
+             for (const entry of entries) {
+                 const fullPath = path.join(dir, entry.name);
+                 
+                 if (entry.isDirectory()) {
+                     // Skip excluded directories
+                     if (shouldSkipDir(entry.name)) {
+                         continue;
+                     }
+                     await scanDir(fullPath);
+                 } else if (entry.isFile()) {
+                     const ext = path.extname(entry.name).toLowerCase();
+                     if (!INDEXABLE_EXTENSIONS.includes(ext)) {
+                         continue;
+                     }
+                     
+                     try {
+                         indexingJobs.update(project.name, { currentItem: fullPath, itemsDone });
+                         const stat = fs.statSync(fullPath);
+                         const mtime = force ? undefined : stat.mtimeMs; // Force ignores mtime
+                         const content = fs.readFileSync(fullPath, 'utf-8');
+                         
+                         const wasIndexed = await rag.indexFile(fullPath, content, mtime);
+                         if (wasIndexed) {
+                             indexed++;
+                         } else {
+                             skipped++;
+                         }
+                     } catch (err) {
+                         // Skip files that can't be read (binary, permissions, etc.)
+                     } finally {
+                         itemsDone++;
+                         indexingJobs.update(project.name, { itemsDone });
+                         // Cooperative yield: keep event-loop responsive
+                         if (itemsDone % 10 === 0) {
+                           await new Promise<void>(resolve => setImmediate(resolve));
+                         }
+                     }
+                 }
+             }
+         };
+
+         await scanDir(scanRoot);
+         rag.markFullIndex();
+
+         const stats = rag.getStats();
+         const message = `Indexed ${indexed} files, skipped ${skipped} unchanged. Total: ${stats.totalChunks} chunks from ${stats.totalFiles} files.`;
+         // Store final details in logger (tool will report status via job state)
+         logger.info(`[RAG] ${project.name}: ${message}`);
+         indexingJobs.update(project.name, { currentItem: undefined });
+     };
+
+     const startResult = indexingJobs.startOrStatus(project.name, runIndexing);
+
+     const p = startResult.progress;
+
+     // Fast return for start-or-status
+     return {
+       state: startResult.state,
+       status: startResult.status,
+       success: startResult.status === 'started' || startResult.status === 'already_running',
+       message:
+         startResult.status === 'started'
+           ? `Indexing started in background for '${project.name}'.`
+           : `Indexing already running for '${project.name}'.`,
+       filesIndexed: 0,
+       filesSkipped: 0,
+       progress: {
+         itemsDone: p.itemsDone,
+         itemsTotal: p.itemsTotal,
+         currentItem: p.currentItem,
+         startedAt: p.startedAt,
+         completedAt: p.completedAt,
+         lastError: p.lastError,
+       },
+     };
 }
 
 /**
