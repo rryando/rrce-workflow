@@ -1,17 +1,19 @@
 # RRCE-Workflow Architecture
 
 > RR Context Engineering Workflow - A selection-agnostic agentic workflow system
+> 
+> **Version**: 0.2.91 | **Last Updated**: 2025-12-31
 
 ## Overview
 
 RRCE-Workflow is a TUI-based agentic code workflow generator designed to work seamlessly across:
-- **GitHub Copilot CLI**
+- **OpenCode** (Native agentic TUI environment with custom Primary Agents)
+- **GitHub Copilot** (VSCode with MCP extension)
 - **Antigravity IDE** (Google's agentic coding environment)
-- **OpenCode** (Native agentic TUI environment)
-- **VS Code** (with Copilot and other AI extensions)
-- **Claude Desktop**
+- **Claude Desktop** (MCP Server integration)
+- **Any MCP-compatible client**
 
-The system provides a structured multi-agent pipeline for software development tasks, with persistent knowledge caching and workspace-aware context management.
+The system provides a structured multi-agent pipeline (7 agents) for software development tasks, with persistent knowledge caching, semantic search (RAG), and workspace-aware context management.
 
 ## Core Principles
 
@@ -24,38 +26,79 @@ The system provides a structured multi-agent pipeline for software development t
 
 ## Directory Structure
 
+### Source Code Organization
+
+```
+rrce-workflow/
+├── agent-core/           # Agent prompts and templates (Source of Truth)
+│   ├── prompts/          # 7 agent system prompts (doctor, executor, init, etc.)
+│   ├── templates/        # Output templates for agents
+│   │   └── docs/         # Doc-type specific templates
+│   └── docs/             # Internal documentation (path-resolution.md)
+├── bin/                  # Executable entry points
+│   └── rrce-workflow.js  # NPM binary wrapper
+├── docs/                 # High-level architecture docs (this file)
+├── scripts/              # Maintenance and verification scripts
+├── src/                  # Source code
+│   ├── commands/         # CLI/TUI command implementations
+│   │   └── wizard/       # Interactive setup wizard (setup-flow, link-flow, etc.)
+│   ├── lib/              # Core utilities
+│   │   ├── detection.ts  # Project scanning and detection (DetectedProject)
+│   │   ├── detection-service.ts  # Singleton project service
+│   │   ├── git.ts        # Git utilities
+│   │   ├── paths.ts      # Path resolution (RRCE_HOME, RRCE_DATA, etc.)
+│   │   └── preferences.ts # User preference storage
+│   ├── mcp/              # MCP Server implementation
+│   │   ├── handlers/     # Decomposed request handlers
+│   │   │   ├── prompts.ts   # Prompt/agent handlers
+│   │   │   ├── resources.ts # Resource handlers
+│   │   │   └── tools.ts     # 12 MCP tools (search, index, tasks, etc.)
+│   │   ├── services/     # Backend services
+│   │   │   └── rag.ts    # Semantic search with @xenova/transformers
+│   │   ├── ui/           # TUI components (Ink/React)
+│   │   │   └── components/ # Reusable UI components
+│   │   ├── config.ts     # MCP configuration management
+│   │   ├── resources.ts  # Project data access utilities
+│   │   └── server.ts     # MCP Server entry point (Stdio transport)
+│   └── types/            # Global TypeScript definitions
+└── temp_rag_test/        # RAG testing environment
+```
+
 ### Global Installation (`~/.rrce-workflow/`)
 
 ```
 ~/.rrce-workflow/
-├── config.yaml                              # User global configuration
-├── templates/                               # Default template store
-│   ├── meta.template.json                   # Task metadata template
-│   ├── research_output.md                   # Research brief template
-│   ├── planning_output.md                   # Execution plan template
-│   ├── executor_output.md                   # Implementation log template
-│   ├── documentation_output.md              # Handover note template
-│   └── docs/                                # Doc-type specific templates
-│       └── <doc-type>.md
-└── workspaces/                              # Project-scoped cache
-    └── <workspace-hash>/                    # SHA256 of workspace path
-        ├── workspace.json                   # Workspace metadata
-        ├── knowledge/                       # Project domain knowledge
-        │   └── <domain>.md
-        └── tasks/                           # Task state and artifacts
+├── mcp.yaml                             # MCP server configuration (projects, permissions)
+├── preferences.json                     # User preferences (global path overrides)
+├── templates/                           # Default template store
+│   ├── meta.template.json               # Task metadata template
+│   └── docs/                            # Doc-type specific templates
+└── workspaces/                          # Project-scoped data (Global Mode)
+    └── <workspace-name>/                # Named by project, not hash
+        ├── config.yaml                  # Project configuration
+        ├── knowledge/                   # Project domain knowledge
+        │   ├── project-context.md       # Main context file
+        │   ├── embeddings.json          # RAG vector index
+        │   └── <topic>.md               # Additional knowledge files
+        ├── refs/                        # Reference documents
+        └── tasks/                       # Task state and artifacts
             └── <task-slug>/
-                ├── meta.json                # Task metadata and status
-                ├── research/                # Research artifacts
-                ├── planning/                # Planning artifacts
-                ├── execution/               # Execution logs
-                └── docs/                    # Generated documentation
+                ├── meta.json            # Task metadata, checklist, agent status
+                ├── research/            # Research artifacts
+                ├── planning/            # Planning artifacts
+                ├── execution/           # Execution logs
+                └── docs/                # Generated documentation
 ```
 
-### Workspace Configuration (Optional)
+### Workspace Mode (`.rrce-workflow/`)
 
 ```
 <workspace>/
-└── .rrce-workflow.yaml                      # Project-specific config
+└── .rrce-workflow/
+    ├── config.yaml                      # Project-specific config
+    ├── knowledge/                       # Project knowledge (same structure as global)
+    ├── refs/
+    └── tasks/
 ```
 
 ---
@@ -69,11 +112,21 @@ The system provides a structured multi-agent pipeline for software development t
 | `global` (default) | `~/.rrce-workflow/workspaces/<workspace-name>/` | Non-intrusive, survives repo deletion |
 | `workspace` | `<workspace>/.rrce-workflow/` | Portable, team-shareable |
 
-Configure via `.rrce-workflow.yaml`:
+Configure via `config.yaml`:
 ```yaml
-storage:
-  mode: global  # or: workspace
+mode: global  # or: workspace
+name: my-project
+sourcePath: /path/to/source  # For global mode: links data back to source
 ```
+
+### Key Path Functions (`src/lib/paths.ts`)
+
+| Function | Purpose |
+|----------|---------|
+| `getEffectiveGlobalPath()` | Returns RRCE_HOME respecting user preferences |
+| `getConfigPath(workspaceRoot)` | Finds config.yaml (local or global) |
+| `resolveDataPath(mode, name, root)` | Resolves RRCE_DATA based on storage mode |
+| `detectWorkspaceRoot()` | Walks up from CWD to find project root |
 
 ### Environment Variables
 
@@ -81,7 +134,6 @@ storage:
 |----------|---------|---------|
 | `RRCE_HOME` | Global installation path | `~/.rrce-workflow` |
 | `RRCE_WORKSPACE` | Explicit workspace root | Auto-detected |
-| `RRCE_AUTHOR` | Default author name | From `config.yaml` |
 
 ### Template Variables
 
@@ -89,7 +141,7 @@ storage:
 |----------|-------------|
 | `{{RRCE_HOME}}` | Global installation path |
 | `{{RRCE_DATA}}` | Data path (based on storage mode) |
-| `{{WORKSPACE_ROOT}}` | Workspace directory |
+| `{{WORKSPACE_ROOT}}` | Workspace directory (source code location) |
 | `{{WORKSPACE_NAME}}` | Project name (from config or directory) |
 
 ### Workspace Detection Algorithm
@@ -98,9 +150,31 @@ storage:
 1. If $RRCE_WORKSPACE is set → use it
 2. Walk up from CWD, find first directory containing:
    - .git/
-   - .rrce-workflow.yaml
+   - .rrce-workflow/config.yaml (new)
+   - .rrce-workflow.yaml (legacy)
 3. Fall back to CWD
 ```
+
+### Project Detection (`src/lib/detection.ts`)
+
+The `DetectedProject` interface captures:
+```typescript
+interface DetectedProject {
+  name: string;
+  path: string;           // Absolute path to project root
+  dataPath: string;       // Path to .rrce-workflow data directory
+  source: 'global' | 'local';
+  sourcePath?: string;    // For global mode: actual source code location
+  knowledgePath?: string;
+  tasksPath?: string;
+  semanticSearchEnabled?: boolean;
+}
+```
+
+Scanning priority:
+1. Known projects from MCP config (name + path)
+2. Global storage (`~/.rrce-workflow/workspaces/`)
+3. Home directory recursive scan (up to depth 5)
 
 ### Cross-Project References
 
@@ -125,13 +199,13 @@ Reference another project's context when needed:
                                     └────────┬────────┘
                                              │
                                              ▼
-                                  project-context.md
+                                  project-context.md + embeddings.json
                                              │
         ┌────────────────────────────────────┴────────────────────────────────────┐
         ▼                                                                          │
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │    Research     │────▶│    Planning     │────▶│    Executor     │────▶│  Documentation  │
-│   & Discussion  │     │  Orchestrator   │     │                 │     │                 │
+│   Discussion    │     │   Discussion    │     │ (Code Changes)  │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘     └─────────────────┘
         │                       │                       │                       │
         ▼                       ▼                       ▼                       ▼
@@ -139,43 +213,74 @@ Reference another project's context when needed:
         │                       │                       │                       │
         └───────────────────────┴───────────────────────┴───────────────────────┘
                                         │
-                                        ▼
-                            {{RRCE_CACHE}}/knowledge/
-                              (Persistent Context)
+                               ┌────────┴────────┐
+                               ▼                 ▼
+                       {{RRCE_DATA}}/      ┌─────────────────┐
+                         knowledge/        │      Sync       │
+                                           │ (Reconciliation)│
+                                           └────────┬────────┘
+                                                    │
+                                           ┌────────┴────────┐
+                                           ▼                 ▼
+                                       Doctor           (Next Task)
+                                    (Health Check)
 ```
 
 ### Agent Responsibilities
 
-| Agent | Role | Input | Output |
-|-------|------|-------|--------|
-| **Init** | Analyze codebase, establish project context | Workspace files | `project-context.md` |
-| **Research & Discussion** | Clarify requirements, surface risks | User request + context | Requirements brief |
-| **Planning Orchestrator** | Create actionable execution plan | Research brief | Prioritized task breakdown |
-| **Executor** | Implement and verify | Plan + skill scope | Code + execution log |
-| **Documentation** | Synthesize and handover | All artifacts | Release-ready docs |
-| **Sync** | Reconcile knowledge | Codebase state | Updated knowledge files |
+| Agent | ID | Role | Input | Output |
+|-------|-----|------|-------|--------|
+| **Init** | `init` | Analyze codebase, establish project context, build RAG index | Workspace files | `project-context.md`, `embeddings.json` |
+| **Research** | `research_discussion` | Interactive requirements clarification, surface risks | User request + context | Research brief |
+| **Planning** | `planning_discussion` | Create actionable execution plan with checklist | Research brief | Prioritized task breakdown |
+| **Executor** | `executor` | Implement and verify - ONLY agent that modifies code | Plan + skill scope | Code + execution log |
+| **Documentation** | `documentation` | Synthesize and handover | All artifacts | Release-ready docs |
+| **Sync** | `sync` | Reconcile knowledge with codebase state | Codebase state | Updated knowledge files |
+| **Doctor** | `doctor` | Analyze codebase health using semantic search | Project + focus area | Health report, improvement tasks |
 
 ---
 
 ## Configuration
 
-### Global Config (`~/.rrce-workflow/config.yaml`)
+### MCP Configuration (`~/.rrce-workflow/mcp.yaml`)
 
 ```yaml
-version: 1
+# Projects exposed to MCP clients
+projects:
+  - name: my-project
+    path: /path/to/my-project
+    permissions:
+      knowledge: true
+      tasks: true
+      prompts: true
+    semanticSearch:
+      enabled: true
+      model: Xenova/all-MiniLM-L6-v2
+```
 
-# User identity
-author: "your-name"
-email: "your@email.com"
+### Project Config (`<workspace>/.rrce-workflow/config.yaml` or global)
 
-# Default behaviors
-defaults:
-  auto_create_workspace_cache: true
-  sync_after_execution: false
-  
-# Editor integration hints (informational)
-editor:
-  preferred: "vscode"  # vscode | antigravity | vim | etc.
+```yaml
+name: my-project
+mode: global  # or: workspace
+sourcePath: /path/to/source  # For global mode
+
+# Semantic search configuration
+semantic_search:
+  enabled: true
+
+# Cross-project linking
+linked_projects:
+  - other-project
+```
+
+### User Preferences (`~/.rrce-workflow/preferences.json`)
+
+```json
+{
+  "defaultGlobalPath": "/custom/path/.rrce-workflow",
+  "useCustomGlobalPath": true
+}
 ```
 
 ### Project Config (`<workspace>/.rrce-workflow.yaml`)
@@ -205,89 +310,78 @@ author: "maintainer-name"    # Overrides global config for this project
 
 ## Prompt Frontmatter Schema
 
-All agent prompts use YAML frontmatter for metadata and tool compatibility:
+All agent prompts in `agent-core/prompts/` use YAML frontmatter for metadata:
 
 ```yaml
 ---
-description: Brief description of the agent's purpose
-argument-hint: CLI-style argument hint for display
-agent: agent | ask | edit              # Copilot mode
-tools: ['search/codebase', ...]        # Available Copilot tools
-required-args:
-  - name: ARG_NAME
-    prompt: "Interactive prompt if arg is missing"
-optional-args:
-  - name: ARG_NAME
-    default: "default value"
-auto-identity:
-  user: "$GIT_USER"      # Auto-detect from `git config user.name`
-  model: "$AGENT_MODEL"  # Auto-detect from runtime (gemini-2.0, claude-sonnet, etc.)
+name: RRCE Executor
+description: Execute the planned tasks to deliver working code and tests.
+tools:
+  - read
+  - write
+  - edit
+  - bash
+  - glob
+  - grep
+  - search_knowledge        # MCP tool (becomes rrce_search_knowledge in OpenCode)
+  - get_project_context     # MCP tool
+  - update_task             # MCP tool
+arguments:
+  - name: TASK_SLUG
+    description: Enter the task slug to execute
+    required: true
+  - name: BRANCH
+    description: Git branch for the work
+    required: false
 ---
+
+# Agent System Prompt Content...
 ```
 
-### Auto-Identity
+### Tool Categories
 
-Identity is automatically detected - no user input required:
-
-| Variable | Source | Example |
-|----------|--------|---------|
-| `$GIT_USER` | `git config user.name` | "John Doe" |
-| `$AGENT_MODEL` | Runtime environment | "gemini-2.0-flash", "claude-sonnet-4" |
+| Category | Tools | Notes |
+|----------|-------|-------|
+| **Host Tools** | `read`, `write`, `edit`, `bash`, `grep`, `glob`, `webfetch` | Native to host environment |
+| **MCP Tools** | `search_knowledge`, `get_project_context`, `list_tasks`, etc. | Prefixed with `rrce_` in OpenCode |
 
 ---
 
 ## Multi-Tool Integration
 
-RRCE-Workflow prompts are designed to work across multiple AI coding tools:
+RRCE-Workflow prompts are designed to work across multiple AI coding tools via MCP and IDE-specific agent generation.
 
 ### Tool Support Matrix
 
-| Tool | Prompt Location | Extension | Notes |
-|------|----------------|-----------|-------|
-| **Antigravity IDE** | `.agent/workflows/` | `.md` | Native workflow support |
-| **OpenCode** | `.opencode/agent/` | `.md` | Custom Primary Agents |
-| **GitHub Copilot (VSCode)** | `.github/agents/` | `.agent.md` | Custom agents format |
-| **Copilot CLI** | Any location | `.md` | Reference via file path |
+| Tool | MCP Config Location | Agent Location | Notes |
+|------|---------------------|----------------|-------|
+| **OpenCode** | `~/.config/opencode/opencode.json` | `.opencode/agent/rrce-*.md` | Custom Primary Agents (Tab to switch) |
+| **Antigravity IDE** | `~/.gemini/antigravity/mcp_config.json` | `.agent/workflows/*.md` | Native workflow support |
+| **GitHub Copilot (VSCode)** | `.vscode/mcp.json` or global settings | `.github/prompts/*.prompt.md` | Custom agents format |
+| **Claude Desktop** | `~/.config/claude/claude_desktop_config.json` | N/A | MCP Server only |
 
-### Wizard Command
+### OpenCode Agent Transformation
 
-The TUI provides an interactive wizard to set up prompts for your preferred tools:
-
-```
-$ rrce-workflow wizard
-
-┌─────────────────────────────────────────────────────────┐
-│  RRCE-Workflow Project Setup                            │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  Which AI tools do you use?                             │
-│                                                         │
-│  [x] GitHub Copilot (VSCode)                            │
-│  [x] Antigravity IDE                                    │
-│  [ ] Copilot CLI only                                   │
-│                                                         │
-│  ─────────────────────────────────────────────────────  │
-│                                                         │
-│  ✓ Created .github/prompts/*.prompt.md                  │
-│  ✓ Created .agent/workflows/*.md                        │
-│  ✓ Initialized project context                          │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-```
+When generating agents for OpenCode (`src/commands/wizard/utils.ts`):
+- **Mode**: Set to `primary` (enables Tab cycling in TUI)
+- **Tools**: 
+  - Host tools (`read`, `write`, `edit`, `bash`, `grep`, `glob`, `webfetch`) pass through as-is
+  - MCP tools are prefixed with `rrce_` (e.g., `rrce_search_knowledge`)
+  - Tool list respects per-agent frontmatter restrictions
+- **Naming**: Agents prefixed with `rrce-` to avoid collisions
 
 ### Generated Files
 
-When you run `rrce-workflow wizard`, it creates:
-
-**For GitHub Copilot (VSCode):**
+**For OpenCode:**
 ```
-.github/prompts/
-├── init.prompt.md
-├── research.prompt.md
-├── planning.prompt.md
-├── executor.prompt.md
-├── documentation.prompt.md
-└── sync.prompt.md
+.opencode/agent/
+├── rrce-init.md
+├── rrce-research.md
+├── rrce-planning.md
+├── rrce-executor.md
+├── rrce-documentation.md
+├── rrce-sync.md
+└── rrce-doctor.md
 ```
 
 **For Antigravity IDE:**
@@ -298,55 +392,81 @@ When you run `rrce-workflow wizard`, it creates:
 ├── planning.md
 ├── executor.md
 ├── documentation.md
-└── sync.md
+├── sync.md
+└── doctor.md
 ```
 
-**For OpenCode:**
+**For GitHub Copilot (VSCode):**
 ```
-.opencode/agent/
-├── rrce-init.md
-├── rrce-research.md
-├── rrce-planning.md
-├── rrce-executor.md
-├── rrce-documentation.md
-└── rrce-sync.md
+.github/prompts/
+├── init.prompt.md
+├── research.prompt.md
+├── planning.prompt.md
+├── executor.prompt.md
+├── documentation.prompt.md
+├── sync.prompt.md
+└── doctor.prompt.md
 ```
-
-### Copilot-Specific Features
-
-Our prompts include Copilot-compatible frontmatter:
-
-| Field | Purpose | Values |
-|-------|---------|--------|
-| `agent` | Execution mode | `agent` (full), `ask` (read-only), `edit` (code changes) |
-| `tools` | Available tools | `search/codebase`, `search/web`, `terminalLastCommand`, etc. |
 
 ---
 
-## Installation Flow (TUI First Run)
+## MCP Server Architecture
 
-```
-$ npx rrce-workflow
+The MCP Server (`src/mcp/`) provides the bridge between project knowledge and AI agents.
 
-┌─────────────────────────────────────────────────────────┐
-│  RRCE-Workflow Setup Wizard                             │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  Welcome! Let's configure your workflow environment.    │
-│                                                         │
-│  Your name: [_________________]                         │
-│  Email (optional): [_________________]                  │
-│                                                         │
-│  ─────────────────────────────────────────────────────  │
-│                                                         │
-│  ✓ Created ~/.rrce-workflow/config.yaml                │
-│  ✓ Installed default templates                          │
-│  ✓ Ready to use!                                        │
-│                                                         │
-│  Run `rrce-workflow help` for available commands.       │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+### Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| **Server Entry** | `src/mcp/server.ts` | Initializes server, registers handlers, manages Stdio transport |
+| **Tool Handlers** | `src/mcp/handlers/tools.ts` | 12 MCP tools (search, index, tasks, resolve_path, etc.) |
+| **Prompt Handlers** | `src/mcp/handlers/prompts.ts` | Agent system prompts with context injection |
+| **Resource Handlers** | `src/mcp/handlers/resources.ts` | Knowledge files and project context as readable resources |
+| **RAG Service** | `src/mcp/services/rag.ts` | Semantic search with @xenova/transformers |
+| **Resources Utilities** | `src/mcp/resources.ts` | Project data access, task CRUD, context preamble generation |
+
+### Context Injection
+
+When an agent requests a prompt via `get_agent_prompt`, the server injects a **Context Preamble** containing:
+- **System Resolved Paths**: Pre-resolved `RRCE_DATA`, `WORKSPACE_ROOT`, `RRCE_HOME`
+- **Available Projects**: List of exposed projects with active project marked
+- **Active Workspace**: Current project context for file operations
+
+### Semantic Search (RAG)
+
+| Feature | Implementation |
+|---------|----------------|
+| **Embedding Model** | `Xenova/all-MiniLM-L6-v2` (configurable) |
+| **Index Location** | `<knowledge>/embeddings.json` |
+| **Similarity** | Cosine similarity |
+| **Indexable Extensions** | `.ts`, `.tsx`, `.js`, `.py`, `.go`, `.rs`, `.md`, etc. |
+| **Skip Directories** | `node_modules`, `.git`, `dist`, `build`, etc. |
+
+---
+
+## Installation Flow
+
+```bash
+# Option 1: MCP Dashboard (recommended)
+npx rrce-workflow mcp
+
+# Option 2: Project Setup Wizard
+cd your-project
+npx rrce-workflow
+
+# Option 3: Start MCP Server directly (for IDE config)
+npx rrce-workflow mcp start
 ```
+
+---
+
+## Key Design Patterns
+
+1. **MCP Decoupling**: Handlers separated from server instance for maintainability
+2. **TUI/MCP Separation**: MCP runs in "interactive" mode to avoid stdio conflicts with TUI
+3. **Prompt Parsing**: Frontmatter-based prompts with variable injection
+4. **Hybrid Storage**: Global mode (clean repos) vs Workspace mode (portable)
+5. **DetectedProject.sourcePath**: For global mode, links data back to actual source location
 
 ---
 
@@ -355,5 +475,7 @@ $ npx rrce-workflow
 - [ ] Web UI for knowledge browsing
 - [ ] Cross-project knowledge sharing (opt-in)
 - [ ] Plugin system for custom agents
-- [ ] LLM-agnostic (support OpenAI, Anthropic, Gemini, local models)
+- [ ] Comprehensive test suite (Jest/Vitest)
+- [ ] CI/CD with GitHub Actions
+- [ ] Cross-platform parity (Windows/macOS)
 

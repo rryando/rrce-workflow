@@ -5,13 +5,14 @@
 [![npm version](https://badge.fury.io/js/rrce-workflow.svg)](https://www.npmjs.com/package/rrce-workflow)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-RRCE-Workflow is a tool that turns your AI coding assistant (GitHub Copilot, Claude Desktop, Antigravity IDE, etc.) into a **context-aware agent**. 
+RRCE-Workflow transforms your AI coding assistant (GitHub Copilot, OpenCode, Claude Desktop, Antigravity IDE) into a **context-aware agent** with persistent project knowledge.
 
-It standardizes how AI agents understand your project through:
-1.  **Global Knowledge Base**: Centralized context management across all your projects.
-2.  **MCP Hub**: A Model Context Protocol server that exposes your code and knowledge to any MCP-compatible client.
-3.  **Semantic Search (RAG)**: Local, privacy-first vector indexing for deep codebase understanding.
-4.  **Structured Agent Pipelines**: Reusable prompts for Research, Planning, Execution, and Documentation.
+**Key Features:**
+- **Global Knowledge Base**: Centralized context management across all your projects (`~/.rrce-workflow/`).
+- **MCP Hub**: A Model Context Protocol server exposing tools, resources, and prompts to any MCP-compatible client.
+- **Semantic Search (RAG)**: Local, privacy-first vector indexing powered by `@xenova/transformers` for deep codebase understanding.
+- **Structured Agent Pipelines**: 7 specialized agents (Init, Research, Planning, Executor, Docs, Sync, Doctor) for end-to-end development workflows.
+- **Task Management**: Built-in CRUD operations for tracking high-level tasks via MCP tools.
 
 ---
 
@@ -58,7 +59,24 @@ RRCE-Workflow uses the [Model Context Protocol](https://modelcontextprotocol.io/
 ### Features
 *   **Universal Context**: Access your project's `project-context.md`, architecture docs, and task history from *any* MCP-enabled tool.
 *   **Cross-Project References**: Your AI can read documentation from Project A while working on Project B (perfect for monorepos or microservices).
-*   **Tools & Resources**: Exposes tools like `search_knowledge` and `get_project_context` directly to the model.
+*   **12 MCP Tools**: Including `search_knowledge`, `get_project_context`, `resolve_path`, task CRUD operations, and more.
+
+### MCP Tools Reference
+
+| Tool | Description |
+|------|-------------|
+| `resolve_path` | Resolve RRCE configuration paths (RRCE_DATA, WORKSPACE_ROOT, etc.) for a project |
+| `list_projects` | List all projects exposed via MCP |
+| `get_project_context` | Get the project-context.md for a specific project |
+| `search_knowledge` | Semantic search (RAG) across project knowledge bases |
+| `index_knowledge` | Update the semantic search index for a project |
+| `list_agents` | List available RRCE agents and their arguments |
+| `get_agent_prompt` | Get the system prompt for a specific agent with context injection |
+| `list_tasks` | List all tasks for a project |
+| `get_task` | Get details of a specific task |
+| `create_task` | Create a new task in the project |
+| `update_task` | Update an existing task's meta.json |
+| `delete_task` | Delete a task from the project |
 
 ### Connecting Your IDE
 
@@ -149,36 +167,40 @@ Stores everything in a `.rrce-workflow` folder inside your project root.
 
 ---
 
-## 🤖 The Agent Pipeline
+## The Agent Pipeline
 
-Once installed, you gain access to powerful agent workflows. Invoke them using your AI assistant's chat interface (if supported) or by pasting the prompts.
+Once installed, you gain access to 7 specialized agent workflows. Invoke them via your AI assistant's chat interface or through MCP tools.
 
-| Agent | Purpose | Recommended Use |
-|-------|---------|-----------------|
-| **Init** | **Context Establishment** | Run once at project start to analyze tech stack & architecture. |
-| **Research** | **Scope Definition** | Use when starting a complex feature to clarify requirements & risks. |
-| **Planning** | **Execution Strategy** | Generates a step-by-step implementation plan (checklist). |
-| **Execute** | **Implementation** | The "coding" phase. Implements the plan created by the Planning agent. |
-| **Docs** | **Documentation** | Generates tailored docs (API refs, guides) from code. |
-| **Sync** | **Knowledge Maintenance** | Scans code changes to update the `knowledge/` folder. |
-| **Doctor** | **Health Analysis** | Analyzes codebase for issues, tech debt, and improvement opportunities. |
+| Agent | ID | Purpose | Key Arguments |
+|-------|----|---------|---------------|
+| **Init** | `init` | Analyze codebase, establish project context and semantic index | `PROJECT_NAME` (optional) |
+| **Research** | `research_discussion` | Interactive requirements clarification through dialogue | `TASK_SLUG`, `REQUEST` |
+| **Planning** | `planning_discussion` | Transform research into actionable execution plan | `TASK_SLUG` |
+| **Executor** | `executor` | Implement the plan - the ONLY agent authorized to modify code | `TASK_SLUG`, `BRANCH` |
+| **Docs** | `documentation` | Generate project documentation (API, architecture, changelog) | `DOC_TYPE`, `TASK_SLUG` |
+| **Sync** | `sync` | Reconcile knowledge base with current codebase state | `SCOPE` (optional) |
+| **Doctor** | `doctor` | Analyze codebase health, identify issues, recommend improvements | `PROJECT_NAME`, `FOCUS_AREA` |
 
 ### Recommended Workflow
-1.  **`/init`**: "Analyze this codebase." -> Creates `project-context.md`.
-2.  **`/research`**: "I need to add user auth." -> Generates a Research Brief.
-3.  **`/plan`**: "Create a plan for user auth." -> Generates an Implementation Plan.
-4.  **`/execute`**: "Implement the auth plan." -> Writes code across files.
-5.  **`/sync`**: "Update knowledge." -> Refreshes context for the next task.
+1.  **`init`**: "Analyze this codebase." → Creates `project-context.md` and semantic index.
+2.  **`research_discussion`**: "I need to add user auth." → Interactive requirements gathering.
+3.  **`planning_discussion`**: "Create a plan for user auth." → Generates implementation checklist.
+4.  **`executor`**: "Implement the auth plan." → Writes code, runs tests.
+5.  **`documentation`**: "Generate API docs." → Produces release-ready documentation.
+6.  **`sync`**: "Update knowledge." → Refreshes context for the next task.
 
 ---
 
-## 🔍 Semantic Search (RAG)
+## Semantic Search (RAG)
 
-RRCE-Workflow includes a local, embedding-based search engine.
--   **Privacy First**: All embeddings are calculated locally on your CPU/GPU. No code leaves your machine.
--   **Smart Context**: Allows the agent to find relevant code snippets via natural language queries (e.g., "Find the authentication middleware logic") even if keywords don't match exactly.
+RRCE-Workflow includes a local, embedding-based search engine powered by `@xenova/transformers`.
 
-RAG is enabled by default in Express Setup. You can toggle it per-project in the MCP Dashboard.
+-   **Privacy First**: All embeddings are calculated locally. No code leaves your machine.
+-   **Full Codebase Indexing**: The `index_knowledge` tool scans your entire source tree (respecting skip lists like `node_modules`, `.git`).
+-   **Smart Fallback**: If RAG fails or isn't enabled, `search_knowledge` performs line-by-line text matching.
+-   **Model**: Uses `Xenova/all-MiniLM-L6-v2` by default (configurable per-project).
+
+RAG is enabled by default in Express Setup. You can toggle it per-project in the MCP Dashboard or via `config.yaml`.
 
 ---
 
@@ -186,6 +208,16 @@ RAG is enabled by default in Express Setup. You can toggle it per-project in the
 
 -   **Node.js 18+**
 -   **Git**
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| TUI Framework | Ink ^6.6.0 (React-based) |
+| MCP Server | @modelcontextprotocol/sdk ^1.25.1 |
+| Embeddings | @xenova/transformers ^2.17.2 |
+| Build | esbuild |
+| Runtime | Node.js >= 18 |
 
 ## License
 
