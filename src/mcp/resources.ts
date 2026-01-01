@@ -5,6 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import * as crypto from 'crypto';
 import { logger } from './logger';
 import { loadMCPConfig, isProjectExposed, getProjectPermissions } from './config';
@@ -491,7 +492,7 @@ export function getContextPreamble(): string {
   
   // Pre-resolved paths section (helps agents avoid manual path resolution)
   if (activeProject) {
-    const rrceHome = process.env.RRCE_HOME || path.join(require('os').homedir(), '.rrce-workflow');
+    const rrceHome = process.env.RRCE_HOME || path.join(os.homedir(), '.rrce-workflow');
     const workspaceRoot = activeProject.sourcePath || activeProject.path || activeProject.dataPath;
     const rrceData = activeProject.dataPath;
     
@@ -584,7 +585,7 @@ export async function createTask(projectName: string, taskSlug: string, taskData
     fs.mkdirSync(path.join(taskDir, 'docs'), { recursive: true });
 
     // Load template from global storage
-    const rrceHome = process.env.RRCE_HOME || path.join(require('os').homedir(), '.rrce-workflow');
+    const rrceHome = process.env.RRCE_HOME || path.join(os.homedir(), '.rrce-workflow');
     const templatePath = path.join(rrceHome, 'templates', 'meta.template.json');
     
     let meta: any = {
