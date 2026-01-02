@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { SimpleSelect } from './components/SimpleSelect';
 import { saveMCPConfig, setProjectConfig } from '../config';
@@ -7,6 +7,8 @@ import type { MCPConfig } from '../types';
 import type { DetectedProject } from '../../lib/detection';
 import type { TaskMeta, TaskStatus } from './lib/tasks-fs';
 import { listProjectTasks, updateTaskStatus } from './lib/tasks-fs';
+import { useConfig } from './ConfigContext';
+import type { DriftReport } from '../../lib/drift-service';
 
 interface ProjectsViewProps {
   config: MCPConfig;
@@ -29,13 +31,20 @@ function projectKey(p: DetectedProject): string {
   return p.sourcePath ?? p.path;
 }
 
-function formatProjectLabel(p: DetectedProject): string {
+function formatProjectLabel(p: DetectedProject, drift?: DriftReport): string {
   const root = p.sourcePath ?? p.path;
-  return `${p.name} (${p.source})${root ? ` - ${root}` : ''}`;
+  const driftLabel = drift?.hasDrift ? ' [UPDATE AVAILABLE]' : '';
+  const label = `${p.name} (${p.source})${root ? ` - ${root}` : ''}`;
+  
+  if (drift?.hasDrift) {
+      return `${label} ${driftLabel}`;
+  }
+  return label;
 }
 
 
 export const ProjectsView = ({ config: initialConfig, projects: allProjects, onConfigChange }: ProjectsViewProps) => {
+  const { driftReports, checkAllDrift } = useConfig();
   const [config, setConfig] = useState(initialConfig);
   const [mode, setMode] = useState<Mode>('expose');
 
@@ -74,6 +83,11 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
     if (input === 't') {
       setErrorLine(null);
       setMode(prev => (prev === 'expose' ? 'tasks' : 'expose'));
+      return;
+    }
+
+    if (input === 'u') {
+      checkAllDrift();
       return;
     }
 
@@ -170,15 +184,16 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
       );
 
       const isExposed = projectConfig ? projectConfig.expose : config.defaults.includeNew;
+      const drift = driftReports[p.path];
 
       return {
-        label: formatProjectLabel(p),
+        label: formatProjectLabel(p, drift),
         value: p.path,
         key: p.path,
         exposed: isExposed,
       };
     });
-  }, [allProjects, config]);
+  }, [allProjects, config, driftReports]);
 
   const initialSelected = useMemo(() => {
     return projectItems.filter(p => p.exposed).map(p => p.value);
@@ -275,7 +290,7 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
     <Box flexDirection="column" padding={1} borderStyle="round" borderColor="cyan" flexGrow={1}>
       <Box justifyContent="space-between">
         <Text bold color="cyan"> Projects (Tasks Mode) </Text>
-        <Text color="dim">t:Expose  Enter:Expand  s:Status  R:Refresh</Text>
+        <Text color="dim">t:Expose  Enter:Expand  s:Status  u:DriftCheck  R:Refresh</Text>
       </Box>
 
       {errorLine && (
@@ -297,13 +312,25 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
                 const k = projectKey(row.project);
                 const isOpen = expanded.has(k);
                 const count = (taskCache[k] || []).length;
+                const drift = driftReports[row.project.path];
+                
                 return (
-                  <Box key={`p:${k}`}>
-                    <Text color={isSel ? 'cyan' : 'white'}>{isSel ? '> ' : '  '}</Text>
-                    <Text color={isSel ? 'cyan' : 'white'}>
-                      {isOpen ? '▾ ' : '▸ '}{formatProjectLabel(row.project)}
-                    </Text>
-                    <Text color="dim"> {count > 0 ? ` (tasks: ${count})` : ''}</Text>
+                  <Box key={`p:${k}`} flexDirection="column">
+                    <Box>
+                      <Text color={isSel ? 'cyan' : 'white'}>{isSel ? '> ' : '  '}</Text>
+                      <Text color={isSel ? 'cyan' : 'white'}>
+                        {isOpen ? '▾ ' : '▸ '}{formatProjectLabel(row.project, drift)}
+                      </Text>
+                      <Text color="dim"> {count > 0 ? ` (tasks: ${count})` : ''}</Text>
+                    </Box>
+                    {isSel && drift?.hasDrift && (
+                      <Box marginLeft={4}>
+                         <Text color="magenta" dimColor italic>
+                           {drift.type === 'version' ? 'New version available. ' : 'Modifications detected. '}
+                           Run 'rrce-workflow wizard' to update.
+                         </Text>
+                      </Box>
+                    )}
                   </Box>
                 );
               }

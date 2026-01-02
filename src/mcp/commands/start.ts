@@ -13,6 +13,7 @@ export async function handleStartServer(): Promise<void> {
   const React = await import('react');
   const { render } = await import('ink');
   const { App } = await import('../ui/App');
+  const { ConfigProvider } = await import('../ui/ConfigContext');
 
   // Check if projects are configured
   const config = loadMCPConfig();
@@ -66,12 +67,15 @@ export async function handleStartServer(): Promise<void> {
   
   process.stdin.resume(); // Ensure stdin is alive
 
-  const app = render(React.createElement(App, {
-    initialPort,
-    onExit: () => {
-        // App requested exit
-    }
-  }), { 
+  const app = render(
+    React.createElement(ConfigProvider, null, 
+      React.createElement(App, {
+        initialPort,
+        onExit: () => {
+            // App requested exit
+        }
+      })
+    ), { 
       exitOnCtrlC: false 
   });
 

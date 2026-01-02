@@ -2,7 +2,7 @@ import { confirm, spinner, note, outro, cancel, isCancel } from '@clack/prompts'
 import pc from 'picocolors';
 import * as fs from 'fs';
 import * as path from 'path';
-import { stringify } from 'yaml';
+import { stringify, parse } from 'yaml';
 import type { StorageMode } from '../../types/prompt';
 import { 
   ensureDir, 
@@ -14,8 +14,41 @@ import {
   getDefaultRRCEHome
 } from '../../lib/paths';
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
-import { copyPromptsToDir, convertToOpenCodeAgent, copyDirRecursive } from './utils';
+import { copyPromptsToDir, convertToOpenCodeAgent, copyDirRecursive, updateOpenCodeConfig } from './utils';
 import { OPENCODE_CONFIG } from '../../mcp/install';
+import { DriftService } from '../../lib/drift-service';
+
+/**
+ * Backup a file by copying it with a timestamp
+ */
+function backupFile(filePath: string): string | null {
+  if (!fs.existsSync(filePath)) return null;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0] + '-' + Date.now();
+  const backupPath = `${filePath}.${timestamp}.bak`;
+  try {
+    fs.copyFileSync(filePath, backupPath);
+    return backupPath;
+  } catch (e) {
+    console.error(`Failed to backup ${filePath}:`, e);
+    return null;
+  }
+}
+
+/**
+ * Get the current version from package.json
+ */
+function getPackageVersion(): string {
+  try {
+    const agentCoreDir = getAgentCoreDir();
+    const packageJsonPath = path.join(path.dirname(agentCoreDir), 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      return JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')).version;
+    }
+  } catch (e) {
+    // Ignore
+  }
+  return '0.0.0';
+}
 
 /**
  * Update prompts and templates from the package without resetting config
@@ -32,6 +65,7 @@ export async function runUpdateFlow(
   try {
     const agentCoreDir = getAgentCoreDir();
     const prompts = loadPromptsFromDir(getAgentCorePromptsDir());
+    const runningVersion = getPackageVersion();
 
     // Determine storage paths based on current mode
     const mode = (currentStorageMode as StorageMode) || 'global';
@@ -40,7 +74,32 @@ export async function runUpdateFlow(
     const customGlobalPath = getEffectiveRRCEHome(workspacePath);
     const dataPaths = resolveAllDataPathsWithCustomGlobal(mode, workspaceName, workspacePath, customGlobalPath);
 
+    // Check for drift
+    const configFilePath = getConfigPath(workspacePath);
+    let currentSyncedVersion: string | undefined;
+    if (fs.existsSync(configFilePath)) {
+      try {
+        const content = fs.readFileSync(configFilePath, 'utf-8');
+        const config = parse(content) as any;
+        currentSyncedVersion = config.last_synced_version;
+      } catch (e) {}
+    }
+
+    const driftReport = DriftService.checkDrift(dataPaths[0]!, currentSyncedVersion, runningVersion);
+
     s.stop('Updates found');
+
+    if (driftReport.type === 'version') {
+      note(`New version available: ${pc.green(runningVersion)} (Current synced: ${pc.dim(currentSyncedVersion || 'None')})`, 'Update Available');
+    }
+
+    if (driftReport.modifiedFiles.length > 0) {
+      note(
+        pc.yellow(`The following files have been modified and will be backed up before updating:\n`) + 
+        driftReport.modifiedFiles.map(f => `  • ${f}`).join('\n'),
+        'Modifications Detected'
+      );
+    }
 
     // Show what will be updated
     const updateTargets = [
@@ -50,7 +109,6 @@ export async function runUpdateFlow(
     ];
 
     // Check for IDE integrations to update
-    const configFilePath = getConfigPath(workspacePath);
     const ideTargets: string[] = [];
     
     if (fs.existsSync(configFilePath)) {
@@ -81,11 +139,42 @@ export async function runUpdateFlow(
 
     s.start('Updating from package');
 
-    // Update templates, prompts, and docs in all storage locations
+    // Update templates, prompts, and docs in all storage locations with drift protection
     for (const dataPath of dataPaths) {
-      copyDirToAllStoragePaths(path.join(agentCoreDir, 'templates'), 'templates', [dataPath]);
-      copyDirToAllStoragePaths(path.join(agentCoreDir, 'prompts'), 'prompts', [dataPath]);
-      copyDirToAllStoragePaths(path.join(agentCoreDir, 'docs'), 'docs', [dataPath]);
+      const dirs = ['templates', 'prompts', 'docs'];
+      const updatedFiles: string[] = [];
+
+      for (const dir of dirs) {
+        const srcDir = path.join(agentCoreDir, dir);
+        if (!fs.existsSync(srcDir)) continue;
+
+        const syncFiles = (src: string, rel: string) => {
+          const entries = fs.readdirSync(src, { withFileTypes: true });
+          for (const entry of entries) {
+            const entrySrc = path.join(src, entry.name);
+            const entryRel = path.join(rel, entry.name);
+            const entryDest = path.join(dataPath, entryRel);
+
+            if (entry.isDirectory()) {
+              ensureDir(entryDest);
+              syncFiles(entrySrc, entryRel);
+            } else {
+              // Check for drift on this specific file
+              if (driftReport.modifiedFiles.includes(entryRel)) {
+                backupFile(entryDest);
+              }
+              fs.copyFileSync(entrySrc, entryDest);
+              updatedFiles.push(entryRel);
+            }
+          }
+        };
+
+        syncFiles(srcDir, dir);
+      }
+
+      // Refresh checksums
+      const manifest = DriftService.generateManifest(dataPath, updatedFiles);
+      DriftService.saveManifest(dataPath, manifest);
     }
 
     // Also update global RRCE_HOME with shared assets as fallback
@@ -103,7 +192,7 @@ export async function runUpdateFlow(
       if (configContent.includes('copilot: true')) {
         const copilotPath = getAgentPromptPath(workspacePath, 'copilot');
         ensureDir(copilotPath);
-        // Clear old prompts first to remove any renamed files (like planning_orchestrator -> planning_discussion)
+        // Clear old prompts first to remove any renamed files
         clearDirectory(copilotPath);
         copyPromptsToDir(prompts, copilotPath, '.agent.md');
       }
@@ -124,6 +213,33 @@ export async function runUpdateFlow(
           updateOpenCodeAgents(prompts, mode, primaryDataPath);
         }
       }
+      
+      // Update config.yaml with last_synced_version
+      try {
+        const yaml = parse(configContent) as any;
+        yaml.last_synced_version = runningVersion;
+        fs.writeFileSync(configFilePath, stringify(yaml));
+      } catch (e) {
+        console.error('Failed to update config.yaml version:', e);
+      }
+    }
+
+    // Update mcp.yaml version if it exists
+    const mcpPath = path.join(rrceHome, 'mcp.yaml');
+    if (fs.existsSync(mcpPath)) {
+      try {
+        const content = fs.readFileSync(mcpPath, 'utf-8');
+        const yaml = parse(content) as any;
+        if (yaml.projects) {
+          const project = yaml.projects.find((p: any) => p.name === workspaceName);
+          if (project) {
+            project.last_synced_version = runningVersion;
+            fs.writeFileSync(mcpPath, stringify(yaml));
+          }
+        }
+      } catch (e) {
+        console.error('Failed to update mcp.yaml version:', e);
+      }
     }
 
     s.stop('Update complete');
@@ -137,6 +253,10 @@ export async function runUpdateFlow(
 
     if (ideTargets.length > 0) {
       summary.push(`  ✓ IDE integrations: ${ideTargets.join(', ')}`);
+    }
+
+    if (driftReport.modifiedFiles.length > 0) {
+      summary.push(`  ✓ ${driftReport.modifiedFiles.length} modified files backed up`);
     }
 
     summary.push(
@@ -166,44 +286,13 @@ function updateOpenCodeAgents(
   primaryDataPath: string
 ): void {
   if (mode === 'global') {
-    // Global mode: Write prompt files to ~/.config/opencode/prompts/ and reference them
+    // Global mode: Use surgical update utility
     try {
       const promptsDir = path.join(path.dirname(OPENCODE_CONFIG), 'prompts');
       ensureDir(promptsDir);
       
-      let opencodeConfig: any = { $schema: "https://opencode.ai/config.json" };
-      if (fs.existsSync(OPENCODE_CONFIG)) {
-        opencodeConfig = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf-8'));
-      }
-      if (!opencodeConfig.agent) opencodeConfig.agent = {};
+      const newAgents: Record<string, any> = {};
       
-      // Remove legacy RRCE agent keys from older versions:
-      // - Pre-migration keys used base names (e.g. "init")
-      // - Migration keys use rrce_ prefix (e.g. "rrce_init")
-      //
-      // Only remove RRCE-managed agents, never user-defined ones.
-      const currentAgentBaseNames = prompts.map(p => path.basename(p.filePath, '.md'));
-      const currentAgentIds = new Set(currentAgentBaseNames.map(base => `rrce_${base}`));
-      const existingAgentNames = Object.keys(opencodeConfig.agent);
-
-      for (const existingName of existingAgentNames) {
-        const isLegacyBaseName = currentAgentBaseNames.includes(existingName);
-        const isRrcePrefixed = existingName.startsWith('rrce_');
-        const isStaleRrcePrefixed = isRrcePrefixed && !currentAgentIds.has(existingName);
-
-        if (isLegacyBaseName || isStaleRrcePrefixed) {
-          delete opencodeConfig.agent[existingName];
-
-          // Remove corresponding prompt file when dropping rrce-managed entries.
-          // Older versions stored prompt files as rrce-<baseName>.md.
-          const legacyBaseName = isLegacyBaseName ? existingName : existingName.replace(/^rrce_/, '');
-          const oldPromptFile = path.join(promptsDir, `rrce-${legacyBaseName}.md`);
-          if (fs.existsSync(oldPromptFile)) {
-            fs.unlinkSync(oldPromptFile);
-          }
-        }
-      }
-
       // Add/update current prompts - write files and use references
       for (const prompt of prompts) {
         const baseName = path.basename(prompt.filePath, '.md');
@@ -216,14 +305,21 @@ function updateOpenCodeAgents(
 
         // Create agent config with file reference
         const agentConfig = convertToOpenCodeAgent(prompt, true, `./prompts/${promptFileName}`);
-        opencodeConfig.agent[agentId] = agentConfig;
+        newAgents[agentId] = agentConfig;
       }
 
-      // Hide OpenCode's native plan agent to avoid confusion with RRCE orchestrator
-      if (!opencodeConfig.agent.plan) opencodeConfig.agent.plan = {};
-      opencodeConfig.agent.plan.disable = true;
+      // Use surgical update utility
+      updateOpenCodeConfig(newAgents);
       
-      fs.writeFileSync(OPENCODE_CONFIG, JSON.stringify(opencodeConfig, null, 2) + '\n');
+      // Hide OpenCode's native plan agent to avoid confusion with RRCE orchestrator
+      if (fs.existsSync(OPENCODE_CONFIG)) {
+          const config = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf8'));
+          if (!config.agents) config.agents = {};
+          if (!config.agents.plan) config.agents.plan = {};
+          config.agents.plan.disable = true;
+          fs.writeFileSync(OPENCODE_CONFIG, JSON.stringify(config, null, 2));
+      }
+
     } catch (e) {
       console.error('Failed to update global OpenCode config with agents:', e);
     }

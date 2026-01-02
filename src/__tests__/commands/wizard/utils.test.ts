@@ -1,8 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import { convertToOpenCodeAgent, updateOpenCodeConfig } from '../../../commands/wizard/utils';
 
-import { convertToOpenCodeAgent } from '../../../commands/wizard/utils';
+vi.mock('fs');
+vi.mock('os');
 
 describe('commands/wizard/utils', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe('convertToOpenCodeAgent', () => {
     it('creates a subagent and preserves tool mapping', () => {
       const prompt = {
@@ -47,6 +55,42 @@ describe('commands/wizard/utils', () => {
 
       expect(agent.prompt).toBe('{file:./prompts/rrce-init.md}');
       expect(agent.mode).toBe('subagent');
+    });
+  });
+
+  describe('updateOpenCodeConfig', () => {
+    it('surgically updates rrce_ agents while preserving others', () => {
+      (os.homedir as any).mockReturnValue('/home/user');
+      const configPath = '/home/user/.config/opencode/opencode.json';
+      
+      const existingConfig = {
+        agents: {
+          user_agent: { description: 'User' },
+          rrce_init: { description: 'Old Init' },
+          rrce_old: { description: 'Stale' }
+        }
+      };
+
+      (fs.existsSync as any).mockImplementation((p: string) => p.endsWith('opencode.json'));
+      (fs.readFileSync as any).mockReturnValue(JSON.stringify(existingConfig));
+      const writeSpy = vi.spyOn(fs, 'writeFileSync');
+
+      const newAgents = {
+        rrce_init: { description: 'New Init' },
+        rrce_new: { description: 'New Agent' }
+      };
+
+      updateOpenCodeConfig(newAgents);
+
+      expect(writeSpy).toHaveBeenCalled();
+      const writeCall = writeSpy.mock.calls[0];
+      if (!writeCall) throw new Error('write was not called');
+      const written = JSON.parse(writeCall[1] as string);
+      
+      expect(written.agents.user_agent).toBeDefined(); // Preserved
+      expect(written.agents.rrce_init.description).toBe('New Init'); // Updated
+      expect(written.agents.rrce_new).toBeDefined(); // Added
+      expect(written.agents.rrce_old).toBeUndefined(); // Deleted (stale)
     });
   });
 });

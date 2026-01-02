@@ -19,6 +19,7 @@ export interface MCPProjectConfig {
   expose: boolean;
   permissions: MCPPermissions;
   semanticSearch?: MCPSemanticSearchConfig;
+  last_synced_version?: string;
 }
 
 export interface MCPServerConfig {
@@ -35,6 +36,7 @@ export interface MCPConfig {
   server: MCPServerConfig;
   projects: MCPProjectConfig[];
   defaults: MCPDefaultsConfig;
+  last_synced_version?: string;
 }
 
 /**

@@ -3,18 +3,40 @@
  * Provides global state for config and projects across all TUI components
  */
 
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import type { MCPConfig } from '../types';
 import type { DetectedProject } from '../../lib/detection';
 import { loadMCPConfig } from '../config';
 import { scanForProjects } from '../../lib/detection';
 import { findProjectConfig } from '../config-utils';
+import { DriftService, type DriftReport } from '../../lib/drift-service';
+import { getAgentCoreDir } from '../../lib/prompts';
+import * as fs from 'fs';
+import * as path from 'path';
+
+/**
+ * Get the current version from package.json
+ */
+function getPackageVersion(): string {
+  try {
+    const agentCoreDir = getAgentCoreDir();
+    const packageJsonPath = path.join(path.dirname(agentCoreDir), 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      return JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')).version;
+    }
+  } catch (e) {
+    // Ignore
+  }
+  return '0.0.0';
+}
 
 interface ConfigContextType {
   config: MCPConfig;
   projects: DetectedProject[];
   exposedProjects: DetectedProject[];
+  driftReports: Record<string, DriftReport>;
   refresh: () => void;
+  checkAllDrift: () => void;
 }
 
 const ConfigContext = createContext<ConfigContextType | null>(null);
@@ -29,12 +51,33 @@ interface ConfigProviderProps {
 export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
   const [config, setConfig] = useState<MCPConfig>(() => loadMCPConfig());
   const [projects, setProjects] = useState<DetectedProject[]>(() => scanForProjects());
+  const [driftReports, setDriftReports] = useState<Record<string, DriftReport>>({});
   
   // Refresh function to reload config and projects
   const refresh = useCallback(() => {
-    setConfig(loadMCPConfig());
-    setProjects(scanForProjects());
+    const newConfig = loadMCPConfig();
+    const newProjects = scanForProjects();
+    setConfig(newConfig);
+    setProjects(newProjects);
   }, []);
+
+  const checkAllDrift = useCallback(() => {
+    const runningVersion = getPackageVersion();
+    const reports: Record<string, DriftReport> = {};
+
+    for (const project of projects) {
+        const projectConfig = findProjectConfig(config, { name: project.name, path: project.path });
+        const currentVersion = projectConfig?.last_synced_version;
+        
+        reports[project.path] = DriftService.checkDrift(project.dataPath, currentVersion, runningVersion);
+    }
+    setDriftReports(reports);
+  }, [projects, config]);
+
+  // Initial drift check
+  useEffect(() => {
+    checkAllDrift();
+  }, [checkAllDrift]);
   
   // Memoize exposed projects calculation
   const exposedProjects = useMemo(() => 
@@ -49,8 +92,10 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     config,
     projects,
     exposedProjects,
+    driftReports,
     refresh,
-  }), [config, projects, exposedProjects, refresh]);
+    checkAllDrift,
+  }), [config, projects, exposedProjects, driftReports, refresh, checkAllDrift]);
   
   return (
     <ConfigContext.Provider value={value}>

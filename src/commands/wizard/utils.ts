@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { stringify } from 'yaml';
 import { ensureDir } from '../../lib/paths';
 import type { ParsedPrompt } from '../../types/prompt';
@@ -16,6 +17,46 @@ export function copyPromptsToDir(prompts: ParsedPrompt[], targetDir: string, ext
     // Read the full content including frontmatter
     const content = fs.readFileSync(prompt.filePath, 'utf-8');
     fs.writeFileSync(targetPath, content);
+  }
+}
+
+/**
+ * Update OpenCode config surgically
+ */
+export function updateOpenCodeConfig(newAgents: Record<string, any>) {
+  const opencodePath = path.join(os.homedir(), '.config', 'opencode', 'opencode.json');
+  if (!fs.existsSync(opencodePath)) {
+    return;
+  }
+
+  try {
+    const config = JSON.parse(fs.readFileSync(opencodePath, 'utf8'));
+    if (!config.agents) {
+      config.agents = {};
+    }
+
+    // Identify all keys starting with rrce_
+    const existingAgentKeys = Object.keys(config.agents);
+    const rrceKeys = existingAgentKeys.filter(key => key.startsWith('rrce_'));
+
+    // Delete rrce_ keys that are not in the new package
+    for (const key of rrceKeys) {
+      if (!newAgents[key]) {
+        delete config.agents[key];
+      }
+    }
+
+    // Upsert rrce_ keys from the package
+    for (const [key, value] of Object.entries(newAgents)) {
+      if (key.startsWith('rrce_')) {
+        config.agents[key] = value;
+      }
+    }
+
+    // Write back to disk with 2-space indentation
+    fs.writeFileSync(opencodePath, JSON.stringify(config, null, 2));
+  } catch (e) {
+    console.error('Failed to update OpenCode config:', e);
   }
 }
 

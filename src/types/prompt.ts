@@ -40,6 +40,7 @@ export type StorageMode = 'global' | 'workspace';
 // Config schema
 export interface RRCEConfig {
   version: number;
+  last_synced_version?: string;
   storage: {
     mode: StorageMode;
     globalPath?: string;  // Custom global storage path (when not using default ~/.rrce-workflow)

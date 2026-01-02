@@ -80,7 +80,7 @@ export function getConfigPath(workspaceRoot: string): string {
       let currentPath = '';
       
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+        const line = lines[i]!;
         const trimmed = line.trim();
         
         if (trimmed.startsWith('projects:')) {

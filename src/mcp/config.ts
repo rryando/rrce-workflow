@@ -161,7 +161,9 @@ function parseMCPConfig(content: string): MCPConfig {
           refs: p.permissions?.refs ?? DEFAULT_PERMISSIONS.refs,
         },
         semanticSearch: p.semanticSearch,
+        last_synced_version: p.last_synced_version,
       })) : [],
+      last_synced_version: parsed?.last_synced_version,
     };
     
     return config;

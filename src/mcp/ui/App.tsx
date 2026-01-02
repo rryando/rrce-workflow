@@ -17,6 +17,7 @@ import { getExposedProjects } from '../resources';
 import { checkInstallStatus } from '../install';
 import { detectWorkspaceRoot } from '../../lib/paths';
 import fs from 'fs';
+import { useConfig } from './ConfigContext';
 
 interface AppProps {
   onExit: () => void;
@@ -25,6 +26,7 @@ interface AppProps {
 
 export const App = ({ onExit, initialPort }: AppProps) => {
   const { exit } = useApp();
+  const { config, projects, exposedProjects, driftReports, refresh: refreshData } = useConfig();
   const [activeTab, setActiveTab] = useState('overview');
   const [logs, setLogs] = useState<string[]>([]);
   const [serverInfo, setServerInfo] = useState({ 
@@ -33,23 +35,6 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     running: false 
   });
   
-  // Stats and Config - cached in state
-  const [config, setConfig] = useState(() => loadMCPConfig());
-  const [projects, setProjects] = useState(() => scanForProjects());
-  
-  // Refresh callback for manual updates
-  const refreshData = useCallback(() => {
-    setConfig(loadMCPConfig());
-    setProjects(scanForProjects());
-  }, []);
-  
-  // Memoize exposed projects calculation - use unified logic from resources.ts if possible
-  // or at least use isProjectExposed helper
-  const exposedProjects = useMemo(() => 
-    projects.filter(p => isProjectExposed(config, p.name, p.path)),
-    [projects, config]
-  );
-
   // Check if any exposed project has RAG enabled
   const isRAGEnabled = useMemo(() => {
       return exposedProjects.some(p => {
@@ -58,6 +43,12 @@ export const App = ({ onExit, initialPort }: AppProps) => {
           return cfg?.semanticSearch?.enabled || p.semanticSearchEnabled;
       });
   }, [exposedProjects, config]);
+
+  const hasAnyDrift = useMemo(() => 
+    Object.values(driftReports).some(r => r.hasDrift),
+    [driftReports]
+  );
+
 
   const tabs = useMemo<Tab[]>(() => {
       const baseTabs = [
@@ -183,15 +174,17 @@ export const App = ({ onExit, initialPort }: AppProps) => {
            {activeTab === 'logs' && <LogViewer logs={logs} height={contentHeight} />}
        </Box>
 
-       {/* Persistent Status Bar */}
-       <Box marginTop={0}>
-          <StatusBoard 
-              exposedLabel={`${exposedProjects.length} / ${projects.length} projects`} 
-              port={serverInfo.port} 
-              pid={serverInfo.pid} 
-              running={serverInfo.running} 
-          />
-       </Box>
+        {/* Persistent Status Bar */}
+        <Box marginTop={0}>
+           <StatusBoard 
+               exposedLabel={`${exposedProjects.length} / ${projects.length} projects`} 
+               port={serverInfo.port} 
+               pid={serverInfo.pid} 
+               running={serverInfo.running} 
+               hasDrift={hasAnyDrift}
+           />
+        </Box>
+
     </Box>
   );
 };
