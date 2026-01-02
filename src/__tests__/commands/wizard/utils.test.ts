@@ -87,7 +87,7 @@ describe('commands/wizard/utils', () => {
       const configPath = '/home/user/.config/opencode/opencode.json';
       
       const existingConfig = {
-        agents: {
+        agent: {
           user_agent: { description: 'User' },
           rrce_init: { description: 'Old Init' },
           rrce_old: { description: 'Stale' }
@@ -110,10 +110,10 @@ describe('commands/wizard/utils', () => {
       if (!writeCall) throw new Error('write was not called');
       const written = JSON.parse(writeCall[1] as string);
       
-      expect(written.agents.user_agent).toBeDefined(); // Preserved
-      expect(written.agents.rrce_init.description).toBe('New Init'); // Updated
-      expect(written.agents.rrce_new).toBeDefined(); // Added
-      expect(written.agents.rrce_old).toBeUndefined(); // Deleted (stale)
+      expect(written.agent.user_agent).toBeDefined(); // Preserved
+      expect(written.agent.rrce_init.description).toBe('New Init'); // Updated
+      expect(written.agent.rrce_new).toBeDefined(); // Added
+      expect(written.agent.rrce_old).toBeUndefined(); // Deleted (stale)
     });
   });
 
@@ -243,7 +243,7 @@ describe('commands/wizard/utils', () => {
       (os.homedir as any).mockReturnValue('/home/user');
       
       const existingConfig = {
-        agents: {
+        agent: {
           user_agent: { description: 'User' },
           rrce_old: { description: 'Stale agent' }
         }
@@ -277,9 +277,9 @@ describe('commands/wizard/utils', () => {
       
       if (configWriteCall) {
         const written = JSON.parse(configWriteCall[1] as string);
-        expect(written.agents.user_agent).toBeDefined(); // Preserved
-        expect(written.agents.rrce_init).toBeDefined(); // Added
-        expect(written.agents.rrce_old).toBeUndefined(); // Removed (stale)
+        expect(written.agent.user_agent).toBeDefined(); // Preserved
+        expect(written.agent.rrce_init).toBeDefined(); // Added
+        expect(written.agent.rrce_old).toBeUndefined(); // Removed (stale)
       }
     });
   });

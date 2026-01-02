@@ -31,34 +31,35 @@ export function copyPromptsToDir(prompts: ParsedPrompt[], targetDir: string, ext
  * Update OpenCode config surgically
  */
 export function updateOpenCodeConfig(newAgents: Record<string, any>) {
-  const opencodePath = path.join(os.homedir(), '.config', 'opencode', 'opencode.json');
+  const opencodePath = getOpenCodeConfigPath();
   if (!fs.existsSync(opencodePath)) {
     return;
   }
 
   try {
     const config = JSON.parse(fs.readFileSync(opencodePath, 'utf8'));
-    if (!config.agents) {
-      config.agents = {};
-    }
+    const agentConfig = config.agent ?? config.agents ?? {};
 
     // Identify all keys starting with rrce_
-    const existingAgentKeys = Object.keys(config.agents);
+    const existingAgentKeys = Object.keys(agentConfig);
     const rrceKeys = existingAgentKeys.filter(key => key.startsWith('rrce_'));
 
     // Delete rrce_ keys that are not in the new package
     for (const key of rrceKeys) {
       if (!newAgents[key]) {
-        delete config.agents[key];
+        delete agentConfig[key];
       }
     }
 
     // Upsert rrce_ keys from the package
     for (const [key, value] of Object.entries(newAgents)) {
       if (key.startsWith('rrce_')) {
-        config.agents[key] = value;
+        agentConfig[key] = value;
       }
     }
+
+    config.agent = agentConfig;
+    if (config.agents) delete config.agents;
 
     // Write back to disk with 2-space indentation
     fs.writeFileSync(opencodePath, JSON.stringify(config, null, 2));
@@ -201,9 +202,9 @@ export function surgicalUpdateOpenCodeAgents(
       // Hide OpenCode's native plan agent to avoid confusion with RRCE orchestrator
       if (fs.existsSync(openCodeConfig)) {
         const config = JSON.parse(fs.readFileSync(openCodeConfig, 'utf8'));
-        if (!config.agents) config.agents = {};
-        if (!config.agents.plan) config.agents.plan = {};
-        config.agents.plan.disable = true;
+        if (!config.agent) config.agent = {};
+        if (!config.agent.plan) config.agent.plan = {};
+        config.agent.plan.disable = true;
         fs.writeFileSync(openCodeConfig, JSON.stringify(config, null, 2));
       }
 
