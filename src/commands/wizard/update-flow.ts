@@ -50,6 +50,178 @@ function getPackageVersion(): string {
 }
 
 /**
+ * Core update logic - shared by both interactive and silent modes
+ */
+async function performUpdate(
+  workspacePath: string,
+  workspaceName: string,
+  currentStorageMode: string | null,
+  options: { silent?: boolean } = {}
+): Promise<{ success: boolean; ideTargets: string[]; modifiedFiles: string[] }> {
+  const agentCoreDir = getAgentCoreDir();
+  const prompts = loadPromptsFromDir(getAgentCorePromptsDir());
+  const runningVersion = getPackageVersion();
+  
+  // Determine storage paths based on current mode
+  const mode = (currentStorageMode as StorageMode) || 'global';
+  
+  // Use effective RRCE_HOME from config for path resolution
+  const customGlobalPath = getEffectiveRRCEHome(workspacePath);
+  const dataPaths = resolveAllDataPathsWithCustomGlobal(mode, workspaceName, workspacePath, customGlobalPath);
+  
+  // Check for drift
+  const configFilePath = getConfigPath(workspacePath);
+  let currentSyncedVersion: string | undefined;
+  if (fs.existsSync(configFilePath)) {
+    try {
+      const content = fs.readFileSync(configFilePath, 'utf-8');
+      const config = parse(content) as any;
+      currentSyncedVersion = config.last_synced_version;
+    } catch (e) {}
+  }
+  
+  const driftReport = DriftService.checkDrift(dataPaths[0]!, currentSyncedVersion, runningVersion);
+  
+  // Check for IDE integrations to update
+  const ideTargets: string[] = [];
+  if (fs.existsSync(configFilePath)) {
+    const configContent = fs.readFileSync(configFilePath, 'utf-8');
+    if (configContent.includes('opencode: true')) ideTargets.push('OpenCode agents');
+    if (configContent.includes('copilot: true')) ideTargets.push('GitHub Copilot');
+    if (configContent.includes('antigravity: true')) ideTargets.push('Antigravity');
+  }
+  
+  // Update templates, prompts, and docs in all storage locations with drift protection
+  for (const dataPath of dataPaths) {
+    const dirs = ['templates', 'prompts', 'docs'];
+    const updatedFiles: string[] = [];
+
+    for (const dir of dirs) {
+      const srcDir = path.join(agentCoreDir, dir);
+      if (!fs.existsSync(srcDir)) continue;
+
+      const syncFiles = (src: string, rel: string) => {
+        const entries = fs.readdirSync(src, { withFileTypes: true });
+        for (const entry of entries) {
+          const entrySrc = path.join(src, entry.name);
+          const entryRel = path.join(rel, entry.name);
+          const entryDest = path.join(dataPath, entryRel);
+
+          if (entry.isDirectory()) {
+            ensureDir(entryDest);
+            syncFiles(entrySrc, entryRel);
+          } else {
+            // Check for drift on this specific file
+            if (driftReport.modifiedFiles.includes(entryRel)) {
+              backupFile(entryDest);
+            }
+            fs.copyFileSync(entrySrc, entryDest);
+            updatedFiles.push(entryRel);
+          }
+        }
+      };
+
+      syncFiles(srcDir, dir);
+    }
+
+    // Refresh checksums
+    const manifest = DriftService.generateManifest(dataPath, updatedFiles);
+    DriftService.saveManifest(dataPath, manifest);
+  }
+
+  // Also update global RRCE_HOME with shared assets as fallback
+  const rrceHome = customGlobalPath || getDefaultRRCEHome();
+  ensureDir(path.join(rrceHome, 'templates'));
+  ensureDir(path.join(rrceHome, 'docs'));
+  copyDirRecursive(path.join(agentCoreDir, 'templates'), path.join(rrceHome, 'templates'));
+  copyDirRecursive(path.join(agentCoreDir, 'docs'), path.join(rrceHome, 'docs'));
+
+  // Update IDE-specific locations if configured
+  if (fs.existsSync(configFilePath)) {
+    const configContent = fs.readFileSync(configFilePath, 'utf-8');
+
+    // Update Copilot prompts (workspace-local)
+    if (configContent.includes('copilot: true')) {
+      const copilotPath = getAgentPromptPath(workspacePath, 'copilot');
+      ensureDir(copilotPath);
+      // Clear old prompts first to remove any renamed files
+      clearDirectory(copilotPath);
+      copyPromptsToDir(prompts, copilotPath, '.agent.md');
+    }
+
+    // Update Antigravity prompts (workspace-local)
+    if (configContent.includes('antigravity: true')) {
+      const antigravityPath = getAgentPromptPath(workspacePath, 'antigravity');
+      ensureDir(antigravityPath);
+      // Clear old prompts first
+      clearDirectory(antigravityPath);
+      copyPromptsToDir(prompts, antigravityPath, '.md');
+    }
+
+    // Update OpenCode agents - uses shared surgical update utility
+    if (configContent.includes('opencode: true')) {
+      const primaryDataPath = dataPaths[0];
+      if (primaryDataPath) {
+        surgicalUpdateOpenCodeAgents(prompts, mode, primaryDataPath);
+      }
+    }
+    
+    // Update config.yaml with last_synced_version
+    try {
+      const yaml = parse(configContent) as any;
+      yaml.last_synced_version = runningVersion;
+      fs.writeFileSync(configFilePath, stringify(yaml));
+    } catch (e) {
+      console.error('Failed to update config.yaml version:', e);
+    }
+  }
+
+  // Update mcp.yaml version if it exists
+  const mcpPath = path.join(rrceHome, 'mcp.yaml');
+  if (fs.existsSync(mcpPath)) {
+    try {
+      const content = fs.readFileSync(mcpPath, 'utf-8');
+      const yaml = parse(content) as any;
+      if (yaml.projects) {
+        const project = yaml.projects.find((p: any) => p.name === workspaceName);
+        if (project) {
+          project.last_synced_version = runningVersion;
+          fs.writeFileSync(mcpPath, stringify(yaml));
+        }
+      }
+    } catch (e) {
+      console.error('Failed to update mcp.yaml version:', e);
+    }
+  }
+  
+  return {
+    success: true,
+    ideTargets,
+    modifiedFiles: driftReport.modifiedFiles,
+  };
+}
+
+/**
+ * Silent update - used by auto-update flow (no prompts, just execute)
+ */
+export async function runSilentUpdate(
+  workspacePath: string,
+  workspaceName: string,
+  currentStorageMode: string | null
+): Promise<void> {
+  const s = spinner();
+  s.start('Applying updates...');
+  
+  try {
+    await performUpdate(workspacePath, workspaceName, currentStorageMode, { silent: true });
+    s.stop('Updates applied');
+  } catch (error) {
+    s.stop('Update failed');
+    throw error;
+  }
+}
+
+/**
  * Update prompts and templates from the package without resetting config
  * This ensures all IDE integrations and data paths receive the latest prompts
  */

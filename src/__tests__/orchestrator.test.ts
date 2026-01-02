@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs';
-import { loadPromptsFromDir } from '../lib/prompts';
+import { loadPromptsFromDir, getAgentCorePromptsDir } from '../lib/prompts';
 import { convertToOpenCodeAgent } from '../commands/wizard/utils';
 import type { ParsedPrompt } from '../types/prompt';
 
 describe('RRCE Orchestrator', () => {
-  const promptsDir = path.join(__dirname, '../../../agent-core/prompts');
+  const promptsDir = getAgentCorePromptsDir();
 
   describe('Prompt Validation', () => {
     it('should have orchestrator.md in prompts directory', () => {
