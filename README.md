@@ -18,65 +18,67 @@ RRCE-Workflow transforms your AI coding assistant (GitHub Copilot, OpenCode, Cla
 
 ## 🚀 Quick Start
 
-### 1. The MCP Dashboard (TUI)
+### 1. Run the Wizard (Project Setup)
 
-The central command center for RRCE-Workflow is the **MCP Dashboard**. It lets you manage your projects, server status, and IDE integrations.
-
-```bash
-npx rrce-workflow mcp
-```
-
-From this dashboard, you can:
--   **Manage Projects**: Toggle which projects are exposed to your AI agents.
--   **Monitor Status**: See the health of the MCP server and RAG indexing.
--   **Install to IDE**: Automatically configure **VSCode**, **Claude Desktop**, **Antigravity IDE**, or **OpenCode** to use the RRCE MCP server.
--   **View Logs**: Debug agent interactions in real-time.
-
-### 2. Setting Up a Project
-
-To enable agent workflows for your current project, run the setup wizard:
+From the project you want to work on:
 
 ```bash
 cd your-project
 npx rrce-workflow
 ```
 
-You can choose between:
+This launches the setup wizard and can:
+- Create the `.rrce-workflow/` structure (workspace mode) or initialize global storage (global mode)
+- Install IDE integrations (VSCode / Claude Desktop / OpenCode / Antigravity)
+- Optionally expose the project to MCP and enable semantic search indexing
 
-*   **⚡ Express Setup**: Configures the project using recommended defaults:
-    *   **Global Storage**: Keeps your project directory clean; config lives in `~/.rrce-workflow/`.
-    *   **MCP Enabled**: Exposes the project to your AI tools via the local server.
-    *   **RAG Enabled**: Indexes your code for semantic search.
-    
-*   **⚙️ Custom Setup**: Full control over storage location (Global vs Workspace), tool selection, and more.
+### 2. Launch the MCP Dashboard (TUI)
+
+The **MCP Dashboard** lets you manage exposed projects, indexing jobs, IDE integrations, and view logs.
+
+```bash
+npx rrce-workflow mcp
+```
+
+### 3. Run the MCP Server (for IDE integrations)
+
+When an IDE connects via MCP, it launches the server in non-interactive mode:
+
+```bash
+npx rrce-workflow mcp start
+```
+
+Note: `mcp start` is intended for stdio-based MCP clients (it only auto-starts when `stdout` is not a TTY).
 
 ---
 
 ## 🧠 Model Context Protocol (MCP)
 
-RRCE-Workflow uses the [Model Context Protocol](https://modelcontextprotocol.io/) to bridge your codebase with AI models. This allows your AI assistant to "see" your project context without needing to manually copy-paste files.
+RRCE-Workflow uses the [Model Context Protocol](https://modelcontextprotocol.io/) to bridge your codebase with AI models. This allows your AI assistant to access project context and knowledge without copy/paste.
 
 ### Features
 *   **Universal Context**: Access your project's `project-context.md`, architecture docs, and task history from *any* MCP-enabled tool.
 *   **Cross-Project References**: Your AI can read documentation from Project A while working on Project B (perfect for monorepos or microservices).
-*   **12 MCP Tools**: Including `search_knowledge`, `get_project_context`, `resolve_path`, task CRUD operations, and more.
+*   **MCP Tools**: Includes `search_knowledge`, `search_code`, `find_related_files`, `get_project_context`, `resolve_path`, task CRUD operations, and more.
 
 ### MCP Tools Reference
 
 | Tool | Description |
 |------|-------------|
-| `resolve_path` | Resolve RRCE configuration paths (RRCE_DATA, WORKSPACE_ROOT, etc.) for a project |
-| `list_projects` | List all projects exposed via MCP |
-| `get_project_context` | Get the project-context.md for a specific project |
-| `search_knowledge` | Semantic search (RAG) across project knowledge bases |
-| `index_knowledge` | Update the semantic search index for a project |
+| `resolve_path` | Resolve configuration paths (`RRCE_DATA`, `WORKSPACE_ROOT`, etc.) for a project |
+| `list_projects` | List projects exposed via MCP |
+| `get_project_context` | Get the project context/architecture for a specific project |
+| `search_knowledge` | Semantic search across project knowledge bases |
+| `search_code` | Semantic search across code files (snippets + line numbers + context) |
+| `find_related_files` | Find imports/imported-by relationships for a file |
+| `index_knowledge` | Start (or query) the semantic indexing job for a project |
 | `list_agents` | List available RRCE agents and their arguments |
-| `get_agent_prompt` | Get the system prompt for a specific agent with context injection |
+| `get_agent_prompt` | Get the system prompt for a specific agent (with context injection) |
 | `list_tasks` | List all tasks for a project |
-| `get_task` | Get details of a specific task |
-| `create_task` | Create a new task in the project |
-| `update_task` | Update an existing task's meta.json |
-| `delete_task` | Delete a task from the project |
+| `get_task` | Get details of a task |
+| `create_task` | Create a task |
+| `update_task` | Update a task (`meta.json`) |
+| `delete_task` | Delete a task |
 
 ### Connecting Your IDE
 
