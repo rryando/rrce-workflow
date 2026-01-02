@@ -17,12 +17,48 @@ export interface RAGChunk {
   metadata?: Record<string, any>;
 }
 
+/**
+ * Extended chunk interface for code files with line number tracking
+ */
+export interface CodeChunk extends RAGChunk {
+  lineStart: number;
+  lineEnd: number;
+  context?: string;  // e.g., "class RAGService", "function search()"
+  language?: string; // e.g., "typescript", "python"
+}
+
+/**
+ * Represents a chunk with its line range (before embedding)
+ */
+export interface ChunkWithLines {
+  content: string;
+  lineStart: number;
+  lineEnd: number;
+}
+
 export interface RAGIndex {
   version: string;
   baseModel: string;
   chunks: RAGChunk[];
   lastFullIndex?: number; // Timestamp of last full index
   fileMetadata?: Record<string, { mtime: number; chunkCount: number }>; // Per-file tracking
+  metadata?: {
+    lastSaveAt?: number;
+  };
+}
+
+/**
+ * Code-specific index with extended chunk metadata
+ */
+export interface CodeRAGIndex {
+  version: string;
+  baseModel: string;
+  chunks: CodeChunk[];
+  lastFullIndex?: number;
+  fileMetadata?: Record<string, { mtime: number; chunkCount: number; language?: string }>;
+  metadata?: {
+    lastSaveAt?: number;
+  };
 }
 
 const INDEX_VERSION = '1.0.0';
@@ -132,6 +168,39 @@ export class RAGService {
   }
 
   /**
+   * Save index to a temp file and atomically replace
+   */
+  private saveIndexAtomic(): void {
+    if (!this.index) return;
+
+    const dir = path.dirname(this.indexPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const tmpPath = `${this.indexPath}.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify(this.index, null, 2));
+    fs.renameSync(tmpPath, this.indexPath);
+  }
+
+  /**
+   * Save index only if enough time passed since last save
+   */
+  private maybeSaveIndex(force: boolean = false): void {
+    if (!this.index) return;
+
+    const now = Date.now();
+    const intervalMs = 1000;
+    const last = this.index.metadata?.lastSaveAt as number | undefined;
+
+    if (force || last === undefined || now - last >= intervalMs) {
+      this.index.metadata = { ...(this.index.metadata ?? {}), lastSaveAt: now };
+      this.saveIndexAtomic();
+      logger.info(`[RAG] Saved index (atomic) to ${this.indexPath} with ${this.index.chunks.length} chunks.`);
+    }
+  }
+
+  /**
    * Generate embedding for text
    */
   async generateEmbedding(text: string): Promise<number[]> {
@@ -196,8 +265,90 @@ export class RAGService {
       chunkCount: chunks.length
     };
 
-    this.saveIndex();
+    // Avoid saving on every file to reduce I/O churn
+    this.maybeSaveIndex();
     return true;
+  }
+
+  /**
+   * Index a code file with line numbers and context
+   * Used for code-specific indexing with rich metadata
+   * @param filePath Absolute path to the file
+   * @param chunk Chunk with line information
+   * @param context Optional function/class context
+   * @param language Language identifier
+   * @param mtime Optional modification time
+   */
+  async indexCodeChunk(
+    filePath: string,
+    chunk: ChunkWithLines,
+    context: string | undefined,
+    language: string,
+    mtime?: number
+  ): Promise<void> {
+    this.loadIndex();
+    if (!this.index) throw new Error('Index not initialized');
+
+    const embedding = await this.generateEmbedding(chunk.content);
+    
+    // Create CodeChunk with extended metadata
+    const codeChunk: CodeChunk = {
+      id: `${filePath}-${chunk.lineStart}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      filePath,
+      content: chunk.content,
+      embedding,
+      mtime,
+      lineStart: chunk.lineStart,
+      lineEnd: chunk.lineEnd,
+      context,
+      language
+    };
+
+    this.index.chunks.push(codeChunk as RAGChunk);
+    
+    // Don't save on every chunk - caller should call markFullIndex when done
+  }
+
+  /**
+   * Clear all chunks for a file (used before re-indexing code files)
+   */
+  clearFileChunks(filePath: string): void {
+    this.loadIndex();
+    if (!this.index) return;
+    
+    this.index.chunks = this.index.chunks.filter(c => c.filePath !== filePath);
+    
+    // Also clear from fileMetadata
+    if (this.index.fileMetadata) {
+      delete this.index.fileMetadata[filePath];
+    }
+  }
+
+  /**
+   * Update file metadata after indexing all chunks
+   */
+  updateFileMetadata(filePath: string, chunkCount: number, mtime: number, language?: string): void {
+    this.loadIndex();
+    if (!this.index) return;
+    
+    if (!this.index.fileMetadata) {
+      this.index.fileMetadata = {};
+    }
+    
+    this.index.fileMetadata[filePath] = {
+      mtime,
+      chunkCount,
+      language
+    } as any;
+  }
+
+  /**
+   * Check if file needs re-indexing based on mtime
+   */
+  needsReindex(filePath: string, mtime: number): boolean {
+    this.loadIndex();
+    if (!this.index?.fileMetadata?.[filePath]) return true;
+    return this.index.fileMetadata[filePath].mtime !== mtime;
   }
 
   /**
@@ -217,7 +368,7 @@ export class RAGService {
     
     if (this.index.chunks.length !== initialCount) {
       logger.info(`[RAG] Removed file ${filePath} from index (${initialCount - this.index.chunks.length} chunks removed)`);
-      this.saveIndex();
+      this.maybeSaveIndex(true);
     }
   }
 
@@ -243,7 +394,7 @@ export class RAGService {
     this.loadIndex();
     if (!this.index) return;
     this.index.lastFullIndex = Date.now();
-    this.saveIndex();
+    this.maybeSaveIndex(true);
   }
 
   /**
@@ -282,9 +433,11 @@ export class RAGService {
     let normA = 0;
     let normB = 0;
     for (let i = 0; i < a.length; i++) {
-        dotProduct += a[i] * b[i];
-        normA += a[i] * a[i];
-        normB += b[i] * b[i];
+        const av = a[i] ?? 0;
+        const bv = b[i] ?? 0;
+        dotProduct += av * bv;
+        normA += av * av;
+        normB += bv * bv;
     }
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
@@ -317,6 +470,62 @@ export class RAGService {
       if (end === content.length) break;
       
       start = end - overlap;
+    }
+    
+    return chunks;
+  }
+
+  /**
+   * Content chunker with line number tracking for code files
+   */
+  chunkContentWithLines(content: string, maxChunkSize: number = 1000, overlap: number = 100): ChunkWithLines[] {
+    const chunks: ChunkWithLines[] = [];
+    const lines = content.split('\n');
+    
+    let currentChunk = '';
+    let chunkStartLine = 1;
+    let currentLine = 1;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i] ?? '';
+      const potentialChunk = currentChunk + (currentChunk ? '\n' : '') + line;
+      
+      if (potentialChunk.length > maxChunkSize && currentChunk.length > 0) {
+        // Save current chunk
+        if (currentChunk.trim().length > 50) {
+          chunks.push({
+            content: currentChunk.trim(),
+            lineStart: chunkStartLine,
+            lineEnd: currentLine - 1
+          });
+        }
+        
+        // Start new chunk with overlap
+        // Find how many lines to include for overlap
+        const overlapLines: string[] = [];
+        let overlapSize = 0;
+        for (let j = i - 1; j >= 0 && overlapSize < overlap; j--) {
+          const prevLine = lines[j] ?? '';
+          overlapLines.unshift(prevLine);
+          overlapSize += prevLine.length + 1;
+        }
+        
+        currentChunk = overlapLines.join('\n') + (overlapLines.length > 0 ? '\n' : '') + line;
+        chunkStartLine = currentLine - overlapLines.length;
+      } else {
+        currentChunk = potentialChunk;
+      }
+      
+      currentLine++;
+    }
+    
+    // Don't forget the last chunk
+    if (currentChunk.trim().length > 50) {
+      chunks.push({
+        content: currentChunk.trim(),
+        lineStart: chunkStartLine,
+        lineEnd: lines.length
+      });
     }
     
     return chunks;

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
+import { indexingJobs } from '../services/indexing-jobs';
 import { RAGService } from '../services/rag';
 import { getRAGIndexPath } from '../resources';
 import { findProjectConfig } from '../config-utils';
@@ -15,6 +16,10 @@ interface IndexingStatusProps {
 interface ProjectStats {
     projectName: string;
     enabled: boolean;
+    state: 'idle' | 'running' | 'complete' | 'failed';
+    itemsDone: number;
+    itemsTotal?: number;
+    currentItem?: string;
     totalFiles: number;
     totalChunks: number;
     lastFullIndex?: number;
@@ -39,12 +44,17 @@ export const IndexingStatus: React.FC<IndexingStatusProps> = ({ projects, config
             const enabled = projConfig?.semanticSearch?.enabled || project.semanticSearchEnabled || false;
             
             if (!enabled) {
-                newStats.push({
-                    projectName: project.name,
-                    enabled: false,
-                    totalFiles: 0,
-                    totalChunks: 0
-                });
+                 const prog = indexingJobs.getProgress(project.name);
+                 newStats.push({
+                     projectName: project.name,
+                     enabled: false,
+                     state: prog.state,
+                     itemsDone: prog.itemsDone,
+                     itemsTotal: prog.itemsTotal,
+                     currentItem: prog.currentItem,
+                     totalFiles: 0,
+                     totalChunks: 0
+                 });
                 continue;
             }
 
@@ -55,21 +65,31 @@ export const IndexingStatus: React.FC<IndexingStatusProps> = ({ projects, config
                 // RAGService constructor doesn't load model immediately.
                 const rag = new RAGService(indexPath, 'dummy'); 
                 const s = rag.getStats();
-                newStats.push({
-                    projectName: project.name,
-                    enabled: true,
-                    totalFiles: s.totalFiles,
-                    totalChunks: s.totalChunks,
-                    lastFullIndex: s.lastFullIndex
-                });
-            } catch (e) {
+                 const prog = indexingJobs.getProgress(project.name);
                  newStats.push({
-                    projectName: project.name,
-                    enabled: true,
-                    totalFiles: 0,
-                    totalChunks: 0,
-                    error: String(e)
-                });
+                     projectName: project.name,
+                     enabled: true,
+                     state: prog.state,
+                     itemsDone: prog.itemsDone,
+                     itemsTotal: prog.itemsTotal,
+                     currentItem: prog.currentItem,
+                     totalFiles: s.totalFiles,
+                     totalChunks: s.totalChunks,
+                     lastFullIndex: s.lastFullIndex
+                 });
+            } catch (e) {
+                  const prog = indexingJobs.getProgress(project.name);
+                  newStats.push({
+                     projectName: project.name,
+                     enabled: true,
+                     state: prog.state,
+                     itemsDone: prog.itemsDone,
+                     itemsTotal: prog.itemsTotal,
+                     currentItem: prog.currentItem,
+                     totalFiles: 0,
+                     totalChunks: 0,
+                     error: String(e)
+                 });
             }
         }
         setStats(newStats);
@@ -95,9 +115,11 @@ export const IndexingStatus: React.FC<IndexingStatusProps> = ({ projects, config
             <Box>
                 <Box width={25}><Text underline>Project</Text></Box>
                 <Box width={15}><Text underline>Status</Text></Box>
-                <Box width={15}><Text underline>Indexed Files</Text></Box>
-                <Box width={15}><Text underline>Total Chunks</Text></Box>
-                <Box><Text underline>Last Index</Text></Box>
+                 <Box width={15}><Text underline>State</Text></Box>
+                 <Box width={18}><Text underline>Progress</Text></Box>
+                 <Box width={15}><Text underline>Indexed Files</Text></Box>
+                 <Box width={15}><Text underline>Total Chunks</Text></Box>
+                 <Box><Text underline>Last Index</Text></Box>
             </Box>
             
             {/* Rows */}
@@ -109,14 +131,19 @@ export const IndexingStatus: React.FC<IndexingStatusProps> = ({ projects, config
                         <Box width={25}>
                             <Text color="white">{s.projectName}</Text>
                         </Box>
-                        <Box width={15}>
-                            <Text color={s.enabled ? 'green' : 'dim'}>
-                                {s.enabled ? 'Enabled' : 'Disabled'}
-                            </Text>
-                        </Box>
-                        <Box width={15}>
-                            <Text>{s.enabled ? s.totalFiles : '-'}</Text>
-                        </Box>
+                         <Box width={15}>
+                             <Text color={s.state === 'running' ? 'yellow' : s.state === 'failed' ? 'red' : s.enabled ? 'green' : 'dim'}>
+                                 {s.enabled ? s.state : 'disabled'}
+                             </Text>
+                         </Box>
+                         <Box width={18}>
+                             <Text>
+                               {s.state === 'running' ? `${s.itemsDone}/${s.itemsTotal ?? '?'}` : '-'}
+                             </Text>
+                         </Box>
+                         <Box width={15}>
+                             <Text>{s.enabled ? s.totalFiles : '-'}</Text>
+                         </Box>
                         <Box width={15}>
                             <Text>{s.enabled ? s.totalChunks : '-'}</Text>
                         </Box>

@@ -2,7 +2,7 @@
 name: RRCE Planning
 description: Transform research findings into an actionable execution plan through interactive task breakdown.
 argument-hint: "TASK_SLUG=<slug>"
-tools: ['search_knowledge', 'get_project_context', 'list_projects', 'update_task', 'read', 'glob', 'grep', 'write', 'bash']
+tools: ['search_knowledge', 'search_code', 'find_related_files', 'get_project_context', 'list_projects', 'update_task', 'read', 'glob', 'grep', 'write', 'bash']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter the task slug to create a plan for"
@@ -21,7 +21,9 @@ Use the pre-resolved paths from the "System Resolved Paths" table in the context
 For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 
 ### Tool Usage Guidance
-- **search_knowledge**: PREFER this tool for finding concepts, logic flow, or documentation. It uses semantic search (RAG) to find relevant code even without exact keyword matches.
+- **search_knowledge**: Use for finding documentation, concepts, or design decisions.
+- **search_code**: PREFER this for finding code implementations. Helps estimate task complexity by finding similar patterns.
+- **find_related_files**: Use to understand dependencies for breaking down tasks and identifying impact.
 - **grep**: Use ONLY when searching for exact string patterns (e.g., specific function names, error codes).
 
 ## Pipeline Position

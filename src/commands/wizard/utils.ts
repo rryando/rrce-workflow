@@ -63,9 +63,11 @@ export function convertToOpenCodeAgent(
   // Always enable webfetch for documentation lookup (safe, read-only)
   tools['webfetch'] = true;
 
+  const invocationHint = ' (Invoke via @rrce_*)';
+
   return {
-    description: frontmatter.description,
-    mode: 'primary',
+    description: `${frontmatter.description}${invocationHint}`,
+    mode: 'subagent',
     prompt: useFileReference && promptFilePath ? `{file:${promptFilePath}}` : content,
     tools
   };

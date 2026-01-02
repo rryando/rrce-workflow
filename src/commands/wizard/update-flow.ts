@@ -177,39 +177,46 @@ function updateOpenCodeAgents(
       }
       if (!opencodeConfig.agent) opencodeConfig.agent = {};
       
-      // Remove old agents that might have been renamed
-      // (e.g., planning_orchestrator -> planning_discussion)
-      const currentAgentNames = prompts.map(p => path.basename(p.filePath, '.md'));
+      // Remove legacy RRCE agent keys from older versions:
+      // - Pre-migration keys used base names (e.g. "init")
+      // - Migration keys use rrce_ prefix (e.g. "rrce_init")
+      //
+      // Only remove RRCE-managed agents, never user-defined ones.
+      const currentAgentBaseNames = prompts.map(p => path.basename(p.filePath, '.md'));
+      const currentAgentIds = new Set(currentAgentBaseNames.map(base => `rrce_${base}`));
       const existingAgentNames = Object.keys(opencodeConfig.agent);
-      
-      // Find agents to remove (exist in config but not in current prompts)
-      // Only remove RRCE agents, not user-defined ones
-      const rrceAgentPrefixes = ['init', 'research', 'planning', 'executor', 'doctor', 'documentation', 'sync'];
+
       for (const existingName of existingAgentNames) {
-        const isRrceAgent = rrceAgentPrefixes.some(prefix => existingName.startsWith(prefix));
-        const stillExists = currentAgentNames.includes(existingName);
-        if (isRrceAgent && !stillExists) {
+        const isLegacyBaseName = currentAgentBaseNames.includes(existingName);
+        const isRrcePrefixed = existingName.startsWith('rrce_');
+        const isStaleRrcePrefixed = isRrcePrefixed && !currentAgentIds.has(existingName);
+
+        if (isLegacyBaseName || isStaleRrcePrefixed) {
           delete opencodeConfig.agent[existingName];
-          // Also remove the old prompt file
-          const oldPromptFile = path.join(promptsDir, `rrce-${existingName}.md`);
+
+          // Remove corresponding prompt file when dropping rrce-managed entries.
+          // Older versions stored prompt files as rrce-<baseName>.md.
+          const legacyBaseName = isLegacyBaseName ? existingName : existingName.replace(/^rrce_/, '');
+          const oldPromptFile = path.join(promptsDir, `rrce-${legacyBaseName}.md`);
           if (fs.existsSync(oldPromptFile)) {
             fs.unlinkSync(oldPromptFile);
           }
         }
       }
-      
+
       // Add/update current prompts - write files and use references
       for (const prompt of prompts) {
         const baseName = path.basename(prompt.filePath, '.md');
+        const agentId = `rrce_${baseName}`;
         const promptFileName = `rrce-${baseName}.md`;
         const promptFilePath = path.join(promptsDir, promptFileName);
-        
+
         // Write the prompt content to a separate file
         fs.writeFileSync(promptFilePath, prompt.content);
-        
+
         // Create agent config with file reference
         const agentConfig = convertToOpenCodeAgent(prompt, true, `./prompts/${promptFileName}`);
-        opencodeConfig.agent[baseName] = agentConfig;
+        opencodeConfig.agent[agentId] = agentConfig;
       }
       
       fs.writeFileSync(OPENCODE_CONFIG, JSON.stringify(opencodeConfig, null, 2) + '\n');
@@ -220,19 +227,20 @@ function updateOpenCodeAgents(
     // Workspace mode: Update .rrce-workflow/.opencode/agent
     const opencodeBaseDir = path.join(primaryDataPath, '.opencode', 'agent');
     ensureDir(opencodeBaseDir);
-    
+
     // Clear old agents first
     clearDirectory(opencodeBaseDir);
-    
+
     for (const prompt of prompts) {
       const baseName = path.basename(prompt.filePath, '.md');
+      const agentId = `rrce_${baseName}`;
       const agentConfig = convertToOpenCodeAgent(prompt);
       const content = `---\n${stringify({
         description: agentConfig.description,
         mode: agentConfig.mode,
         tools: agentConfig.tools
       })}---\n${agentConfig.prompt}`;
-      fs.writeFileSync(path.join(opencodeBaseDir, `${baseName}.md`), content);
+      fs.writeFileSync(path.join(opencodeBaseDir, `${agentId}.md`), content);
     }
   }
 }

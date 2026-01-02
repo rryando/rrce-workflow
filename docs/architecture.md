@@ -2,18 +2,18 @@
 
 > RR Context Engineering Workflow - A selection-agnostic agentic workflow system
 > 
-> **Version**: 0.2.91 | **Last Updated**: 2025-12-31
+> **Version**: 0.2.96 | **Last Updated**: 2026-01-02
 
 ## Overview
 
 RRCE-Workflow is a TUI-based agentic code workflow generator designed to work seamlessly across:
-- **OpenCode** (Native agentic TUI environment with custom Primary Agents)
+- **OpenCode** (Native agentic TUI environment; RRCE installs subagents invoked via `@rrce_<agent>`)
 - **GitHub Copilot** (VSCode with MCP extension)
 - **Antigravity IDE** (Google's agentic coding environment)
 - **Claude Desktop** (MCP Server integration)
 - **Any MCP-compatible client**
 
-The system provides a structured multi-agent pipeline (7 agents) for software development tasks, with persistent knowledge caching, semantic search (RAG), and workspace-aware context management.
+The system provides a structured multi-agent pipeline (7 agents) for software development tasks, with persistent knowledge caching, semantic search (RAG) across knowledge and code, and workspace-aware context management.
 
 ## Core Principles
 
@@ -355,7 +355,7 @@ RRCE-Workflow prompts are designed to work across multiple AI coding tools via M
 
 | Tool | MCP Config Location | Agent Location | Notes |
 |------|---------------------|----------------|-------|
-| **OpenCode** | `~/.config/opencode/opencode.json` | `.opencode/agent/rrce-*.md` | Custom Primary Agents (Tab to switch) |
+| **OpenCode** | `~/.config/opencode/opencode.json` | `.opencode/agent/rrce_*.md` | Custom subagents (invoke via `@rrce_*`) |
 | **Antigravity IDE** | `~/.gemini/antigravity/mcp_config.json` | `.agent/workflows/*.md` | Native workflow support |
 | **GitHub Copilot (VSCode)** | `.vscode/mcp.json` or global settings | `.github/prompts/*.prompt.md` | Custom agents format |
 | **Claude Desktop** | `~/.config/claude/claude_desktop_config.json` | N/A | MCP Server only |
@@ -363,25 +363,26 @@ RRCE-Workflow prompts are designed to work across multiple AI coding tools via M
 ### OpenCode Agent Transformation
 
 When generating agents for OpenCode (`src/commands/wizard/utils.ts`):
-- **Mode**: Set to `primary` (enables Tab cycling in TUI)
-- **Tools**: 
+- **Mode**: Set to `subagent` (not tab-switchable; invoke via mention)
+- **Invoke**: Use `@rrce_<agent>` (e.g., `@rrce_init`)
+- **Tools**:
   - Host tools (`read`, `write`, `edit`, `bash`, `grep`, `glob`, `webfetch`) pass through as-is
   - MCP tools are prefixed with `rrce_` (e.g., `rrce_search_knowledge`)
   - Tool list respects per-agent frontmatter restrictions
-- **Naming**: Agents prefixed with `rrce-` to avoid collisions
+- **Naming**: Agent IDs are prefixed with `rrce_` (underscore) to avoid collisions
 
 ### Generated Files
 
 **For OpenCode:**
 ```
 .opencode/agent/
-├── rrce-init.md
-├── rrce-research.md
-├── rrce-planning.md
-├── rrce-executor.md
-├── rrce-documentation.md
-├── rrce-sync.md
-└── rrce-doctor.md
+├── rrce_init.md
+├── rrce_research.md
+├── rrce_planning.md
+├── rrce_executor.md
+├── rrce_documentation.md
+├── rrce_sync.md
+└── rrce_doctor.md
 ```
 
 **For Antigravity IDE:**

@@ -7,7 +7,9 @@ import { logger } from '../logger';
 import { 
   getExposedProjects, 
   getProjectContext, 
-  searchKnowledge, 
+  searchKnowledge,
+  searchCode,
+  findRelatedFiles,
   indexKnowledge, 
   detectActiveProject, 
   getContextPreamble,
@@ -47,6 +49,34 @@ export function registerToolHandlers(server: Server): void {
             project: { type: 'string', description: 'Optional: limit search to specific project name' }
           },
           required: ['query'],
+        },
+      },
+      {
+        name: 'search_code',
+        description: 'Semantic search across code files. Returns code snippets with line numbers and function/class context. Use for finding implementations, patterns, or understanding code.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Search query (e.g., "error handling", "authentication logic", "database connection")' },
+            project: { type: 'string', description: 'Optional: limit search to specific project name' },
+            limit: { type: 'number', description: 'Maximum number of results (default 10)' }
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'find_related_files',
+        description: 'Find files related to a given file through import/dependency relationships. Use for understanding code structure, finding consumers of a module, or tracing data flow.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: { type: 'string', description: 'Path to the file (absolute or project-relative)' },
+            project: { type: 'string', description: 'Name of the project' },
+            include_imports: { type: 'boolean', description: 'Include files this file imports (default true)' },
+            include_imported_by: { type: 'boolean', description: 'Include files that import this file (default true)' },
+            depth: { type: 'number', description: 'How many levels of relationships to traverse (default 1)' }
+          },
+          required: ['file', 'project'],
         },
       },
       {
@@ -184,6 +214,36 @@ export function registerToolHandlers(server: Server): void {
           const params = args as { query: string; project?: string };
           const results = await searchKnowledge(params.query, params.project);
           return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
+        }
+
+        case 'search_code': {
+          const params = args as { query: string; project?: string; limit?: number };
+          const results = await searchCode(params.query, params.project, params.limit);
+          if (results.length === 0) {
+            return {
+              content: [{
+                type: 'text',
+                text: 'No code matches found. The code index may be empty or semantic search is not enabled.\nRun `index_knowledge` first to build the code index.'
+              }]
+            };
+          }
+          return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
+        }
+
+        case 'find_related_files': {
+          const params = args as {
+            file: string;
+            project: string;
+            include_imports?: boolean;
+            include_imported_by?: boolean;
+            depth?: number;
+          };
+          const result = await findRelatedFiles(params.file, params.project, {
+            includeImports: params.include_imports,
+            includeImportedBy: params.include_imported_by,
+            depth: params.depth
+          });
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
 
         case 'index_knowledge': {
