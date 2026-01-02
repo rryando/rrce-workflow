@@ -138,22 +138,39 @@ Turn 3: Reference cached findings → Generate brief
 
 ---
 
-## 💰 Model Configuration
+## 💰 Model Configuration (User Choice)
 
-Optimized model selection for balanced cost/quality:
+**RRCE does NOT force specific models.** You choose what works for you!
 
-| Agent | Model | Use Case | Cost |
-|-------|-------|----------|------|
-| **Research** | Claude Haiku 4 | Q&A, clarification | $0.25/M tokens |
-| **Planning** | Claude Sonnet 4 | Task breakdown, reasoning | $3/M tokens |
-| **Executor** | Claude Sonnet 4 | Code generation | $3/M tokens |
-| **Orchestrator** | Claude Sonnet 4 | Multi-phase coordination | $3/M tokens |
+The optimization works with **ANY model** you configure in OpenCode. What we enable:
 
-**Why Haiku for Research?**
-- Research is primarily Q&A and documentation
-- Haiku is 12x cheaper than Sonnet
-- Quality is sufficient for clarification questions
-- Complex reasoning happens in Planning/Execution (Sonnet)
+| Feature | What It Does | Works With |
+|---------|--------------|------------|
+| **Provider Caching** | `setCacheKey: true` for all providers | Anthropic, OpenAI, OpenRouter, Google |
+| **Prompt Caching** | Automatic via `promptCacheKey = sessionID` | Any model that supports caching |
+| **Slim Prompts** | 70-93% smaller prompts | ALL models |
+| **Session Reuse** | Orchestrator reuses sessions | ALL models |
+
+### Recommended Models (Optional)
+
+If you want cost optimization, consider:
+
+| Agent | Recommendation | Rationale |
+|-------|----------------|-----------|
+| **Research** | Haiku/Mini | Q&A doesn't need heavy reasoning |
+| **Planning** | Sonnet/GPT-4o | Task breakdown needs reasoning |
+| **Executor** | Sonnet/GPT-4o | Code generation needs power |
+
+**To set models per agent (optional):**
+```json
+{
+  "agent": {
+    "rrce_research_discussion": {
+      "model": "anthropic/claude-haiku-4-20250514"
+    }
+  }
+}
+```
 
 **Configuration location:** `opencode.json` in project root or `~/.config/opencode/opencode.json`
 

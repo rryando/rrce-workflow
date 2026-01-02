@@ -134,10 +134,10 @@
 - ✅ Session state management (caching guidance present)
 - ✅ Orchestrator session reuse (session_id parameter present)
 - ✅ Hybrid research approach (max 2 rounds documented)
-- ✅ Model configuration (Haiku for research, Sonnet for planning/execution)
+- ✅ Provider caching enabled (model-agnostic)
 - ✅ Tool permissions (task/todo disabled for subagents)
 
-**Results:** 16/16 tests passing ✅
+**Results:** 15/15 tests passing ✅
 
 ---
 

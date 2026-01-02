@@ -13,6 +13,56 @@ function getOpenCodeConfigPath(): string {
 }
 
 /**
+ * Enable provider caching for all supported providers in OpenCode config.
+ * This sets `setCacheKey: true` for each provider, which enables prompt caching
+ * for multi-turn conversations and session reuse.
+ * 
+ * IMPORTANT: This function is model-agnostic - it only enables caching without
+ * overwriting any existing provider settings (models, API keys, etc.)
+ * 
+ * Supported providers: anthropic, openai, openrouter, google
+ */
+export function enableProviderCaching(): void {
+  const opencodePath = getOpenCodeConfigPath();
+  
+  let config: Record<string, any> = {};
+  
+  // Load existing config if it exists
+  if (fs.existsSync(opencodePath)) {
+    try {
+      config = JSON.parse(fs.readFileSync(opencodePath, 'utf8'));
+    } catch (e) {
+      // If config is corrupted, start fresh but warn
+      console.error('Warning: Could not parse existing OpenCode config, creating new provider section');
+    }
+  } else {
+    // Ensure the directory exists
+    ensureDir(path.dirname(opencodePath));
+  }
+  
+  // Ensure provider section exists
+  if (!config.provider) {
+    config.provider = {};
+  }
+  
+  // Enable caching for each provider WITHOUT overwriting other settings
+  const providers = ['anthropic', 'openai', 'openrouter', 'google'];
+  for (const provider of providers) {
+    if (!config.provider[provider]) {
+      config.provider[provider] = {};
+    }
+    if (!config.provider[provider].options) {
+      config.provider[provider].options = {};
+    }
+    // Set caching key - this is the critical optimization flag
+    config.provider[provider].options.setCacheKey = true;
+  }
+  
+  // Write back with pretty formatting
+  fs.writeFileSync(opencodePath, JSON.stringify(config, null, 2));
+}
+
+/**
  * Copy parsed prompts to a target directory with specified extension
  */
 export function copyPromptsToDir(prompts: ParsedPrompt[], targetDir: string, extension: string) {

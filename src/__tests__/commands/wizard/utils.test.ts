@@ -24,7 +24,8 @@ import {
   convertToOpenCodeAgent, 
   updateOpenCodeConfig, 
   clearDirectory,
-  surgicalUpdateOpenCodeAgents 
+  surgicalUpdateOpenCodeAgents,
+  enableProviderCaching
 } from '../../../commands/wizard/utils';
 import { detectExistingProject } from '../../../commands/wizard/setup-actions';
 
@@ -281,6 +282,90 @@ describe('commands/wizard/utils', () => {
         expect(written.agent.rrce_init).toBeDefined(); // Added
         expect(written.agent.rrce_old).toBeUndefined(); // Removed (stale)
       }
+    });
+  });
+
+  describe('enableProviderCaching', () => {
+    it('enables caching for all providers in new config', () => {
+      (os.homedir as any).mockReturnValue('/home/user');
+      (fs.existsSync as any).mockReturnValue(false);
+      const writeSpy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+
+      enableProviderCaching();
+
+      expect(writeSpy).toHaveBeenCalled();
+      const writeCall = writeSpy.mock.calls[0];
+      if (!writeCall) throw new Error('write was not called');
+      const written = JSON.parse(writeCall[1] as string);
+
+      // All providers should have caching enabled
+      expect(written.provider.anthropic.options.setCacheKey).toBe(true);
+      expect(written.provider.openai.options.setCacheKey).toBe(true);
+      expect(written.provider.openrouter.options.setCacheKey).toBe(true);
+      expect(written.provider.google.options.setCacheKey).toBe(true);
+    });
+
+    it('preserves existing provider settings while adding caching', () => {
+      (os.homedir as any).mockReturnValue('/home/user');
+      
+      const existingConfig = {
+        provider: {
+          anthropic: {
+            model: 'claude-sonnet-4-20250514',
+            options: {
+              maxTokens: 8192
+            }
+          },
+          openai: {
+            model: 'gpt-4o'
+          }
+        },
+        agent: {
+          rrce_init: { description: 'Init' }
+        }
+      };
+      
+      (fs.existsSync as any).mockReturnValue(true);
+      (fs.readFileSync as any).mockReturnValue(JSON.stringify(existingConfig));
+      const writeSpy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+
+      enableProviderCaching();
+
+      expect(writeSpy).toHaveBeenCalled();
+      const writeCall = writeSpy.mock.calls[0];
+      if (!writeCall) throw new Error('write was not called');
+      const written = JSON.parse(writeCall[1] as string);
+
+      // Existing settings preserved
+      expect(written.provider.anthropic.model).toBe('claude-sonnet-4-20250514');
+      expect(written.provider.anthropic.options.maxTokens).toBe(8192);
+      expect(written.provider.openai.model).toBe('gpt-4o');
+      expect(written.agent.rrce_init).toBeDefined();
+
+      // Caching added
+      expect(written.provider.anthropic.options.setCacheKey).toBe(true);
+      expect(written.provider.openai.options.setCacheKey).toBe(true);
+      expect(written.provider.openrouter.options.setCacheKey).toBe(true);
+      expect(written.provider.google.options.setCacheKey).toBe(true);
+    });
+
+    it('handles corrupted config gracefully', () => {
+      (os.homedir as any).mockReturnValue('/home/user');
+      (fs.existsSync as any).mockReturnValue(true);
+      (fs.readFileSync as any).mockReturnValue('not valid json');
+      const writeSpy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      enableProviderCaching();
+
+      // Should still write a valid config with caching enabled
+      expect(writeSpy).toHaveBeenCalled();
+      const writeCall = writeSpy.mock.calls[0];
+      if (!writeCall) throw new Error('write was not called');
+      const written = JSON.parse(writeCall[1] as string);
+      
+      expect(written.provider.anthropic.options.setCacheKey).toBe(true);
+      expect(consoleSpy).toHaveBeenCalled();
     });
   });
 });

@@ -171,25 +171,23 @@ describe('RRCE Token Optimization Tests', () => {
       expect(config).toHaveProperty('agent');
     });
 
-    test('research agent should use Haiku model', () => {
+    test('provider caching should be enabled (model-agnostic)', () => {
       const configPath = path.join(__dirname, '../../opencode.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       
-      expect(config.agent.rrce_research_discussion.model).toContain('haiku');
+      // Caching should be enabled for all major providers
+      expect(config.provider?.anthropic?.options?.setCacheKey).toBe(true);
+      expect(config.provider?.openai?.options?.setCacheKey).toBe(true);
     });
 
-    test('planning agent should use Sonnet model (balanced)', () => {
+    test('agents should NOT have hardcoded models (user choice)', () => {
       const configPath = path.join(__dirname, '../../opencode.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       
-      expect(config.agent.rrce_planning_discussion.model).toContain('sonnet');
-    });
-
-    test('executor agent should use Sonnet model', () => {
-      const configPath = path.join(__dirname, '../../opencode.json');
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      
-      expect(config.agent.rrce_executor.model).toContain('sonnet');
+      // Agents should NOT have model set - let user choose
+      expect(config.agent.rrce_research_discussion.model).toBeUndefined();
+      expect(config.agent.rrce_planning_discussion.model).toBeUndefined();
+      expect(config.agent.rrce_executor.model).toBeUndefined();
     });
 
     test('research agent should have task/todo tools disabled', () => {

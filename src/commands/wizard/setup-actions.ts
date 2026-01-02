@@ -17,7 +17,7 @@ import {
   getDefaultRRCEHome
 } from '../../lib/paths';
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
-import { copyPromptsToDir, copyDirRecursive, surgicalUpdateOpenCodeAgents } from './utils';
+import { copyPromptsToDir, copyDirRecursive, surgicalUpdateOpenCodeAgents, enableProviderCaching } from './utils';
 import { generateVSCodeWorkspace } from './vscode';
 import { installToConfig, getTargetLabel, type InstallTarget, OPENCODE_CONFIG } from '../../mcp/install';
 
@@ -165,6 +165,11 @@ export async function installAgentPrompts(
       const primaryDataPath = dataPaths[0];
       if (primaryDataPath) {
         surgicalUpdateOpenCodeAgents(prompts, config.storageMode, primaryDataPath);
+        
+        // Enable provider caching for optimal token usage
+        // This sets setCacheKey: true for all providers (anthropic, openai, openrouter, google)
+        // which enables prompt caching for multi-turn conversations and session reuse
+        enableProviderCaching();
       }
     }
   }

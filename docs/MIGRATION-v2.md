@@ -94,30 +94,35 @@ Orchestrator: (Detects user wants implementation, auto-proceeds to planning → 
 
 ---
 
-### 4. Model Configuration (Cost Optimization)
+### 4. Provider Caching Configuration (Model-Agnostic)
 
-**What changed:** Research agent now uses **Claude Haiku** by default (12x cheaper)
+**What changed:** RRCE now enables provider caching for ALL providers, but does NOT force specific models
 
-| Agent | Old Model | New Model | Cost Change |
-|-------|-----------|-----------|-------------|
-| Research | Sonnet 4 | Haiku 4 | -92% |
-| Planning | Sonnet 4 | Sonnet 4 | No change |
-| Executor | Sonnet 4 | Sonnet 4 | No change |
+**New behavior:**
+- `setCacheKey: true` enabled for Anthropic, OpenAI, OpenRouter, Google
+- **No hardcoded models** - you choose what model to use
+- Prompt caching activates automatically for any model that supports it
 
-**Impact:** Research phase is now 98% cheaper, with minimal quality difference for Q&A tasks
+**Recommended models** (optional, for cost optimization):
 
-**Migration action:** None required (configured in `opencode.json`)
+| Agent | Recommendation | Rationale |
+|-------|----------------|-----------|
+| Research | Haiku/Mini | Q&A doesn't need heavy reasoning |
+| Planning | Sonnet/GPT-4o | Task breakdown needs reasoning |
+| Executor | Sonnet/GPT-4o | Code generation needs power |
 
-**To revert to Sonnet for research:**
+**To set models per agent (optional):**
 ```json
 {
   "agent": {
     "rrce_research_discussion": {
-      "model": "anthropic/claude-sonnet-4-20250514"
+      "model": "anthropic/claude-haiku-4-20250514"
     }
   }
 }
 ```
+
+**Migration action:** None required - caching is automatic
 
 ---
 

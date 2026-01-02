@@ -152,7 +152,7 @@ describe('RRCE Orchestrator', () => {
       expect(content).toContain('planning');
       expect(content).toContain('research');
       expect(content).toContain('execution');
-      expect(content).toContain('requires');
+      expect(content).toContain('prerequisite'); // phase dependencies documented
       expect(content).toContain('meta.json');
     });
   });
