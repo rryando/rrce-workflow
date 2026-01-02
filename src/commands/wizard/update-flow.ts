@@ -14,8 +14,7 @@ import {
   getDefaultRRCEHome
 } from '../../lib/paths';
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
-import { copyPromptsToDir, convertToOpenCodeAgent, copyDirRecursive, updateOpenCodeConfig } from './utils';
-import { OPENCODE_CONFIG } from '../../mcp/install';
+import { copyPromptsToDir, copyDirRecursive, clearDirectory, surgicalUpdateOpenCodeAgents } from './utils';
 import { DriftService } from '../../lib/drift-service';
 
 /**
@@ -206,11 +205,11 @@ export async function runUpdateFlow(
         copyPromptsToDir(prompts, antigravityPath, '.md');
       }
 
-      // Update OpenCode agents
+      // Update OpenCode agents - uses shared surgical update utility
       if (configContent.includes('opencode: true')) {
         const primaryDataPath = dataPaths[0];
         if (primaryDataPath) {
-          updateOpenCodeAgents(prompts, mode, primaryDataPath);
+          surgicalUpdateOpenCodeAgents(prompts, mode, primaryDataPath);
         }
       }
       
@@ -274,88 +273,6 @@ export async function runUpdateFlow(
     s.stop('Error occurred');
     cancel(`Failed to update: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
-  }
-}
-
-/**
- * Update OpenCode agents based on storage mode
- */
-function updateOpenCodeAgents(
-  prompts: ReturnType<typeof loadPromptsFromDir>,
-  mode: StorageMode,
-  primaryDataPath: string
-): void {
-  if (mode === 'global') {
-    // Global mode: Use surgical update utility
-    try {
-      const promptsDir = path.join(path.dirname(OPENCODE_CONFIG), 'prompts');
-      ensureDir(promptsDir);
-      
-      const newAgents: Record<string, any> = {};
-      
-      // Add/update current prompts - write files and use references
-      for (const prompt of prompts) {
-        const baseName = path.basename(prompt.filePath, '.md');
-        const agentId = `rrce_${baseName}`;
-        const promptFileName = `rrce-${baseName}.md`;
-        const promptFilePath = path.join(promptsDir, promptFileName);
-
-        // Write the prompt content to a separate file
-        fs.writeFileSync(promptFilePath, prompt.content);
-
-        // Create agent config with file reference
-        const agentConfig = convertToOpenCodeAgent(prompt, true, `./prompts/${promptFileName}`);
-        newAgents[agentId] = agentConfig;
-      }
-
-      // Use surgical update utility
-      updateOpenCodeConfig(newAgents);
-      
-      // Hide OpenCode's native plan agent to avoid confusion with RRCE orchestrator
-      if (fs.existsSync(OPENCODE_CONFIG)) {
-          const config = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf8'));
-          if (!config.agents) config.agents = {};
-          if (!config.agents.plan) config.agents.plan = {};
-          config.agents.plan.disable = true;
-          fs.writeFileSync(OPENCODE_CONFIG, JSON.stringify(config, null, 2));
-      }
-
-    } catch (e) {
-      console.error('Failed to update global OpenCode config with agents:', e);
-    }
-  } else {
-    // Workspace mode: Update .rrce-workflow/.opencode/agent
-    const opencodeBaseDir = path.join(primaryDataPath, '.opencode', 'agent');
-    ensureDir(opencodeBaseDir);
-
-    // Clear old agents first
-    clearDirectory(opencodeBaseDir);
-
-    for (const prompt of prompts) {
-      const baseName = path.basename(prompt.filePath, '.md');
-      const agentId = `rrce_${baseName}`;
-      const agentConfig = convertToOpenCodeAgent(prompt);
-      const content = `---\n${stringify({
-        description: agentConfig.description,
-        mode: agentConfig.mode,
-        tools: agentConfig.tools
-      })}---\n${agentConfig.prompt}`;
-      fs.writeFileSync(path.join(opencodeBaseDir, `${agentId}.md`), content);
-    }
-  }
-}
-
-/**
- * Clear all files in a directory (but not subdirectories)
- */
-function clearDirectory(dirPath: string): void {
-  if (!fs.existsSync(dirPath)) return;
-  
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.isFile()) {
-      fs.unlinkSync(path.join(dirPath, entry.name));
-    }
   }
 }
 

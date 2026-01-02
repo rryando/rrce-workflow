@@ -3,7 +3,14 @@ import * as path from 'path';
 import * as os from 'os';
 import { stringify } from 'yaml';
 import { ensureDir } from '../../lib/paths';
-import type { ParsedPrompt } from '../../types/prompt';
+import type { ParsedPrompt, StorageMode } from '../../types/prompt';
+
+/**
+ * Get the path to OpenCode config (lazy evaluated to support testing)
+ */
+function getOpenCodeConfigPath(): string {
+  return path.join(os.homedir(), '.config', 'opencode', 'opencode.json');
+}
 
 /**
  * Copy parsed prompts to a target directory with specified extension
@@ -132,6 +139,97 @@ export function copyDirRecursive(src: string, dest: string) {
       copyDirRecursive(srcPath, destPath);
     } else {
       fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+/**
+ * Clear all files in a directory (but not subdirectories)
+ * Useful for removing old agent files before writing new ones
+ */
+export function clearDirectory(dirPath: string): void {
+  if (!fs.existsSync(dirPath)) return;
+  
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isFile()) {
+      fs.unlinkSync(path.join(dirPath, entry.name));
+    }
+  }
+}
+
+/**
+ * Surgically update OpenCode agents using proper cleanup logic
+ * Removes old rrce_* agents, adds new ones, preserves user agents
+ * 
+ * @param prompts - The parsed prompts to install as agents
+ * @param mode - Storage mode ('global' or 'workspace')
+ * @param dataPath - The primary data path for the project
+ */
+export function surgicalUpdateOpenCodeAgents(
+  prompts: ParsedPrompt[], 
+  mode: StorageMode, 
+  dataPath: string
+): void {
+  if (mode === 'global') {
+    // Global mode: Update ~/.config/opencode/opencode.json surgically
+    try {
+      const openCodeConfig = getOpenCodeConfigPath();
+      const promptsDir = path.join(path.dirname(openCodeConfig), 'prompts');
+      ensureDir(promptsDir);
+      
+      const newAgents: Record<string, any> = {};
+      
+      // Write prompt files and build agent configs
+      for (const prompt of prompts) {
+        const baseName = path.basename(prompt.filePath, '.md');
+        const agentId = `rrce_${baseName}`;
+        const promptFileName = `rrce-${baseName}.md`;
+        const promptFilePath = path.join(promptsDir, promptFileName);
+
+        // Write the prompt content to a separate file
+        fs.writeFileSync(promptFilePath, prompt.content);
+
+        // Create agent config with file reference
+        const agentConfig = convertToOpenCodeAgent(prompt, true, `./prompts/${promptFileName}`);
+        newAgents[agentId] = agentConfig;
+      }
+
+      // Use surgical update utility (removes old rrce_* agents, upserts new ones)
+      updateOpenCodeConfig(newAgents);
+      
+      // Hide OpenCode's native plan agent to avoid confusion with RRCE orchestrator
+      if (fs.existsSync(openCodeConfig)) {
+        const config = JSON.parse(fs.readFileSync(openCodeConfig, 'utf8'));
+        if (!config.agents) config.agents = {};
+        if (!config.agents.plan) config.agents.plan = {};
+        config.agents.plan.disable = true;
+        fs.writeFileSync(openCodeConfig, JSON.stringify(config, null, 2));
+      }
+
+    } catch (e) {
+      console.error('Failed to update global OpenCode config with agents:', e);
+      throw e;
+    }
+  } else {
+    // Workspace mode: Clear and rewrite .rrce-workflow/.opencode/agent/
+    const opencodeBaseDir = path.join(dataPath, '.opencode', 'agent');
+    ensureDir(opencodeBaseDir);
+
+    // IMPORTANT: Clear old agents first (this is the fix!)
+    clearDirectory(opencodeBaseDir);
+
+    // Write new agents
+    for (const prompt of prompts) {
+      const baseName = path.basename(prompt.filePath, '.md');
+      const agentId = `rrce_${baseName}`;
+      const agentConfig = convertToOpenCodeAgent(prompt);
+      const content = `---\n${stringify({
+        description: agentConfig.description,
+        mode: agentConfig.mode,
+        tools: agentConfig.tools
+      })}---\n${agentConfig.prompt}`;
+      fs.writeFileSync(path.join(opencodeBaseDir, `${agentId}.md`), content);
     }
   }
 }

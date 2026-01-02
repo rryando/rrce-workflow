@@ -7,7 +7,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import pc from 'picocolors';
 import { note } from '@clack/prompts';
-import { stringify } from 'yaml';
 import type { StorageMode } from '../../types/prompt';
 import type { DetectedProject } from '../../lib/detection';
 import { 
@@ -18,9 +17,80 @@ import {
   getDefaultRRCEHome
 } from '../../lib/paths';
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
-import { copyPromptsToDir, convertToOpenCodeAgent, copyDirRecursive } from './utils';
+import { copyPromptsToDir, copyDirRecursive, surgicalUpdateOpenCodeAgents } from './utils';
 import { generateVSCodeWorkspace } from './vscode';
-import { installToConfig, getTargetLabel, type InstallTarget, OPENCODE_CONFIG_DIR, OPENCODE_CONFIG } from '../../mcp/install';
+import { installToConfig, getTargetLabel, type InstallTarget, OPENCODE_CONFIG } from '../../mcp/install';
+
+/**
+ * Detection result for existing project
+ */
+export interface ExistingProjectInfo {
+  isExisting: boolean;
+  currentMode: StorageMode | null;
+  configPath: string | null;
+}
+
+/**
+ * Detect if a project already has RRCE installed
+ * Checks for config.yaml (global or workspace) or orphaned OpenCode agents
+ */
+export function detectExistingProject(
+  workspacePath: string, 
+  workspaceName: string,
+  globalPath?: string
+): ExistingProjectInfo {
+  // Check for global config
+  const rrceHome = globalPath || getDefaultRRCEHome();
+  const globalConfigPath = path.join(rrceHome, 'workspaces', workspaceName, 'config.yaml');
+  
+  // Check for workspace config
+  const workspaceConfigPath = path.join(workspacePath, '.rrce-workflow', 'config.yaml');
+  
+  // Check OpenCode config for rrce_ agents
+  const hasOpenCodeAgents = checkForRRCEAgents();
+  
+  // Determine which config exists
+  if (fs.existsSync(globalConfigPath)) {
+    return {
+      isExisting: true,
+      currentMode: 'global',
+      configPath: globalConfigPath
+    };
+  } else if (fs.existsSync(workspaceConfigPath)) {
+    return {
+      isExisting: true,
+      currentMode: 'workspace',
+      configPath: workspaceConfigPath
+    };
+  } else if (hasOpenCodeAgents) {
+    // Agents exist but no config - likely incomplete setup
+    return {
+      isExisting: true,
+      currentMode: null,
+      configPath: null
+    };
+  }
+  
+  return {
+    isExisting: false,
+    currentMode: null,
+    configPath: null
+  };
+}
+
+/**
+ * Check if OpenCode config has RRCE agents
+ */
+function checkForRRCEAgents(): boolean {
+  if (!fs.existsSync(OPENCODE_CONFIG)) return false;
+  try {
+    const config = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf8'));
+    const agentKeys = Object.keys(config.agent || config.agents || {});
+    return agentKeys.some(key => key.startsWith('rrce_'));
+  } catch {
+    return false;
+  }
+}
 
 export interface SetupConfig {
   storageMode: StorageMode;
@@ -90,63 +160,11 @@ export async function installAgentPrompts(
       }
     }
 
-    // OpenCode agents (respects storage mode)
+    // OpenCode agents (respects storage mode) - uses surgical update logic
     if (config.tools.includes('opencode')) {
       const primaryDataPath = dataPaths[0];
       if (primaryDataPath) {
-        // Determine where to put OpenCode agents
-        if (config.storageMode === 'global') {
-          // Global mode: Write prompt files to ~/.config/opencode/prompts/ and reference them
-          try {
-            const promptsDir = path.join(path.dirname(OPENCODE_CONFIG), 'prompts');
-            ensureDir(promptsDir);
-
-            let opencodeConfig: any = { $schema: "https://opencode.ai/config.json" };
-            if (fs.existsSync(OPENCODE_CONFIG)) {
-              opencodeConfig = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf-8'));
-            }
-            if (!opencodeConfig.agent) opencodeConfig.agent = {};
-
-            for (const prompt of prompts) {
-              const baseName = path.basename(prompt.filePath, '.md');
-              const agentId = `rrce_${baseName}`;
-              const promptFileName = `rrce-${baseName}.md`;
-              const promptFilePath = path.join(promptsDir, promptFileName);
-
-              // Write the prompt content to a separate file
-              fs.writeFileSync(promptFilePath, prompt.content);
-
-              // Create agent config with file reference
-              const agentConfig = convertToOpenCodeAgent(prompt, true, `./prompts/${promptFileName}`);
-              opencodeConfig.agent[agentId] = agentConfig;
-            }
-
-            // Hide OpenCode's native plan agent to avoid confusion with RRCE orchestrator
-            if (!opencodeConfig.agent) opencodeConfig.agent = {};
-            if (!opencodeConfig.agent.plan) opencodeConfig.agent.plan = {};
-            opencodeConfig.agent.plan.disable = true;
-
-            fs.writeFileSync(OPENCODE_CONFIG, JSON.stringify(opencodeConfig, null, 2) + '\n');
-          } catch (e) {
-            console.error('Failed to update global OpenCode config with agents:', e);
-          }
-        } else {
-          // Workspace mode: put them in .rrce-workflow/.opencode/agent
-          const opencodeBaseDir = path.join(primaryDataPath, '.opencode', 'agent');
-          ensureDir(opencodeBaseDir);
-          for (const prompt of prompts) {
-            const baseName = path.basename(prompt.filePath, '.md');
-            const agentId = `rrce_${baseName}`;
-            const agentConfig = convertToOpenCodeAgent(prompt);
-            // In workspace mode, we keep individual markdown files with frontmatter
-            const content = `---\n${stringify({
-              description: agentConfig.description,
-              mode: agentConfig.mode,
-              tools: agentConfig.tools
-            })}---\n${agentConfig.prompt}`;
-            fs.writeFileSync(path.join(opencodeBaseDir, `${agentId}.md`), content);
-          }
-        }
+        surgicalUpdateOpenCodeAgents(prompts, config.storageMode, primaryDataPath);
       }
     }
   }

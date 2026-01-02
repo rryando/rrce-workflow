@@ -11,6 +11,7 @@ import type { StorageMode } from '../../types/prompt';
 import { type DetectedProject } from '../../lib/detection';
 import { resolveGlobalPath } from '../../lib/tui-utils';
 import { isOpenCodeInstalled, isAntigravityInstalled, isVSCodeInstalled } from '../../mcp/install';
+import { getDefaultRRCEHome } from '../../lib/paths';
 
 // Import extracted prompt functions
 import {
@@ -32,6 +33,7 @@ import {
   registerWithMCP,
   getDataPaths,
   installToSelectedIDEs,
+  detectExistingProject,
 } from './setup-actions';
 
 // Re-export for other modules
@@ -143,6 +145,52 @@ async function runExpressSetup(
 }
 
 /**
+ * Setup-as-Update: When an existing project is detected, redirect to update flow
+ * This ensures surgical updates (remove old agents, add new) instead of merge-only logic
+ */
+async function runSetupAsUpdate(
+  workspacePath: string,
+  workspaceName: string,
+  currentMode: StorageMode | null
+): Promise<void> {
+  // If mode is unknown (orphaned agents), prompt for it
+  let mode = currentMode;
+  if (!mode) {
+    const modeResult = await select({
+      message: 'Storage mode not detected. Please confirm:',
+      options: [
+        { value: 'global', label: 'Global (~/.rrce-workflow/)' },
+        { value: 'workspace', label: 'Workspace (.rrce-workflow/)' },
+      ],
+      initialValue: 'global',
+    });
+    
+    if (isCancel(modeResult)) {
+      cancel('Setup cancelled.');
+      process.exit(0);
+    }
+    mode = modeResult as StorageMode;
+  }
+  
+  // Run update flow
+  const { runUpdateFlow } = await import('./update-flow');
+  await runUpdateFlow(workspacePath, workspaceName, mode);
+  
+  // Offer to start MCP server (same as normal setup)
+  const startMCP = await confirm({
+    message: 'Start MCP server now?',
+    initialValue: true,
+  });
+  
+  if (startMCP && !isCancel(startMCP)) {
+    const { runMCP } = await import('../../mcp/index');
+    await runMCP();
+  } else {
+    outro(pc.green(`✓ Setup complete! Run ${pc.cyan('npx rrce-workflow mcp')} to start the server.`));
+  }
+}
+
+/**
  * Run the full setup flow for new workspaces
  */
 export async function runSetupFlow(
@@ -150,6 +198,25 @@ export async function runSetupFlow(
   workspaceName: string,
   existingProjects: DetectedProject[]
 ): Promise<void> {
+  // Check if this is an existing project FIRST
+  const customGlobalPath = getDefaultRRCEHome();
+  const existingProjectInfo = detectExistingProject(workspacePath, workspaceName, customGlobalPath);
+  
+  if (existingProjectInfo.isExisting) {
+    note(
+      `${pc.cyan('ℹ')} Existing RRCE installation detected.\n` +
+      `Running smart update to sync with latest version.`,
+      'Update Mode'
+    );
+    
+    return runSetupAsUpdate(
+      workspacePath, 
+      workspaceName, 
+      existingProjectInfo.currentMode
+    );
+  }
+  
+  // Fresh project - continue with normal setup flow
   const s = spinner();
   
   // Ask for setup mode first
@@ -178,10 +245,10 @@ export async function runSetupFlow(
   const storageMode = await promptStorageMode();
   
   // Resolve global path if needed
-  let customGlobalPath: string | undefined;
+  let resolvedGlobalPath: string | undefined;
   if (storageMode === 'global') {
-    customGlobalPath = await resolveGlobalPath();
-    if (!customGlobalPath) {
+    resolvedGlobalPath = await resolveGlobalPath();
+    if (!resolvedGlobalPath) {
       cancel('Setup cancelled - no global path selected.');
       process.exit(0);
     }
@@ -209,7 +276,7 @@ export async function runSetupFlow(
   // Build config
   const config: SetupConfig = {
     storageMode,
-    globalPath: customGlobalPath,
+    globalPath: resolvedGlobalPath,
     tools,
     linkedProjects,
     addToGitignore,
