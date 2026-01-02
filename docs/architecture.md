@@ -2,18 +2,18 @@
 
 > RR Context Engineering Workflow - A selection-agnostic agentic workflow system
 > 
-> **Version**: 0.2.91 | **Last Updated**: 2025-12-31
+> **Version**: 0.2.96 | **Last Updated**: 2026-01-02
 
 ## Overview
 
 RRCE-Workflow is a TUI-based agentic code workflow generator designed to work seamlessly across:
-- **OpenCode** (Native agentic TUI environment with custom Primary Agents)
+- **OpenCode** (Native agentic TUI environment; RRCE installs subagents invoked via `@rrce_<agent>`)
 - **GitHub Copilot** (VSCode with MCP extension)
 - **Antigravity IDE** (Google's agentic coding environment)
 - **Claude Desktop** (MCP Server integration)
 - **Any MCP-compatible client**
 
-The system provides a structured multi-agent pipeline (7 agents) for software development tasks, with persistent knowledge caching, semantic search (RAG), and workspace-aware context management.
+The system provides a structured multi-agent pipeline (7 agents) for software development tasks, with persistent knowledge caching, semantic search (RAG) across knowledge and code, and workspace-aware context management.
 
 ## Core Principles
 
