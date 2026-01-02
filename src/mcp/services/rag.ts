@@ -373,6 +373,15 @@ export class RAGService {
   }
 
   /**
+   * Get current indexed file paths
+   */
+  getIndexedFiles(): string[] {
+    this.loadIndex();
+    if (!this.index || !this.index.fileMetadata) return [];
+    return Object.keys(this.index.fileMetadata);
+  }
+
+  /**
    * Get index statistics
    */
   getStats(): { totalChunks: number; totalFiles: number; lastFullIndex?: number } {

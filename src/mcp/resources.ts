@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import ignore from 'ignore';
 import { logger } from './logger';
 import type { IndexJobState } from './services/indexing-jobs';
 import { loadMCPConfig, isProjectExposed, getProjectPermissions } from './config';
@@ -588,10 +589,45 @@ export async function indexKnowledge(projectName: string, force: boolean = false
         '.sql'
     ];
 
-    // Directories to skip
-    const SKIP_DIRS = ['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', 'venv', '.venv', 'target', 'vendor'];
+     // Directories to skip (still applied when .gitignore missing)
+     const SKIP_DIRS = ['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', 'venv', '.venv', 'target', 'vendor'];
 
-     const runIndexing = async (): Promise<void> => {
+     const gitignorePath = path.join(scanRoot, '.gitignore');
+     const ig = fs.existsSync(gitignorePath)
+       ? ignore().add(fs.readFileSync(gitignorePath, 'utf-8'))
+       : null;
+
+     const toPosixRelativePath = (absolutePath: string): string => {
+       const rel = path.relative(scanRoot, absolutePath);
+       return rel.split(path.sep).join('/');
+     };
+
+     const isUnderGitDir = (absolutePath: string): boolean => {
+       const rel = toPosixRelativePath(absolutePath);
+       return rel === '.git' || rel.startsWith('.git/');
+     };
+
+     const isIgnoredByGitignore = (absolutePath: string, isDir: boolean): boolean => {
+       if (!ig) return false;
+       const rel = toPosixRelativePath(absolutePath);
+       return ig.ignores(isDir ? `${rel}/` : rel);
+     };
+
+     const shouldSkipEntryDir = (absolutePath: string): boolean => {
+       const dirName = path.basename(absolutePath);
+       if (dirName === '.git') return true;
+       if (SKIP_DIRS.includes(dirName)) return true;
+       if (isIgnoredByGitignore(absolutePath, true)) return true;
+       return false;
+     };
+
+     const shouldSkipEntryFile = (absolutePath: string): boolean => {
+       if (isUnderGitDir(absolutePath)) return true;
+       if (isIgnoredByGitignore(absolutePath, false)) return true;
+       return false;
+     };
+
+      const runIndexing = async (): Promise<void> => {
          const indexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'embeddings.json');
          const codeIndexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'code-embeddings.json');
          
@@ -606,46 +642,69 @@ export async function indexKnowledge(projectName: string, force: boolean = false
          let itemsTotal = 0;
          let itemsDone = 0;
 
-         const shouldSkipDir = (dirName: string) => SKIP_DIRS.includes(dirName) || dirName.startsWith('.');
+          const preCount = (dir: string) => {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+              const fullPath = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                if (shouldSkipEntryDir(fullPath)) continue;
+                preCount(fullPath);
+              } else if (entry.isFile()) {
+                const ext = path.extname(entry.name).toLowerCase();
+                if (!INDEXABLE_EXTENSIONS.includes(ext)) continue;
+                if (shouldSkipEntryFile(fullPath)) continue;
+                itemsTotal++;
+              }
+            }
+          };
 
-         const preCount = (dir: string) => {
-           const entries = fs.readdirSync(dir, { withFileTypes: true });
-           for (const entry of entries) {
-             const fullPath = path.join(dir, entry.name);
-             if (entry.isDirectory()) {
-               if (shouldSkipDir(entry.name)) continue;
-               preCount(fullPath);
-             } else if (entry.isFile()) {
-               const ext = path.extname(entry.name).toLowerCase();
-               if (!INDEXABLE_EXTENSIONS.includes(ext)) continue;
-               itemsTotal++;
-             }
-           }
-         };
+          preCount(scanRoot);
+          indexingJobs.update(project.name, { itemsTotal });
 
-         preCount(scanRoot);
-         indexingJobs.update(project.name, { itemsTotal });
+          const cleanupIgnoredFiles = async (): Promise<void> => {
+            const indexedFiles = [...rag.getIndexedFiles(), ...codeRag.getIndexedFiles()];
+            const unique = Array.from(new Set(indexedFiles));
+            for (const filePath of unique) {
+              if (!path.isAbsolute(filePath)) continue;
 
-         // Recursive file scanner
+              const relFilePath = filePath.split(path.sep).join('/');
+              const relScanRoot = scanRoot.split(path.sep).join('/');
+              const isInScanRoot = relFilePath === relScanRoot || relFilePath.startsWith(`${relScanRoot}/`);
+              if (!isInScanRoot) continue;
+
+              if (shouldSkipEntryFile(filePath)) {
+                await rag.removeFile(filePath);
+                await codeRag.removeFile(filePath);
+              }
+            }
+          };
+
+          await cleanupIgnoredFiles();
+
+          // Recursive file scanner
          const scanDir = async (dir: string) => {
              const entries = fs.readdirSync(dir, { withFileTypes: true });
              
              for (const entry of entries) {
                  const fullPath = path.join(dir, entry.name);
                  
-                 if (entry.isDirectory()) {
-                     // Skip excluded directories
-                     if (shouldSkipDir(entry.name)) {
-                         continue;
-                     }
-                     await scanDir(fullPath);
-                 } else if (entry.isFile()) {
-                     const ext = path.extname(entry.name).toLowerCase();
-                     if (!INDEXABLE_EXTENSIONS.includes(ext)) {
-                         continue;
-                     }
-                     
-                     try {
+                  if (entry.isDirectory()) {
+                      // Skip excluded directories
+                      if (shouldSkipEntryDir(fullPath)) {
+                          continue;
+                      }
+                      await scanDir(fullPath);
+                  } else if (entry.isFile()) {
+                      const ext = path.extname(entry.name).toLowerCase();
+                      if (!INDEXABLE_EXTENSIONS.includes(ext)) {
+                          continue;
+                      }
+
+                      if (shouldSkipEntryFile(fullPath)) {
+                          continue;
+                      }
+                      
+                      try {
                           indexingJobs.update(project.name, { currentItem: fullPath, itemsDone });
                           const stat = fs.statSync(fullPath);
                           const mtime = force ? undefined : stat.mtimeMs; // Force ignores mtime
