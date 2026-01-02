@@ -1,0 +1,231 @@
+import { describe, test, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+
+/**
+ * Token Optimization Tests for RRCE Workflow
+ * 
+ * These tests validate the token usage optimizations made to subagent prompts.
+ * Target: 70% reduction in prompt size (from ~15K to ~4K tokens per agent)
+ */
+
+describe('RRCE Token Optimization Tests', () => {
+  const PROMPTS_DIR = path.join(__dirname, '../../agent-core/prompts');
+  
+  // Simple token estimation (rough approximation: 1 token ≈ 4 characters)
+  const estimateTokens = (text: string): number => {
+    return Math.ceil(text.length / 4);
+  };
+
+  describe('Prompt Size Validation', () => {
+    test('research_discussion.md should be under 5K tokens', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'research_discussion.md'),
+        'utf-8'
+      );
+      const tokens = estimateTokens(content);
+      
+      expect(tokens).toBeLessThan(5000);
+      console.log(`Research prompt: ${tokens} tokens (target: <5K)`);
+    });
+
+    test('planning_discussion.md should be under 5K tokens', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'planning_discussion.md'),
+        'utf-8'
+      );
+      const tokens = estimateTokens(content);
+      
+      expect(tokens).toBeLessThan(5000);
+      console.log(`Planning prompt: ${tokens} tokens (target: <5K)`);
+    });
+
+    test('executor.md should be under 6K tokens', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'executor.md'),
+        'utf-8'
+      );
+      const tokens = estimateTokens(content);
+      
+      // Executor needs more complexity, so slightly higher threshold
+      expect(tokens).toBeLessThan(6000);
+      console.log(`Executor prompt: ${tokens} tokens (target: <6K)`);
+    });
+
+    test('orchestrator.md should be under 5K tokens', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'orchestrator.md'),
+        'utf-8'
+      );
+      const tokens = estimateTokens(content);
+      
+      expect(tokens).toBeLessThan(5000);
+      console.log(`Orchestrator prompt: ${tokens} tokens (target: <5K)`);
+    });
+  });
+
+  describe('Session State Management', () => {
+    test('research prompt should include session state guidance', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'research_discussion.md'),
+        'utf-8'
+      );
+      
+      expect(content).toContain('Session State: Knowledge Cache');
+      expect(content).toContain('First turn ONLY');
+      expect(content).toContain('Store results');
+      expect(content).toContain('Only re-search if');
+    });
+
+    test('planning prompt should include session state guidance', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'planning_discussion.md'),
+        'utf-8'
+      );
+      
+      expect(content).toContain('Session State');
+      expect(content).toContain('First turn');
+    });
+  });
+
+  describe('Orchestrator Session Reuse', () => {
+    test('orchestrator should mention session_id parameter', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'orchestrator.md'),
+        'utf-8'
+      );
+      
+      expect(content).toContain('session_id');
+      expect(content).toContain('Session Naming Convention');
+      expect(content).toContain('research-${TASK_SLUG}');
+      expect(content).toContain('planning-${TASK_SLUG}');
+      expect(content).toContain('executor-${TASK_SLUG}');
+    });
+
+    test('orchestrator should explain session reuse benefits', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'orchestrator.md'),
+        'utf-8'
+      );
+      
+      expect(content).toContain('Session Reuse Benefits');
+      expect(content).toContain('Prompt caching');
+      expect(content).toContain('Context preserved');
+      expect(content).toContain('token reduction');
+    });
+  });
+
+  describe('Hybrid Research Approach', () => {
+    test('research prompt should implement hybrid clarification', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'research_discussion.md'),
+        'utf-8'
+      );
+      
+      expect(content).toContain('Hybrid');
+      expect(content).toContain('Max 2');
+      expect(content).toContain('critical questions');
+      expect(content).toContain('assumptions');
+    });
+  });
+
+  describe('Prompt Structure Validation', () => {
+    test('all prompts should have YAML frontmatter', () => {
+      const prompts = ['research_discussion.md', 'planning_discussion.md', 'executor.md', 'orchestrator.md'];
+      
+      prompts.forEach(promptFile => {
+        const content = fs.readFileSync(path.join(PROMPTS_DIR, promptFile), 'utf-8');
+        expect(content).toMatch(/^---\n/);
+        expect(content).toContain('name:');
+        expect(content).toContain('description:');
+        expect(content).toContain('tools:');
+      });
+    });
+
+    test('subagent prompts should have required sections', () => {
+      const subagents = [
+        'research_discussion.md',
+        'planning_discussion.md',
+        'executor.md'
+      ];
+      
+      subagents.forEach(promptFile => {
+        const content = fs.readFileSync(path.join(PROMPTS_DIR, promptFile), 'utf-8');
+        
+        // Core sections
+        expect(content).toContain('## Path Resolution');
+        expect(content).toContain('## Workflow');
+        expect(content).toContain('## Rules');
+        expect(content).toContain('## Constraints');
+        expect(content).toContain('## Completion Checklist');
+      });
+    });
+  });
+
+  describe('OpenCode Configuration', () => {
+    test('opencode.json should exist and be valid JSON', () => {
+      const configPath = path.join(__dirname, '../../opencode.json');
+      expect(fs.existsSync(configPath)).toBe(true);
+      
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      expect(config).toHaveProperty('agent');
+    });
+
+    test('research agent should use Haiku model', () => {
+      const configPath = path.join(__dirname, '../../opencode.json');
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      
+      expect(config.agent.rrce_research_discussion.model).toContain('haiku');
+    });
+
+    test('planning agent should use Sonnet model (balanced)', () => {
+      const configPath = path.join(__dirname, '../../opencode.json');
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      
+      expect(config.agent.rrce_planning_discussion.model).toContain('sonnet');
+    });
+
+    test('executor agent should use Sonnet model', () => {
+      const configPath = path.join(__dirname, '../../opencode.json');
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      
+      expect(config.agent.rrce_executor.model).toContain('sonnet');
+    });
+
+    test('research agent should have task/todo tools disabled', () => {
+      const configPath = path.join(__dirname, '../../opencode.json');
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      
+      expect(config.agent.rrce_research_discussion.tools.task).toBe(false);
+      expect(config.agent.rrce_research_discussion.tools.todowrite).toBe(false);
+      expect(config.agent.rrce_research_discussion.tools.todoread).toBe(false);
+    });
+  });
+});
+
+describe('Token Usage Regression Tests', () => {
+  /**
+   * These tests would ideally track actual token usage across API calls.
+   * For now, they serve as placeholders for integration testing.
+   */
+  
+  test.skip('research phase should use <20K tokens total (3 rounds)', async () => {
+    // TODO: Implement integration test with actual API calls
+    // Simulate research with 3 question rounds
+    // Track total token usage via API response
+    // Assert < 20K tokens
+  });
+
+  test.skip('full workflow should use <80K tokens (research → plan → execute)', async () => {
+    // TODO: Implement full workflow integration test
+    // Run complete RRCE workflow
+    // Sum token usage from all API responses
+    // Assert < 80K tokens total
+  });
+
+  test.skip('session reuse should show cache hits on turn 2+', async () => {
+    // TODO: Mock Anthropic API response
+    // Verify cache_creation_input_tokens on turn 1
+    // Verify cache_read_input_tokens on turn 2+
+  });
+});

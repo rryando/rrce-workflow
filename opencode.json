@@ -1,0 +1,124 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "rrce_research_discussion": {
+      "description": "Interactive research and requirements clarification (optimized for direct invocation)",
+      "mode": "subagent",
+      "model": "anthropic/claude-haiku-4-20250514",
+      "temperature": 0.2,
+      "tools": {
+        "search_knowledge": true,
+        "search_code": true,
+        "find_related_files": true,
+        "get_project_context": true,
+        "read": true,
+        "glob": true,
+        "grep": true,
+        "write": true,
+        "update_task": true,
+        "bash": false,
+        "edit": false,
+        "task": false,
+        "todowrite": false,
+        "todoread": false
+      }
+    },
+    "rrce_planning_discussion": {
+      "description": "Transform research into actionable execution plan (balanced reasoning)",
+      "mode": "subagent",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1,
+      "tools": {
+        "search_knowledge": true,
+        "search_code": true,
+        "find_related_files": true,
+        "get_project_context": true,
+        "read": true,
+        "glob": true,
+        "grep": true,
+        "write": true,
+        "update_task": true,
+        "bash": false,
+        "edit": false,
+        "task": false,
+        "todowrite": false,
+        "todoread": false
+      }
+    },
+    "rrce_executor": {
+      "description": "Execute planned tasks - ONLY agent authorized to modify source code",
+      "mode": "subagent",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.3,
+      "tools": {
+        "search_knowledge": true,
+        "search_code": true,
+        "find_related_files": true,
+        "get_project_context": true,
+        "index_knowledge": true,
+        "read": true,
+        "glob": true,
+        "grep": true,
+        "write": true,
+        "edit": true,
+        "bash": true,
+        "update_task": true,
+        "task": false,
+        "todowrite": false,
+        "todoread": false
+      }
+    },
+    "rrce_orchestrator": {
+      "description": "Orchestrates full RRCE workflow lifecycle with session reuse (for multi-phase automation)",
+      "mode": "primary",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.2,
+      "tools": {
+        "search_knowledge": true,
+        "search_code": true,
+        "find_related_files": true,
+        "get_project_context": true,
+        "index_knowledge": true,
+        "list_tasks": true,
+        "get_task": true,
+        "create_task": true,
+        "update_task": true,
+        "delete_task": true,
+        "read": true,
+        "glob": true,
+        "grep": true,
+        "write": true,
+        "bash": true,
+        "webfetch": true,
+        "task": true,
+        "todowrite": true,
+        "todoread": true,
+        "edit": false
+      }
+    },
+    "rrce_init": {
+      "description": "Initialize project context and semantic search index",
+      "mode": "subagent",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1
+    },
+    "rrce_sync": {
+      "description": "Reconcile project state with RRCE knowledge base",
+      "mode": "subagent",
+      "model": "anthropic/claude-haiku-4-20250514",
+      "temperature": 0.1
+    },
+    "rrce_doctor": {
+      "description": "Analyze codebase health using semantic search",
+      "mode": "subagent",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "temperature": 0.1
+    },
+    "rrce_documentation": {
+      "description": "Produce project documentation aligned with latest delivery",
+      "mode": "subagent",
+      "model": "anthropic/claude-haiku-4-20250514",
+      "temperature": 0.2
+    }
+  }
+}
