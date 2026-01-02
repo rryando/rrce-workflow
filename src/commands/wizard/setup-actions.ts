@@ -100,26 +100,27 @@ export async function installAgentPrompts(
           try {
             const promptsDir = path.join(path.dirname(OPENCODE_CONFIG), 'prompts');
             ensureDir(promptsDir);
-            
+
             let opencodeConfig: any = { $schema: "https://opencode.ai/config.json" };
             if (fs.existsSync(OPENCODE_CONFIG)) {
               opencodeConfig = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf-8'));
             }
             if (!opencodeConfig.agent) opencodeConfig.agent = {};
-            
+
             for (const prompt of prompts) {
               const baseName = path.basename(prompt.filePath, '.md');
+              const agentId = `rrce_${baseName}`;
               const promptFileName = `rrce-${baseName}.md`;
               const promptFilePath = path.join(promptsDir, promptFileName);
-              
+
               // Write the prompt content to a separate file
               fs.writeFileSync(promptFilePath, prompt.content);
-              
+
               // Create agent config with file reference
               const agentConfig = convertToOpenCodeAgent(prompt, true, `./prompts/${promptFileName}`);
-              opencodeConfig.agent[baseName] = agentConfig;
+              opencodeConfig.agent[agentId] = agentConfig;
             }
-            
+
             fs.writeFileSync(OPENCODE_CONFIG, JSON.stringify(opencodeConfig, null, 2) + '\n');
           } catch (e) {
             console.error('Failed to update global OpenCode config with agents:', e);
@@ -130,6 +131,7 @@ export async function installAgentPrompts(
           ensureDir(opencodeBaseDir);
           for (const prompt of prompts) {
             const baseName = path.basename(prompt.filePath, '.md');
+            const agentId = `rrce_${baseName}`;
             const agentConfig = convertToOpenCodeAgent(prompt);
             // In workspace mode, we keep individual markdown files with frontmatter
             const content = `---\n${stringify({
@@ -137,7 +139,7 @@ export async function installAgentPrompts(
               mode: agentConfig.mode,
               tools: agentConfig.tools
             })}---\n${agentConfig.prompt}`;
-            fs.writeFileSync(path.join(opencodeBaseDir, `${baseName}.md`), content);
+            fs.writeFileSync(path.join(opencodeBaseDir, `${agentId}.md`), content);
           }
         }
       }
