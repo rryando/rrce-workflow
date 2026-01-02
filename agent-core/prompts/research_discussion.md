@@ -2,7 +2,7 @@
 name: RRCE Research
 description: Interactive research and requirements clarification through constructive dialogue. Achieves 100% understanding before planning.
 argument-hint: REQUEST="<user prompt>" [TASK_SLUG=<slug>] [TITLE="<task title>"] [SOURCE=<url>]
-tools: ['search_knowledge', 'get_project_context', 'list_projects', 'create_task', 'update_task', 'read', 'glob', 'grep', 'write', 'bash']
+tools: ['search_knowledge', 'search_code', 'find_related_files', 'get_project_context', 'list_projects', 'create_task', 'update_task', 'read', 'glob', 'grep', 'write', 'bash']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter a task slug (kebab-case identifier)"
@@ -28,7 +28,9 @@ Use the pre-resolved paths from the "System Resolved Paths" table in the context
 For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 
 ### Tool Usage Guidance
-- **search_knowledge**: PREFER this tool for finding concepts, logic flow, or documentation. It uses semantic search (RAG) to find relevant code even without exact keyword matches.
+- **search_knowledge**: Use for finding documentation, concepts, or design decisions in knowledge files.
+- **search_code**: PREFER this for finding code implementations or patterns. Returns code snippets with line numbers and function/class context.
+- **find_related_files**: Use to understand file relationships and dependencies. Helpful for scoping impact.
 - **grep**: Use ONLY when searching for exact string patterns (e.g., specific function names, error codes).
 
 ## Pipeline Position

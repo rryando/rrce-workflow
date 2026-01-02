@@ -2,7 +2,7 @@
 name: RRCE Executor
 description: Execute the planned tasks to deliver working code and tests. The ONLY agent authorized to modify source code.
 argument-hint: "TASK_SLUG=<slug> [BRANCH=<git ref>]"
-tools: ['search_knowledge', 'get_project_context', 'index_knowledge', 'update_task', 'terminalLastCommand', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
+tools: ['search_knowledge', 'search_code', 'find_related_files', 'get_project_context', 'index_knowledge', 'update_task', 'terminalLastCommand', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter the task slug to execute"
@@ -24,7 +24,9 @@ Use the pre-resolved paths from the "System Resolved Paths" table in the context
 For details, see: `{{RRCE_DATA}}/docs/path-resolution.md`
 
 ### Tool Usage Guidance
-- **search_knowledge**: PREFER this tool for finding concepts, logic flow, or documentation. It uses semantic search (RAG) to find relevant code even without exact keyword matches.
+- **search_knowledge**: Use for finding documentation, concepts, or design decisions in knowledge files.
+- **search_code**: PREFER this for finding code implementations, patterns, or understanding how features work. Returns code snippets with line numbers and function/class context.
+- **find_related_files**: Use to discover files connected through imports/dependencies. Helpful for understanding impact of changes or finding all consumers of a module.
 - **grep**: Use ONLY when searching for exact string patterns (e.g., specific function names, error codes).
 
 ## Pipeline Position

@@ -14,7 +14,10 @@ import { normalizeProjectPath } from './config-utils';
 import { type DetectedProject, findClosestProject } from '../lib/detection';
 import { projectService } from '../lib/detection-service';
 import { RAGService } from './services/rag';
+import type { CodeChunk, ChunkWithLines } from './services/rag';
 import { indexingJobs } from './services/indexing-jobs';
+import { extractContext, getLanguageFromExtension } from './services/context-extractor';
+import { scanProjectDependencies, findRelatedFiles as findRelatedInGraph, type FileRelationship } from './services/dependency-graph';
 import { 
   getConfigPath, 
   resolveDataPath, 
@@ -161,6 +164,14 @@ export function getRAGIndexPath(project: DetectedProject): string {
 }
 
 /**
+ * Get Code-specific RAG index path for a project
+ */
+export function getCodeIndexPath(project: DetectedProject): string {
+    const scanRoot = project.path || project.dataPath;
+    return path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'code-embeddings.json');
+}
+
+/**
  * Detect the active project based on the current working directory (CWD)
  */
 export function detectActiveProject(knownProjects?: DetectedProject[]): DetectedProject | undefined {
@@ -259,6 +270,101 @@ export function getProjectTasks(projectName: string): object[] {
   }
 
   return tasks;
+}
+
+/**
+ * Search code files using semantic search on the code-specific index
+ * Returns code snippets with line numbers and context
+ * @param query Search query string
+ * @param projectFilter Optional: limit search to specific project name
+ * @param limit Maximum number of results (default 10)
+ */
+export async function searchCode(query: string, projectFilter?: string, limit: number = 10): Promise<Array<{
+  project: string;
+  file: string;
+  snippet: string;
+  lineStart: number;
+  lineEnd: number;
+  context?: string;
+  language?: string;
+  score: number;
+  indexingInProgress?: boolean;
+  advisoryMessage?: string;
+}>> {
+  const config = loadMCPConfig();
+  const projects = getExposedProjects();
+  const results: Array<{
+    project: string;
+    file: string;
+    snippet: string;
+    lineStart: number;
+    lineEnd: number;
+    context?: string;
+    language?: string;
+    score: number;
+    indexingInProgress?: boolean;
+    advisoryMessage?: string;
+  }> = [];
+
+  for (const project of projects) {
+    // Skip if project filter specified and doesn't match
+    if (projectFilter && project.name !== projectFilter) continue;
+
+    const permissions = getProjectPermissions(config, project.name, project.sourcePath || project.path);
+    if (!permissions.knowledge || !project.knowledgePath) continue;
+
+    const indexingInProgress = indexingJobs.isRunning(project.name);
+    const advisoryMessage = indexingInProgress
+      ? 'Indexing in progress; results may be stale/incomplete.'
+      : undefined;
+
+    // Check for RAG configuration
+    const projConfig = config.projects.find(p =>
+      (p.path && normalizeProjectPath(p.path) === normalizeProjectPath(project.sourcePath || project.path)) || (!p.path && p.name === project.name)
+    );
+    const useRAG = projConfig?.semanticSearch?.enabled;
+
+    if (!useRAG) {
+      logger.debug(`[searchCode] Semantic search not enabled for project '${project.name}'`);
+      continue;
+    }
+
+    try {
+      const codeIndexPath = getCodeIndexPath(project);
+      
+      if (!fs.existsSync(codeIndexPath)) {
+        logger.debug(`[searchCode] Code index not found for project '${project.name}'`);
+        continue;
+      }
+
+      const rag = new RAGService(codeIndexPath, projConfig?.semanticSearch?.model);
+      const ragResults = await rag.search(query, limit);
+
+      for (const r of ragResults) {
+        // CodeChunk fields are preserved even when cast to RAGChunk
+        const codeChunk = r as CodeChunk & { score: number };
+        
+        results.push({
+          project: project.name,
+          file: path.relative(project.sourcePath || project.path || '', codeChunk.filePath),
+          snippet: codeChunk.content,
+          lineStart: codeChunk.lineStart ?? 1,
+          lineEnd: codeChunk.lineEnd ?? 1,
+          context: codeChunk.context,
+          language: codeChunk.language,
+          score: codeChunk.score,
+          indexingInProgress: indexingInProgress || undefined,
+          advisoryMessage
+        });
+      }
+    } catch (e) {
+      logger.error(`[searchCode] Search failed for project '${project.name}'`, e);
+    }
+  }
+
+  // Sort by score descending and limit results
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, limit);
 }
 
 /**
@@ -466,17 +572,36 @@ export async function indexKnowledge(projectName: string, force: boolean = false
         '.html', '.css', '.scss', '.sass', '.less'
     ];
 
+    // Code-only extensions (for code-embeddings.json)
+    const CODE_EXTENSIONS = [
+        '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
+        '.py', '.pyw',
+        '.go',
+        '.rs',
+        '.java', '.kt', '.kts',
+        '.c', '.cpp', '.h', '.hpp',
+        '.cs',
+        '.rb',
+        '.php',
+        '.swift',
+        '.sh', '.bash', '.zsh',
+        '.sql'
+    ];
+
     // Directories to skip
     const SKIP_DIRS = ['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', 'venv', '.venv', 'target', 'vendor'];
 
      const runIndexing = async (): Promise<void> => {
          const indexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'embeddings.json');
+         const codeIndexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'code-embeddings.json');
          
          // Fix lint error: ensure model is defined or provide default
          const model = projConfig?.semanticSearch?.model || 'Xenova/all-MiniLM-L6-v2';
          const rag = new RAGService(indexPath, model);
+         const codeRag = new RAGService(codeIndexPath, model);
          
          let indexed = 0;
+         let codeIndexed = 0;
          let skipped = 0;
          let itemsTotal = 0;
          let itemsDone = 0;
@@ -521,19 +646,42 @@ export async function indexKnowledge(projectName: string, force: boolean = false
                      }
                      
                      try {
-                         indexingJobs.update(project.name, { currentItem: fullPath, itemsDone });
-                         const stat = fs.statSync(fullPath);
-                         const mtime = force ? undefined : stat.mtimeMs; // Force ignores mtime
-                         const content = fs.readFileSync(fullPath, 'utf-8');
-                         
-                         const wasIndexed = await rag.indexFile(fullPath, content, mtime);
-                         if (wasIndexed) {
-                             indexed++;
-                         } else {
-                             skipped++;
-                         }
-                     } catch (err) {
-                         // Skip files that can't be read (binary, permissions, etc.)
+                          indexingJobs.update(project.name, { currentItem: fullPath, itemsDone });
+                          const stat = fs.statSync(fullPath);
+                          const mtime = force ? undefined : stat.mtimeMs; // Force ignores mtime
+                          const content = fs.readFileSync(fullPath, 'utf-8');
+                          
+                          // Index in knowledge index (all files)
+                          const wasIndexed = await rag.indexFile(fullPath, content, mtime);
+                          if (wasIndexed) {
+                              indexed++;
+                          } else {
+                              skipped++;
+                          }
+                          
+                          // For code files, also index with line numbers + context in code index
+                          if (CODE_EXTENSIONS.includes(ext)) {
+                              // Check if needs re-indexing
+                              if (!mtime || codeRag.needsReindex(fullPath, mtime)) {
+                                  const language = getLanguageFromExtension(ext);
+                                  const chunks = codeRag.chunkContentWithLines(content);
+                                  
+                                  // Clear existing chunks for this file
+                                  codeRag.clearFileChunks(fullPath);
+                                  
+                                  // Index each chunk with context
+                                  for (const chunk of chunks) {
+                                      const context = extractContext(content, chunk.lineStart, language);
+                                      await codeRag.indexCodeChunk(fullPath, chunk, context, language, mtime);
+                                  }
+                                  
+                                  // Update file metadata
+                                  codeRag.updateFileMetadata(fullPath, chunks.length, mtime ?? Date.now(), language);
+                                  codeIndexed++;
+                              }
+                          }
+                      } catch (err) {
+                          // Skip files that can't be read (binary, permissions, etc.)
                      } finally {
                          itemsDone++;
                          indexingJobs.update(project.name, { itemsDone });
@@ -547,12 +695,14 @@ export async function indexKnowledge(projectName: string, force: boolean = false
          };
 
          await scanDir(scanRoot);
-         rag.markFullIndex();
+          rag.markFullIndex();
+          codeRag.markFullIndex();
 
-         const stats = rag.getStats();
-         const message = `Indexed ${indexed} files, skipped ${skipped} unchanged. Total: ${stats.totalChunks} chunks from ${stats.totalFiles} files.`;
-         // Store final details in logger (tool will report status via job state)
-         logger.info(`[RAG] ${project.name}: ${message}`);
+          const stats = rag.getStats();
+          const codeStats = codeRag.getStats();
+          const message = `Indexed ${indexed} files (${codeIndexed} code files), skipped ${skipped} unchanged. Knowledge: ${stats.totalChunks} chunks. Code: ${codeStats.totalChunks} chunks.`;
+          // Store final details in logger (tool will report status via job state)
+          logger.info(`[RAG] ${project.name}: ${message}`);
          indexingJobs.update(project.name, { currentItem: undefined });
      };
 
@@ -774,4 +924,99 @@ export function deleteTask(projectName: string, taskSlug: string): boolean {
     }
     
     return true;
+}
+
+/**
+ * Find files related to a given file through import relationships
+ * Uses static analysis of imports/dependencies to find connected files
+ * @param filePath Absolute or project-relative path to the file
+ * @param projectName Name of the project to search in
+ * @param options Options for relationship traversal
+ */
+export async function findRelatedFiles(
+  filePath: string,
+  projectName: string,
+  options: {
+    includeImports?: boolean;
+    includeImportedBy?: boolean;
+    depth?: number;
+  } = {}
+): Promise<{
+  success: boolean;
+  file: string;
+  project: string;
+  relationships: Array<{
+    file: string;
+    relationship: 'imports' | 'imported-by' | 'exports-to';
+    importPath: string;
+  }>;
+  message?: string;
+}> {
+  const config = loadMCPConfig();
+  const projects = getExposedProjects();
+  const project = projects.find(p => p.name === projectName);
+
+  if (!project) {
+    return {
+      success: false,
+      file: filePath,
+      project: projectName,
+      relationships: [],
+      message: `Project '${projectName}' not found`
+    };
+  }
+
+  const projectRoot = project.sourcePath || project.path || '';
+  
+  // Resolve file path - if relative, make it absolute
+  let absoluteFilePath = filePath;
+  if (!path.isAbsolute(filePath)) {
+    absoluteFilePath = path.resolve(projectRoot, filePath);
+  }
+
+  if (!fs.existsSync(absoluteFilePath)) {
+    return {
+      success: false,
+      file: filePath,
+      project: projectName,
+      relationships: [],
+      message: `File '${filePath}' not found`
+    };
+  }
+
+  try {
+    // Build dependency graph for the project
+    // TODO: In future, cache this graph in the knowledge directory
+    const graph = await scanProjectDependencies(projectRoot);
+    
+    // Find related files
+    const related = findRelatedInGraph(absoluteFilePath, graph, {
+      includeImports: options.includeImports ?? true,
+      includeImportedBy: options.includeImportedBy ?? true,
+      depth: options.depth ?? 1
+    });
+
+    // Convert absolute paths to project-relative paths
+    const relationships = related.map(r => ({
+      file: path.relative(projectRoot, r.file),
+      relationship: r.relationship,
+      importPath: r.importPath
+    }));
+
+    return {
+      success: true,
+      file: path.relative(projectRoot, absoluteFilePath),
+      project: projectName,
+      relationships
+    };
+  } catch (e) {
+    logger.error(`[findRelatedFiles] Error analyzing ${filePath}`, e);
+    return {
+      success: false,
+      file: filePath,
+      project: projectName,
+      relationships: [],
+      message: `Error analyzing file relationships: ${e instanceof Error ? e.message : String(e)}`
+    };
+  }
 }
