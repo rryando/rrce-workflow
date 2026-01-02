@@ -218,6 +218,10 @@ function updateOpenCodeAgents(
         const agentConfig = convertToOpenCodeAgent(prompt, true, `./prompts/${promptFileName}`);
         opencodeConfig.agent[agentId] = agentConfig;
       }
+
+      // Hide OpenCode's native plan agent to avoid confusion with RRCE orchestrator
+      if (!opencodeConfig.agent.plan) opencodeConfig.agent.plan = {};
+      opencodeConfig.agent.plan.disable = true;
       
       fs.writeFileSync(OPENCODE_CONFIG, JSON.stringify(opencodeConfig, null, 2) + '\n');
     } catch (e) {

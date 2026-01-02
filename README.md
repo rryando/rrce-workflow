@@ -86,7 +86,7 @@ The easiest way to connect is via the TUI (`npx rrce-workflow mcp` -> **Install*
 
 #### OpenCode
 
-RRCE-Workflow integrates with OpenCode both as an MCP server and by providing **Custom Primary Agents**.
+RRCE-Workflow integrates with OpenCode both as an MCP server and by providing a **Primary Orchestrator Agent** plus specialized subagents.
 
 1.  **Register MCP Server**: Add the following to `~/.config/opencode/opencode.json`:
     ```json
@@ -102,7 +102,17 @@ RRCE-Workflow integrates with OpenCode both as an MCP server and by providing **
     }
     ```
 
-2.  **Install Agents**: Run `npx rrce-workflow` and select **OpenCode** as a tool. This will generate specialized primary agents (Research, Planning, etc.) in `.opencode/agent/` that you can cycle through using the **Tab** key in the OpenCode TUI.
+2.  **Install Agents**: Run `npx rrce-workflow` and select **OpenCode** as a tool. This generates:
+    - **Primary Agent (`rrce`)**: Orchestrates the complete workflow lifecycle (tab-switchable)
+    - **Subagents** (`@rrce_*`): Specialized agents for each phase (expert mode)
+    - **Auto-configuration**: Hides OpenCode's native plan agent to avoid confusion
+
+3.  **Usage**:
+    - Press `Tab` to cycle to the RRCE agent for structured workflows
+    - Build agent can automatically delegate to RRCE for complex tasks
+    - Direct subagent access via `@rrce_init`, `@rrce_research`, etc.
+
+See [OpenCode Guide](docs/opencode-guide.md) for detailed usage instructions.
 
 #### VSCode (with MCP Extension)
 Add to `.vscode/mcp.json`:
@@ -171,25 +181,43 @@ Stores everything in a `.rrce-workflow` folder inside your project root.
 
 ## The Agent Pipeline
 
-Once installed, you gain access to 7 specialized agent workflows. Invoke them via your AI assistant's chat interface or through MCP tools.
+RRCE provides two ways to work with agents, depending on your workflow needs:
 
-| Agent | ID | Purpose | Key Arguments |
-|-------|----|---------|---------------|
-| **Init** | `init` | Analyze codebase, establish project context and semantic index | `PROJECT_NAME` (optional) |
-| **Research** | `research_discussion` | Interactive requirements clarification through dialogue | `TASK_SLUG`, `REQUEST` |
-| **Planning** | `planning_discussion` | Transform research into actionable execution plan | `TASK_SLUG` |
-| **Executor** | `executor` | Implement the plan - the ONLY agent authorized to modify code | `TASK_SLUG`, `BRANCH` |
-| **Docs** | `documentation` | Generate project documentation (API, architecture, changelog) | `DOC_TYPE`, `TASK_SLUG` |
-| **Sync** | `sync` | Reconcile knowledge base with current codebase state | `SCOPE` (optional) |
-| **Doctor** | `doctor` | Analyze codebase health, identify issues, recommend improvements | `PROJECT_NAME`, `FOCUS_AREA` |
+### Primary Orchestrator (Recommended for OpenCode)
+
+The **RRCE Orchestrator** is a primary agent that manages the complete workflow lifecycle:
+
+- **Access**: Press `Tab` in OpenCode to cycle to the RRCE agent
+- **Purpose**: Automatically coordinate research → planning → execution → documentation
+- **Delegation**: Build agent can delegate to RRCE for complex tasks
+- **Benefits**: Results flow back to calling agents, preventing hallucination
+
+### Specialized Subagents
+
+For expert control, invoke subagents directly via your AI assistant or MCP tools:
+
+| Agent | Invoke With | Purpose | Key Arguments |
+|-------|-------------|---------|---------------|
+| **Init** | `@rrce_init` | Analyze codebase, establish project context and semantic index | `PROJECT_NAME` (optional) |
+| **Research** | `@rrce_research_discussion` | Interactive requirements clarification through dialogue | `TASK_SLUG`, `REQUEST` |
+| **Planning** | `@rrce_planning_discussion` | Transform research into actionable execution plan | `TASK_SLUG` |
+| **Executor** | `@rrce_executor` | Implement the plan - the ONLY agent authorized to modify code | `TASK_SLUG`, `BRANCH` |
+| **Docs** | `@rrce_documentation` | Generate project documentation (API, architecture, changelog) | `DOC_TYPE`, `TASK_SLUG` |
+| **Sync** | `@rrce_sync` | Reconcile knowledge base with current codebase state | `SCOPE` (optional) |
+| **Doctor** | `@rrce_doctor` | Analyze codebase health, identify issues, recommend improvements | `PROJECT_NAME`, `FOCUS_AREA` |
+
+### Workflow Comparison
+
+| Approach | When to Use | Example |
+|----------|-------------|---------|
+| **Orchestrator** | Complex features, want automatic flow | Switch to RRCE agent: "Add user authentication" → Auto-orchestrates all phases |
+| **Subagents** | Expert control, specific phase needed | `@rrce_executor TASK_SLUG=user-auth` → Direct execution |
+| **Build Delegation** | Want build's help but need structure | Stay in build: "Implement caching" → Build delegates to RRCE |
 
 ### Recommended Workflow
-1.  **`init`**: "Analyze this codebase." → Creates `project-context.md` and semantic index.
-2.  **`research_discussion`**: "I need to add user auth." → Interactive requirements gathering.
-3.  **`planning_discussion`**: "Create a plan for user auth." → Generates implementation checklist.
-4.  **`executor`**: "Implement the auth plan." → Writes code, runs tests.
-5.  **`documentation`**: "Generate API docs." → Produces release-ready documentation.
-6.  **`sync`**: "Update knowledge." → Refreshes context for the next task.
+1.  **`@rrce_init`** (or orchestrator): "Analyze this codebase." → Creates `project-context.md` and semantic index.
+2.  **RRCE Orchestrator**: "I need to add user auth." → Runs research, planning, execution phases automatically.
+3.  **`@rrce_sync`**: "Update knowledge." → Refreshes context for the next task.
 
 ---
 

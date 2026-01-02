@@ -24,9 +24,10 @@ export function copyPromptsToDir(prompts: ParsedPrompt[], targetDir: string, ext
  * 
  * IMPORTANT: This respects the tool restrictions defined in each prompt's frontmatter.
  * Different agents have different tool access based on their role in the pipeline:
- * - research/planning: read-only for workspace, can write to RRCE_DATA
- * - executor: full access including edit/bash for code changes
- * - doctor/init: read-only, no code modifications
+ * - orchestrator: primary agent, full tool access for coordination
+ * - research/planning: read-only for workspace, can write to RRCE_DATA (subagents)
+ * - executor: full access including edit/bash for code changes (subagent)
+ * - doctor/init: read-only, no code modifications (subagents)
  * 
  * @param prompt - The parsed prompt
  * @param useFileReference - If true, returns a file reference instead of inline content
@@ -46,7 +47,7 @@ export function convertToOpenCodeAgent(
   // Map frontmatter tools to OpenCode tool names
   // Some tools are host tools (read, write, edit, bash, grep, glob)
   // Some are MCP tools (search_knowledge, get_project_context, etc.)
-  const hostTools = ['read', 'write', 'edit', 'bash', 'grep', 'glob', 'webfetch', 'terminalLastCommand'];
+  const hostTools = ['read', 'write', 'edit', 'bash', 'grep', 'glob', 'webfetch', 'terminalLastCommand', 'task'];
   
   if (frontmatter.tools) {
     for (const tool of frontmatter.tools) {
@@ -63,11 +64,13 @@ export function convertToOpenCodeAgent(
   // Always enable webfetch for documentation lookup (safe, read-only)
   tools['webfetch'] = true;
 
-  const invocationHint = ' (Invoke via @rrce_*)';
+  // Determine mode from frontmatter or default to subagent
+  const mode = frontmatter.mode || 'subagent';
+  const invocationHint = mode === 'primary' ? '' : ' (Invoke via @rrce_*)';
 
   return {
     description: `${frontmatter.description}${invocationHint}`,
-    mode: 'subagent',
+    mode,
     prompt: useFileReference && promptFilePath ? `{file:${promptFilePath}}` : content,
     tools
   };

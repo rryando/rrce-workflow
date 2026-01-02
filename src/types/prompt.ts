@@ -17,6 +17,7 @@ export const PromptFrontmatterSchema = z.object({
   description: z.string(),
   'argument-hint': z.union([z.string(), z.array(z.string())]).optional(),
   tools: z.array(z.string()).optional(),
+  mode: z.enum(['primary', 'subagent']).optional(),
   'required-args': z.array(PromptArgSchema).optional(),
   'optional-args': z.array(PromptArgSchema).optional(),
   'auto-identity': AutoIdentitySchema.optional(),
