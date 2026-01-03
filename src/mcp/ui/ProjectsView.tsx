@@ -9,6 +9,17 @@ import type { TaskMeta, TaskStatus } from './lib/tasks-fs';
 import { listProjectTasks, updateTaskStatus } from './lib/tasks-fs';
 import { useConfig } from './ConfigContext';
 import type { DriftReport } from '../../lib/drift-service';
+import {
+  getStatusIcon,
+  getStatusColor,
+  getChecklistProgress,
+  getCheckbox,
+  getRelativeTime,
+  getProgressBar,
+  getFolderIcon,
+  getExpandIndicator,
+  getAgentStatusIcon
+} from './ui-helpers';
 
 interface ProjectsViewProps {
   config: MCPConfig;
@@ -33,12 +44,7 @@ function projectKey(p: DetectedProject): string {
 
 function formatProjectLabel(p: DetectedProject, drift?: DriftReport): string {
   const root = p.sourcePath ?? p.path;
-  const driftLabel = drift?.hasDrift ? ' [UPDATE AVAILABLE]' : '';
   const label = `${p.name} (${p.source})${root ? ` - ${root}` : ''}`;
-  
-  if (drift?.hasDrift) {
-      return `${label} ${driftLabel}`;
-  }
   return label;
 }
 
@@ -289,8 +295,14 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
   return (
     <Box flexDirection="column" padding={1} borderStyle="round" borderColor="cyan" flexGrow={1}>
       <Box justifyContent="space-between">
-        <Text bold color="cyan"> Projects (Tasks Mode) </Text>
-        <Text color="dim">t:Expose  Enter:Expand  s:Status  u:DriftCheck  R:Refresh</Text>
+        <Box>
+          <Text bold color="cyan">⚙ Tasks Mode</Text>
+          <Text dimColor> • </Text>
+          <Text>{sortedProjects.length} projects</Text>
+          <Text dimColor> • </Text>
+          <Text>{Object.values(taskCache).flat().length} tasks</Text>
+        </Box>
+        <Text color="dim">t:Expose ↑/↓:Nav Enter:Expand s:Status R:Refresh u:Drift</Text>
       </Box>
 
       {errorLine && (
@@ -307,7 +319,7 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
           ) : (
             flattenedRows.map((row, idx) => {
               const isSel = idx === selectedIndex;
-
+              
               if (row.kind === 'project') {
                 const k = projectKey(row.project);
                 const isOpen = expanded.has(k);
@@ -319,9 +331,10 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
                     <Box>
                       <Text color={isSel ? 'cyan' : 'white'}>{isSel ? '> ' : '  '}</Text>
                       <Text color={isSel ? 'cyan' : 'white'}>
-                        {isOpen ? '▾ ' : '▸ '}{formatProjectLabel(row.project, drift)}
+                        {getFolderIcon(isOpen)} {formatProjectLabel(row.project, drift)}
                       </Text>
-                      <Text color="dim"> {count > 0 ? ` (tasks: ${count})` : ''}</Text>
+                      {drift?.hasDrift && <Text color="magenta"> ⚠</Text>}
+                      <Text color="dim"> {count > 0 ? `(${count})` : ''}</Text>
                     </Box>
                     {isSel && drift?.hasDrift && (
                       <Box marginLeft={4}>
@@ -344,7 +357,9 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
                   <Text color="dim">    - </Text>
                   <Text color={isSel ? 'cyan' : 'white'}>{taskLabel}</Text>
                   {row.task.task_slug !== '__none__' && (
-                    <Text color={status === 'complete' ? 'green' : status === 'blocked' ? 'red' : 'yellow'}>{`  [${status}]`}</Text>
+                    <Text backgroundColor={getStatusColor(status)} color="black">
+                      {` ${getStatusIcon(status)} ${status.toUpperCase().replace('_', ' ')} `}
+                    </Text>
                   )}
                 </Box>
               );
@@ -359,50 +374,74 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
         {/* Right pane: details */}
         <Box flexDirection="column" width="45%" paddingLeft={2}>
           {!selectedTask ? (
-            <Text color="dim">Select a task to view details.</Text>
+            <Box flexDirection="column" justifyContent="center" alignItems="center" gap={1}>
+              <Text bold color="dim">─ No Task Selected ─</Text>
+              <Text color="dim">Use ↑/↓ to navigate, Enter to expand projects</Text>
+              <Text color="dim">Press 's' to cycle task status, 't' to switch modes</Text>
+            </Box>
           ) : (
             <Box flexDirection="column">
               <Text bold color="cyan">{selectedTask.title || selectedTask.task_slug}</Text>
               {selectedTask.summary && <Text>{selectedTask.summary}</Text>}
 
-              <Box marginTop={1} flexDirection="column">
-                <Text>
-                  <Text color="dim">Status: </Text>
-                  <Text>{selectedTask.status || 'unknown'}</Text>
-                </Text>
-                <Text>
-                  <Text color="dim">Updated: </Text>
-                  <Text>{selectedTask.updated_at || '—'}</Text>
-                </Text>
-                <Text>
-                  <Text color="dim">Tags: </Text>
-                  <Text>{(selectedTask.tags || []).join(', ') || '—'}</Text>
-                </Text>
+              <Box marginTop={1} borderStyle="single" borderColor="dim" padding={1} flexDirection="column">
+                <Text bold color="cyan">📋 Status</Text>
+                <Box flexDirection="column" marginTop={0}>
+                  <Text><Text color="dim">Status:</Text> <Text>{selectedTask.status || 'unknown'}</Text></Text>
+                  <Text><Text color="dim">Updated:</Text> <Text>{selectedTask.updated_at || '—'}</Text></Text>
+                  <Text>
+                    <Text color="dim">Tags:</Text> {' '}
+                    {(() => {
+                      const tags = selectedTask.tags || [];
+                      return tags.length > 0
+                        ? tags.map((tag: string, i: number) => (
+                            <Text key={tag}>
+                              <Text color="cyan">{tag}</Text>
+                              {i < tags.length - 1 && <Text color="dim">, </Text>}
+                            </Text>
+                          ))
+                        : <Text color="dim">—</Text>;
+                    })()}
+                  </Text>
+                </Box>
               </Box>
 
-              <Box marginTop={1} flexDirection="column">
-                <Text bold>Checklist</Text>
+              <Box marginTop={1} borderStyle="single" borderColor="dim" padding={1} flexDirection="column">
+                <Text bold color="cyan">📋 Checklist</Text>
+                {selectedTask.checklist && selectedTask.checklist.length > 0 && (
+                  <Box marginTop={0} flexDirection="column">
+                    <Box>
+                      <Text backgroundColor="white">{getProgressBar(getChecklistProgress(selectedTask.checklist).percentage)}</Text>
+                      <Text dimColor> {' '}{getChecklistProgress(selectedTask.checklist).completed}/{getChecklistProgress(selectedTask.checklist).total} ({getChecklistProgress(selectedTask.checklist).percentage}%)</Text>
+                    </Box>
+                  </Box>
+                )}
                 {(selectedTask.checklist || []).length === 0 ? (
                   <Text color="dim">—</Text>
                 ) : (
                   (selectedTask.checklist || []).slice(0, 12).map((c: any, i: number) => (
                     <Text key={c.id || i}>
-                      <Text color="dim">- </Text>
-                      {c.label || c.id || 'item'} <Text color="dim">[{c.status || 'pending'}]</Text>
+                      <Text color="dim">{getCheckbox(c.status || 'pending')} </Text>
+                      {c.label || c.id || 'item'}
                     </Text>
                   ))
                 )}
               </Box>
 
-              <Box marginTop={1} flexDirection="column">
-                <Text bold>Agents</Text>
+              <Box marginTop={1} borderStyle="single" borderColor="dim" padding={1} flexDirection="column">
+                <Text bold color="cyan">🤖 Agents</Text>
                 {!selectedTask.agents ? (
                   <Text color="dim">—</Text>
                 ) : (
                   Object.entries(selectedTask.agents).map(([agent, info]: any) => (
                     <Text key={agent}>
                       <Text color="dim">- {agent}: </Text>
-                      {info?.status || '—'}{info?.artifact ? ` (${info.artifact})` : ''}
+                      {info?.status === 'complete' && <Text color="green">✓</Text>}
+                      {info?.status === 'in_progress' && <Text color="yellow">⟳</Text>}
+                      {info?.status === 'pending' && <Text color="dim">○</Text>}
+                      {info?.blocked && <Text color="red">✕</Text>}
+                      <Text dimColor> {info?.status || '—'}</Text>
+                      {info?.artifact && <Text dimColor>({info.artifact})</Text>}
                     </Text>
                   ))
                 )}
