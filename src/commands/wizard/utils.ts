@@ -163,6 +163,10 @@ export function convertToOpenCodeAgent(
   // Always enable webfetch for documentation lookup (safe, read-only)
   tools['webfetch'] = true;
 
+  // Token-efficiency soft guidance: keep grep/glob available only when explicitly allowed,
+  // but nudge the model toward semantic search first.
+  // (We do this in prompts; here we avoid auto-enabling extra tools.)
+
   // Determine mode from frontmatter or default to subagent
   const mode = frontmatter.mode || 'subagent';
   const invocationHint = mode === 'primary' ? '' : ' (Invoke via @rrce_*)';

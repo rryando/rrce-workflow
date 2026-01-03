@@ -24,17 +24,31 @@ Verify before proceeding:
 
 **If missing:** "Planning requires completed research. Run `@rrce_research_discussion TASK_SLUG={{TASK_SLUG}}` first."
 
+## Session State
+
+- First turn: load research brief + project context and keep a compact summary in memory.
+- Only do code search if needed for implementation shape; reuse results across turns.
+
 ## Context Handling
 
 **If `PRE-FETCHED CONTEXT` block exists:**
-→ SKIP code search
-→ Use provided patterns
+→ Treat it as authoritative.
+→ **Do not call** `rrce_search_*`, `glob`, or `grep` unless needed for clearly NEW scope.
 
 **If NO pre-fetched context:**
+Run a single semantic search, then reuse it:
 ```
-rrce_search_code(query="<related patterns>", limit=10)
+rrce_search_code(query="<related patterns>", limit=8)
 ```
-Store and reference thereafter.
+
+### Retrieval Budget + Order (Token Efficiency)
+
+- **Budget:** max **2 retrieval tool calls per user turn** (including `rrce_search_*`, `read`, `glob`, `grep`).
+- **Order:**
+  1. `read` existing artifacts (research brief, project context)
+  2. `rrce_search_code` (only if you need implementation shape)
+  3. `glob`/`grep` **only as last resort** (exact string/location needs, or RAG index missing/empty).
+- Prefer citing semantic results over quoting large excerpts.
 
 ## Workflow
 
@@ -117,6 +131,14 @@ rrce_update_task({
 ```
 
 Then: "Planning complete! Next: `@rrce_executor TASK_SLUG={{TASK_SLUG}}`"
+
+## Completion Checklist
+
+- Prerequisites verified (`meta.json` research complete)
+- Plan drafted + user-approved
+- Plan saved
+- `meta.json` updated (`agents.planning.status = complete`)
+- `<rrce_completion>` emitted
 
 ## Rules
 

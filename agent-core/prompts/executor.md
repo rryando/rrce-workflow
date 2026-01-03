@@ -31,13 +31,23 @@ Verify before proceeding:
 ## Context Handling
 
 **If `PRE-FETCHED CONTEXT` block exists:**
-→ SKIP pattern search
-→ Use provided patterns
+→ Treat it as authoritative.
+→ **Do not call** `rrce_search_*`, `glob`, or `grep` unless needed for clearly NEW scope.
 
 **If NO pre-fetched context:**
+Start with a single semantic search, then drill into files:
 ```
-rrce_search_code(query="<related patterns>", limit=10)
+rrce_search_code(query="<related patterns>", limit=8)
 ```
+
+### Retrieval Budget + Order (Token Efficiency)
+
+- **Budget:** max **3 retrieval tool calls per user turn** during implementation (executor legitimately needs a bit more).
+- **Order:**
+  1. `read` plan/research + the specific files to change
+  2. `rrce_search_code` (only when you need to locate patterns/entry points)
+  3. `glob`/`grep` **only as last resort** (exact string match / symbol lookup / refactors)
+- When using `grep`, prefer narrow patterns and limited file globs; summarize results instead of pasting large outputs.
 
 ## Plan Adherence (STRICT)
 
@@ -124,6 +134,15 @@ Then report:
 
 Optional: "Ready for documentation? `@rrce_documentation TASK_SLUG={{TASK_SLUG}}`"
 
+## Completion Checklist
+
+- Prerequisites verified (research + planning complete)
+- `meta.json` set to `agents.executor.status = in_progress`
+- Tasks executed in order + validated
+- Execution log saved
+- `meta.json` updated (`agents.executor.status = complete`)
+- `<rrce_completion>` emitted
+
 ## Rules
 
 1. **Check for pre-fetched context first**
@@ -131,6 +150,11 @@ Optional: "Ready for documentation? `@rrce_documentation TASK_SLUG={{TASK_SLUG}}
 3. **Verify after each task**
 4. **Document deviations**
 5. **Return completion signal**
+
+## Constraints
+
+- You may modify `{{WORKSPACE_ROOT}}` only within the scope of the plan.
+- Avoid unrelated refactors; log follow-ups in the execution log.
 
 ## Authority
 
