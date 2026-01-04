@@ -36,13 +36,15 @@ export function parsePromptFile(filePath: string): ParsedPrompt | null {
 
 /**
  * Load all prompts from a directory
+ * Skips files starting with '_' (used for includes/partials like _base.md)
  */
 export function loadPromptsFromDir(dirPath: string): ParsedPrompt[] {
   if (!fs.existsSync(dirPath)) {
     return [];
   }
   
-  const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.md'));
+  const files = fs.readdirSync(dirPath)
+    .filter(f => f.endsWith('.md') && !f.startsWith('_'));
   const prompts: ParsedPrompt[] = [];
   
   for (const file of files) {

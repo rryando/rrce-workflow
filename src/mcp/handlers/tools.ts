@@ -309,20 +309,12 @@ export function registerToolHandlers(server: Server): void {
             stringArgs[key] = String(val);
           }
            
-          const { rendered, context } = renderPromptWithContext(promptDef.content, stringArgs);
+          const { rendered } = renderPromptWithContext(promptDef.content, stringArgs);
           
-          // Context Injection (Same as GetPromptRequest)
-          let contextPreamble = getContextPreamble();
-          
-          // Add Pre-Resolved Paths section to guide the agent
-          contextPreamble += `
-### System Resolved Paths (OVERRIDE)
-The system has pre-resolved the configuration for this project. Use these values instead of manual resolution:
-- **RRCE_DATA**: \`${context.RRCE_DATA}\` (Stores knowledge, tasks, refs)
-- **WORKSPACE_ROOT**: \`${context.WORKSPACE_ROOT}\` (Source code location)
-- **RRCE_HOME**: \`${context.RRCE_HOME}\`
-- **Current Project**: ${context.WORKSPACE_NAME}
-`;
+          // Single source of truth for context - no duplicate path sections
+          // getContextPreamble() provides minimal System Context table
+          // Base protocol (injected by renderPromptWithContext) explains how to use it
+          const contextPreamble = getContextPreamble();
 
           return { content: [{ type: 'text', text: contextPreamble + rendered }] };
         }

@@ -5,6 +5,9 @@ import { projectService } from '../lib/detection-service';
 import * as path from 'path';
 import * as fs from 'fs';
 
+// Cache for base protocol to avoid repeated file reads
+let baseProtocolCache: string | null = null;
+
 export interface PromptArgument {
   name: string;
   description: string;
@@ -20,7 +23,36 @@ export interface AgentPromptDef {
 }
 
 /**
+ * Load the base protocol file (_base.md) that's injected into all agent prompts
+ * This contains shared behaviors like path resolution, tool preferences, completion signals
+ */
+function loadBaseProtocol(): string {
+  if (baseProtocolCache !== null) {
+    return baseProtocolCache;
+  }
+  
+  const basePath = path.join(getAgentCorePromptsDir(), '_base.md');
+  if (fs.existsSync(basePath)) {
+    const content = fs.readFileSync(basePath, 'utf-8');
+    // Strip any frontmatter (if accidentally added)
+    baseProtocolCache = content.replace(/^---[\s\S]*?---\n*/, '');
+    return baseProtocolCache;
+  }
+  
+  baseProtocolCache = '';
+  return '';
+}
+
+/**
+ * Clear the base protocol cache (useful for testing or hot-reload)
+ */
+export function clearBaseProtocolCache(): void {
+  baseProtocolCache = null;
+}
+
+/**
  * Get all available agent prompts from the file system
+ * Note: _base.md and other underscore-prefixed files are excluded by loadPromptsFromDir
  */
 export function getAllPrompts(): AgentPromptDef[] {
   const prompts = loadPromptsFromDir(getAgentCorePromptsDir());
@@ -142,8 +174,16 @@ export function renderPromptWithContext(content: string, args: Record<string, st
   if (!renderArgs['WORKSPACE_ROOT']) renderArgs['WORKSPACE_ROOT'] = resolvedWorkspaceRoot;
   if (!renderArgs['WORKSPACE_NAME']) renderArgs['WORKSPACE_NAME'] = resolvedWorkspaceName;
 
+  // Render agent-specific content
+  const agentContent = renderPrompt(content, renderArgs);
+  
+  // Inject base protocol before agent-specific content
+  // This provides shared behaviors (path resolution, tool preferences, completion signals)
+  const baseProtocol = loadBaseProtocol();
+  const rendered = baseProtocol ? `${baseProtocol}\n${agentContent}` : agentContent;
+
   return {
-    rendered: renderPrompt(content, renderArgs),
+    rendered,
     context: {
         RRCE_DATA: resolvedRrceData,
         RRCE_HOME: resolvedRrceHome,

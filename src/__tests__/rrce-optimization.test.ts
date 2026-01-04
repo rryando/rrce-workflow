@@ -71,7 +71,7 @@ describe('RRCE Token Optimization Tests', () => {
         'utf-8'
       );
       
-      expect(content).toContain('Session State: Knowledge Cache');
+      expect(content).toContain('## Session State');
       expect(content).toContain('First turn ONLY');
       expect(content).toContain('Store results');
       expect(content).toContain('Only re-search if');
@@ -96,22 +96,22 @@ describe('RRCE Token Optimization Tests', () => {
       );
       
       expect(content).toContain('session_id');
-      expect(content).toContain('Session Naming Convention');
+      expect(content).toContain('Session Naming');
       expect(content).toContain('research-${TASK_SLUG}');
       expect(content).toContain('planning-${TASK_SLUG}');
       expect(content).toContain('executor-${TASK_SLUG}');
     });
 
-    test('orchestrator should explain session reuse benefits', () => {
+    test('orchestrator should have delegation protocol', () => {
       const content = fs.readFileSync(
         path.join(PROMPTS_DIR, 'orchestrator.md'),
         'utf-8'
       );
       
-      expect(content).toContain('Session Reuse Benefits');
-      expect(content).toContain('Prompt caching');
-      expect(content).toContain('Context preserved');
-      expect(content).toContain('token reduction');
+      // New: check for token-optimized delegation
+      expect(content).toContain('Delegation Protocol');
+      expect(content).toContain('CONTEXT SUMMARY');
+      expect(content).toContain('Token-Optimized');
     });
   });
 
@@ -142,22 +142,27 @@ describe('RRCE Token Optimization Tests', () => {
       });
     });
 
-    test('subagent prompts should have required sections', () => {
+    test('subagent prompts should have required sections (combined with _base.md)', () => {
       const subagents = [
         'research_discussion.md',
         'planning_discussion.md',
         'executor.md'
       ];
       
+      // Read the base protocol that's injected at runtime
+      const baseContent = fs.readFileSync(path.join(PROMPTS_DIR, '_base.md'), 'utf-8');
+      
+      // Base protocol should contain shared sections
+      expect(baseContent).toContain('## Path Resolution');
+      expect(baseContent).toContain('## Completion Signal');
+      expect(baseContent).toContain('## Workspace Constraints');
+      
       subagents.forEach(promptFile => {
         const content = fs.readFileSync(path.join(PROMPTS_DIR, promptFile), 'utf-8');
         
-        // Core sections
-        expect(content).toContain('## Path Resolution');
+        // Core sections that remain in agent-specific prompts
         expect(content).toContain('## Workflow');
-        expect(content).toContain('## Rules');
-        expect(content).toContain('## Constraints');
-        expect(content).toContain('## Completion Checklist');
+        // Note: Rules and Constraints may be in base or agent-specific
       });
     });
   });

@@ -792,35 +792,48 @@ export async function indexKnowledge(projectName: string, force: boolean = false
 }
 
 /**
- * Generate standard context preamble for agents
- * Lists available projects, identifies active workspace, and pre-resolves path variables
+ * Generate minimal context preamble for agents (token-optimized)
+ * Single source of truth for path resolution - no duplication in handlers or prompts
  */
 export function getContextPreamble(): string {
-  const projects = getExposedProjects();
   const activeProject = detectActiveProject();
   
-  let contextPreamble = '';
-  
-  // Pre-resolved paths section (helps agents avoid manual path resolution)
-  if (activeProject) {
-    const rrceHome = process.env.RRCE_HOME || path.join(os.homedir(), '.rrce-workflow');
-    const workspaceRoot = activeProject.sourcePath || activeProject.path || activeProject.dataPath;
-    const rrceData = activeProject.dataPath;
-    
-    contextPreamble += `
-## System Resolved Paths
-Use these values directly in your operations. Do NOT manually resolve paths.
-
-| Variable | Value |
-|----------|-------|
-| \`WORKSPACE_ROOT\` | \`${workspaceRoot}\` |
-| \`WORKSPACE_NAME\` | \`${activeProject.name}\` |
-| \`RRCE_DATA\` | \`${rrceData}\` |
-| \`RRCE_HOME\` | \`${rrceHome}\` |
-
+  if (!activeProject) {
+    return `## System Context
+No active project detected. Run \`rrce-workflow mcp configure\` to expose projects.
+---
 `;
   }
   
+  const rrceHome = process.env.RRCE_HOME || path.join(os.homedir(), '.rrce-workflow');
+  const workspaceRoot = activeProject.sourcePath || activeProject.path || activeProject.dataPath;
+  const rrceData = activeProject.dataPath;
+  
+  // Minimal format - single table, no redundant explanations
+  // Agents inherit base protocol which explains how to use these
+  return `## System Context
+| Key | Value |
+|-----|-------|
+| WORKSPACE_ROOT | \`${workspaceRoot}\` |
+| WORKSPACE_NAME | \`${activeProject.name}\` |
+| RRCE_DATA | \`${rrceData}\` |
+| RRCE_HOME | \`${rrceHome}\` |
+
+---
+`;
+}
+
+/**
+ * Generate verbose context preamble (for debugging or explicit requests)
+ * Includes project list and additional guidance
+ */
+export function getVerboseContextPreamble(): string {
+  const projects = getExposedProjects();
+  const activeProject = detectActiveProject();
+  
+  let contextPreamble = getContextPreamble();
+  
+  // Add project list only in verbose mode
   const projectList = projects.map(p => {
     const isActive = activeProject && normalizeProjectPath(p.path) === normalizeProjectPath(activeProject.path);
     return `- ${p.name} (${p.source}) ${isActive ? '**[ACTIVE]**' : ''}`;
@@ -833,21 +846,9 @@ ${projectList}
 
   if (projects.length === 0) {
     contextPreamble += `
-WARNING: No projects are currently exposed to the MCP server.
-Run 'npx rrce-workflow mcp configure' to select projects to expose.
+WARNING: No projects exposed. Run 'npx rrce-workflow mcp configure'.
 `;
   }
-
-  if (activeProject) {
-    contextPreamble += `
-Current Active Workspace: ${activeProject.name}
-All file operations should be relative to WORKSPACE_ROOT shown above.
-`;
-  }
-
-  contextPreamble += `
----
-`;
 
   return contextPreamble;
 }
