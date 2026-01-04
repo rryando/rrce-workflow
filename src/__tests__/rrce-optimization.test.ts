@@ -96,9 +96,6 @@ describe('RRCE Token Optimization Tests', () => {
       );
       
       expect(content).toContain('session_id');
-      expect(content).toContain('Session Naming');
-      expect(content).toContain('research-${TASK_SLUG}');
-      expect(content).toContain('planning-${TASK_SLUG}');
       expect(content).toContain('executor-${TASK_SLUG}');
     });
 
@@ -111,7 +108,7 @@ describe('RRCE Token Optimization Tests', () => {
       // New: check for token-optimized delegation
       expect(content).toContain('Delegation Protocol');
       expect(content).toContain('CONTEXT SUMMARY');
-      expect(content).toContain('Token-Optimized');
+      expect(content).toContain('token-efficient');
     });
   });
 
@@ -190,18 +187,15 @@ describe('RRCE Token Optimization Tests', () => {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       
       // Agents should NOT have model set - let user choose
-      expect(config.agent.rrce_research_discussion.model).toBeUndefined();
-      expect(config.agent.rrce_planning_discussion.model).toBeUndefined();
+      expect(config.agent.rrce_orchestrator.model).toBeUndefined();
       expect(config.agent.rrce_executor.model).toBeUndefined();
     });
 
-    test('research agent should have task/todo tools disabled', () => {
+    test('executor agent should have task tool disabled', () => {
       const configPath = path.join(__dirname, '../../opencode.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       
-      expect(config.agent.rrce_research_discussion.tools.task).toBe(false);
-      expect(config.agent.rrce_research_discussion.tools.todowrite).toBe(false);
-      expect(config.agent.rrce_research_discussion.tools.todoread).toBe(false);
+      expect(config.agent.rrce_executor.tools.task).toBe(false);
     });
   });
 });

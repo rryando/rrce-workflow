@@ -71,25 +71,35 @@ export function SimpleSelect<T>({
   });
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="cyan" padding={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor="white" padding={1}>
       {message && <Box marginBottom={1}><Text bold>{message}</Text></Box>}
       {items.map((item, index) => {
         const isSelected = index === selectedIndex;
         const isChecked = isMulti && selectedValues.has(item.value);
         
         return (
-          <Box key={item.key || String(item.value)}>
-            <Text color={isSelected ? 'cyan' : 'white'}>
-              {isSelected ? '> ' : '  '}
-            </Text>
-            {isMulti && (
-                <Text color={isChecked ? 'green' : 'gray'}>
-                    {isChecked ? '[x] ' : '[ ] '}
+          <Box key={item.key || String(item.value)} flexDirection="column">
+            <Box>
+              <Text color={isSelected ? 'cyan' : 'white'}>
+                {isSelected ? '> ' : '  '}
+              </Text>
+              {isMulti && (
+                  <Text color={isChecked ? 'green' : 'gray'}>
+                      {isChecked ? '[x] ' : '[ ] '}
+                  </Text>
+              )}
+              <Text color={isSelected ? 'cyan' : 'white'}>
+                {item.label.split('\n')[0]}
+              </Text>
+            </Box>
+            {item.label.includes('\n') && (
+              <Box paddingLeft={isSelected ? 2 : 2}>
+                {isMulti && <Text>    </Text>}
+                <Text dimColor>
+                  {item.label.split('\n').slice(1).join('\n')}
                 </Text>
+              </Box>
             )}
-            <Text color={isSelected ? 'cyan' : 'white'}>
-              {item.label}
-            </Text>
           </Box>
         );
       })}

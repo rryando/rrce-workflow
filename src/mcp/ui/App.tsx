@@ -30,6 +30,8 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     pid: process.pid,
     running: false 
   });
+
+  const workspacePath = useMemo(() => detectWorkspaceRoot(), []);
   
   // Check if any exposed project has RAG enabled
   const isRAGEnabled = useMemo(() => {
@@ -53,7 +55,6 @@ export const App = ({ onExit, initialPort }: AppProps) => {
       ];
   }, []);
 
-  const workspacePath = detectWorkspaceRoot();
   const installStatus = checkInstallStatus(workspacePath);
   const installedCount = [
       installStatus.antigravity, 
@@ -158,8 +159,8 @@ export const App = ({ onExit, initialPort }: AppProps) => {
                />
            )}
            {activeTab === 'logs' && <LogViewer logs={logs} height={contentHeight} />}
-           {activeTab === 'tasks' && <TasksView projects={projects} />}
-           {activeTab === 'projects' && <ProjectsView config={config} projects={projects} onConfigChange={handleConfigChange} />}
+           {activeTab === 'tasks' && <TasksView projects={projects} workspacePath={workspacePath} />}
+           {activeTab === 'projects' && <ProjectsView config={config} projects={projects} onConfigChange={handleConfigChange} workspacePath={workspacePath} />}
        </Box>
 
         {/* Persistent Status Bar */}

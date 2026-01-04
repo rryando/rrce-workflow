@@ -24,7 +24,7 @@ export const LogViewer = ({ logs, height }: { logs: string[], height: number }) 
   };
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="dim" paddingX={1} height={height + 2} flexGrow={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor="white" paddingX={1} height={height + 2} flexGrow={1}>
       {padding.map((_, i) => (
         <Text key={`empty-${i}`}> </Text>
       ))}

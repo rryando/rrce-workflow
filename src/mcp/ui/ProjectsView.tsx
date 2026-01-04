@@ -13,6 +13,7 @@ interface ProjectsViewProps {
   config: MCPConfig;
   projects: DetectedProject[];
   onConfigChange?: () => void;
+  workspacePath: string;
 }
 
 function projectKey(p: DetectedProject): string {
@@ -24,18 +25,24 @@ function formatProjectLabel(p: DetectedProject): string {
   return `${p.name} (${p.source})${root ? ` - ${root}` : ''}`;
 }
 
-export const ProjectsView = ({ config: initialConfig, projects: allProjects, onConfigChange }: ProjectsViewProps) => {
+export const ProjectsView = ({ config: initialConfig, projects: allProjects, onConfigChange, workspacePath }: ProjectsViewProps) => {
   const { driftReports, checkAllDrift } = useConfig();
   const [config, setConfig] = useState(initialConfig);
   const [indexingStats, setIndexingStats] = useState<Record<string, any>>({});
 
   const sortedProjects = useMemo(() => {
     return [...allProjects].sort((a, b) => {
+      // workspacePath prioritization
+      const aIsCurrent = a.path === workspacePath;
+      const bIsCurrent = b.path === workspacePath;
+      if (aIsCurrent && !bIsCurrent) return -1;
+      if (!aIsCurrent && bIsCurrent) return 1;
+
       const byName = a.name.localeCompare(b.name);
       if (byName !== 0) return byName;
       return projectKey(a).localeCompare(projectKey(b));
     });
-  }, [allProjects]);
+  }, [allProjects, workspacePath]);
 
   // Indexing status polling
   useEffect(() => {
@@ -91,15 +98,17 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
       const idx = indexingStats[p.name];
 
       let label = formatProjectLabel(p);
-      if (idx?.state === 'running') {
-        label += ` [⟳ Indexing ${idx.itemsDone}/${idx.itemsTotal ?? '?'}]`;
-      } else if (idx?.state === 'failed') {
-        label += ` [✕ Index Fail]`;
-      } else if (idx?.enabled && idx?.state === 'complete') {
-        label += ` [✓ Indexed]`;
-      }
       if (drift?.hasDrift) {
         label += ` ⚠`;
+      }
+
+      // Add indexing status as sub-line
+      if (idx?.state === 'running') {
+        label += `\n⟳ Indexing ${idx.itemsDone}/${idx.itemsTotal ?? '?'}`;
+      } else if (idx?.state === 'failed') {
+        label += `\n✕ Index Fail`;
+      } else if (idx?.enabled && idx?.state === 'complete') {
+        label += `\n✓ Indexed`;
       }
 
       return {
@@ -145,7 +154,7 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
   };
 
   return (
-    <Box flexDirection="column" padding={1} borderStyle="round" borderColor="cyan" flexGrow={1}>
+    <Box flexDirection="column" padding={1} borderStyle="round" borderColor="white" flexGrow={1}>
       <Box justifyContent="space-between">
         <Box>
           <Text bold color="cyan"> Projects </Text>
@@ -159,7 +168,7 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
         </Box>
       </Box>
 
-      <Text color="dim"> Manage which projects are exposed to the MCP server. Indexing status shown in-line.</Text>
+      <Text color="dim"> Manage which projects are exposed to the MCP server.</Text>
 
       <Box marginTop={1} flexDirection="column" flexGrow={1}>
         <SimpleSelect
