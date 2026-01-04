@@ -1,1 +1,0 @@
-Python is a great language for data science. RAG uses vector embeddings.

@@ -102,7 +102,7 @@ describe('mcp ui tasks-fs', () => {
     if (!result.ok) return;
 
     expect(result.meta.status).toBe('blocked');
-    expect(result.meta.keep).toBe('field');
+    expect((result.meta as any).keep).toBe('field');
 
     const saved = JSON.parse(fs.readFileSync(path.join(root, '.rrce-workflow', 'tasks', 't2', 'meta.json'), 'utf-8'));
     expect(saved.status).toBe('blocked');

@@ -87,14 +87,14 @@ describe('Background indexing job behavior', () => {
     await indexKnowledge('proj2');
 
     // Search while indexing is potentially running
-    const results = await searchKnowledge('export', 'proj2');
+    const searchResult = await searchKnowledge('export', 'proj2');
 
     // We don't require results content; only the flag behavior for the queried project
-    if (results.length > 0) {
-      expect(results[0]).toHaveProperty('indexingInProgress');
+    if (searchResult.results.length > 0) {
+      expect(searchResult).toHaveProperty('indexingInProgress');
     }
 
-    const anyFlagged = results.some(r => r.indexingInProgress === true);
+    const anyFlagged = searchResult.indexingInProgress === true;
     // It's acceptable for indexing to have finished extremely quickly in CI,
     // but in most cases it should be running and flagged.
     expect(typeof anyFlagged).toBe('boolean');

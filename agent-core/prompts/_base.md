@@ -9,13 +9,21 @@ Use values from the **System Context** table above. Never guess or construct pat
 - `RRCE_HOME` - Global RRCE installation directory
 
 ## Tool Preference Order
-1. **Semantic search** (`search_knowledge`, `search_code`) - finds concepts without exact matches
-2. **Direct read** (`read`) - for specific known files
-3. **Pattern search** (`glob`, `grep`) - last resort for exact strings or when RAG unavailable
+1. **Context bundling** (`get_context_bundle`) - single call aggregates project context + knowledge + code
+2. **Semantic search** (`search_knowledge`, `search_code`) - finds concepts without exact matches
+3. **Symbol search** (`search_symbols`) - find functions/classes by name with fuzzy matching
+4. **Direct read** (`read`) - for specific known files
+5. **Pattern search** (`glob`, `grep`) - last resort for exact strings or when RAG unavailable
+
+## Efficient Context Loading
+- Use `get_context_bundle` for initial context (replaces multiple search calls)
+- Use `prefetch_task_context` when working on a specific task
+- Use `get_file_summary` for quick file overview without reading full content
 
 ## Retrieval Budget
 - Default: max **2 retrieval calls per turn** (agent-specific limits may apply)
 - Prefer summarizing findings over quoting large outputs
+- `get_context_bundle` counts as 1 call but provides comprehensive context
 
 ## Context Handling
 If a `PRE-FETCHED CONTEXT` block exists in your prompt:
@@ -24,6 +32,11 @@ If a `PRE-FETCHED CONTEXT` block exists in your prompt:
 
 ## Metadata Updates
 For `meta.json` changes, use `rrce_update_task()` - it auto-saves. Never use `write` for meta.json.
+
+## Phase Validation
+Use `validate_phase` to check prerequisites before starting a phase:
+- Returns `valid`, `status`, `missing_items`, and `suggestions`
+- Prevents wasted work on incomplete prerequisites
 
 ## Checklist Sync (OpenCode)
 When working on a task with a checklist:

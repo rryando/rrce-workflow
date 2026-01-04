@@ -19,6 +19,7 @@ import type { CodeChunk, ChunkWithLines } from './services/rag';
 import { indexingJobs } from './services/indexing-jobs';
 import { extractContext, getLanguageFromExtension } from './services/context-extractor';
 import { scanProjectDependencies, findRelatedFiles as findRelatedInGraph, type FileRelationship } from './services/dependency-graph';
+import { extractSymbols, searchSymbols as searchSymbolsInResults, type SymbolType, type ExtractedSymbol, type SymbolExtractionResult } from './services/symbol-extractor';
 import { 
   getConfigPath, 
   resolveDataPath, 
@@ -312,24 +313,41 @@ export function getProjectTasks(projectName: string): object[] {
 }
 
 /**
+ * Estimate token count from text (conservative: chars / 4)
+ */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/**
  * Search code files using semantic search on the code-specific index
  * Returns code snippets with line numbers and context
  * @param query Search query string
  * @param projectFilter Optional: limit search to specific project name
  * @param limit Maximum number of results (default 10)
+ * @param options Additional options: max_tokens, min_score
  */
-export async function searchCode(query: string, projectFilter?: string, limit: number = 10): Promise<Array<{
-  project: string;
-  file: string;
-  snippet: string;
-  lineStart: number;
-  lineEnd: number;
-  context?: string;
-  language?: string;
-  score: number;
+export async function searchCode(query: string, projectFilter?: string, limit: number = 10, options?: {
+  max_tokens?: number;
+  min_score?: number;
+}): Promise<{
+  results: Array<{
+    project: string;
+    file: string;
+    snippet: string;
+    lineStart: number;
+    lineEnd: number;
+    context?: string;
+    language?: string;
+    score: number;
+  }>;
+  token_count: number;
+  truncated: boolean;
+  index_age_seconds?: number;
+  last_indexed_at?: string;
   indexingInProgress?: boolean;
   advisoryMessage?: string;
-}>> {
+}> {
   const config = loadMCPConfig();
   const projects = getExposedProjects();
   const results: Array<{
@@ -399,24 +417,96 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
     }
   }
 
-  // Sort by score descending and limit results
+  // Sort by score descending
   results.sort((a, b) => b.score - a.score);
-  return results.slice(0, limit);
+  
+  // Apply min_score filter if specified
+  let filteredResults = results;
+  if (options?.min_score !== undefined && options.min_score > 0) {
+    filteredResults = results.filter(r => r.score >= options.min_score!);
+  }
+  
+  // Apply limit
+  let limitedResults = filteredResults.slice(0, limit);
+  
+  // Apply max_tokens budget if specified
+  let truncated = false;
+  let tokenCount = 0;
+  
+  if (options?.max_tokens !== undefined && options.max_tokens > 0) {
+    const budgetedResults: typeof limitedResults = [];
+    for (const result of limitedResults) {
+      const resultTokens = estimateTokens(result.snippet + (result.context || ''));
+      if (tokenCount + resultTokens > options.max_tokens) {
+        truncated = true;
+        break;
+      }
+      budgetedResults.push(result);
+      tokenCount += resultTokens;
+    }
+    limitedResults = budgetedResults;
+  } else {
+    // Calculate total tokens without budget
+    tokenCount = limitedResults.reduce((sum, r) => sum + estimateTokens(r.snippet + (r.context || '')), 0);
+  }
+
+  // Get index freshness info
+  let indexAgeSeconds: number | undefined;
+  let lastIndexedAt: string | undefined;
+  let indexingInProgress: boolean | undefined;
+  let advisoryMessage: string | undefined;
+
+  if (projectFilter) {
+    const project = projects.find(p => p.name === projectFilter);
+    if (project) {
+      indexingInProgress = indexingJobs.isRunning(project.name);
+      advisoryMessage = indexingInProgress ? 'Indexing in progress; results may be stale/incomplete.' : undefined;
+      
+      const progress = indexingJobs.getProgress(project.name);
+      if (progress.completedAt) {
+        lastIndexedAt = new Date(progress.completedAt).toISOString();
+        indexAgeSeconds = Math.floor((Date.now() - progress.completedAt) / 1000);
+      }
+    }
+  }
+
+  // Strip internal fields from results
+  const cleanResults = limitedResults.map(({ indexingInProgress: _, advisoryMessage: __, ...rest }) => rest);
+
+  return {
+    results: cleanResults,
+    token_count: tokenCount,
+    truncated,
+    index_age_seconds: indexAgeSeconds,
+    last_indexed_at: lastIndexedAt,
+    indexingInProgress,
+    advisoryMessage
+  };
 }
 
 /**
  * Search across all exposed project knowledge bases
  * @param query Search query string
  * @param projectFilter Optional: limit search to specific project name
+ * @param options Additional options: max_tokens, min_score
  */
-export async function searchKnowledge(query: string, projectFilter?: string): Promise<Array<{
-  project: string;
-  file: string;
-  matches: string[];
-  score?: number;
+export async function searchKnowledge(query: string, projectFilter?: string, options?: {
+  max_tokens?: number;
+  min_score?: number;
+}): Promise<{
+  results: Array<{
+    project: string;
+    file: string;
+    matches: string[];
+    score?: number;
+  }>;
+  token_count: number;
+  truncated: boolean;
+  index_age_seconds?: number;
+  last_indexed_at?: string;
   indexingInProgress?: boolean;
   advisoryMessage?: string;
-}>> {
+}> {
   const config = loadMCPConfig();
   const projects = getExposedProjects();
   const results: Array<{ project: string; file: string; matches: string[]; score?: number; indexingInProgress?: boolean; advisoryMessage?: string }> = [];
@@ -498,7 +588,67 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
     }
   }
 
-  return results;
+  // Apply min_score filter if specified
+  let filteredResults = results;
+  if (options?.min_score !== undefined && options.min_score > 0) {
+    filteredResults = results.filter(r => (r.score ?? 1) >= options.min_score!);
+  }
+
+  // Sort by score descending (text matches default to score of 1)
+  filteredResults.sort((a, b) => (b.score ?? 1) - (a.score ?? 1));
+
+  // Apply max_tokens budget if specified
+  let truncated = false;
+  let tokenCount = 0;
+  let budgetedResults = filteredResults;
+
+  if (options?.max_tokens !== undefined && options.max_tokens > 0) {
+    budgetedResults = [];
+    for (const result of filteredResults) {
+      const resultTokens = estimateTokens(result.matches.join('\n'));
+      if (tokenCount + resultTokens > options.max_tokens) {
+        truncated = true;
+        break;
+      }
+      budgetedResults.push(result);
+      tokenCount += resultTokens;
+    }
+  } else {
+    tokenCount = filteredResults.reduce((sum, r) => sum + estimateTokens(r.matches.join('\n')), 0);
+  }
+
+  // Get index freshness info
+  let indexAgeSeconds: number | undefined;
+  let lastIndexedAt: string | undefined;
+  let indexingInProgress: boolean | undefined;
+  let advisoryMessage: string | undefined;
+
+  if (projectFilter) {
+    const project = projects.find(p => p.name === projectFilter);
+    if (project) {
+      indexingInProgress = indexingJobs.isRunning(project.name);
+      advisoryMessage = indexingInProgress ? 'Indexing in progress; results may be stale/incomplete.' : undefined;
+      
+      const progress = indexingJobs.getProgress(project.name);
+      if (progress.completedAt) {
+        lastIndexedAt = new Date(progress.completedAt).toISOString();
+        indexAgeSeconds = Math.floor((Date.now() - progress.completedAt) / 1000);
+      }
+    }
+  }
+
+  // Strip internal fields from results
+  const cleanResults = budgetedResults.map(({ indexingInProgress: _, advisoryMessage: __, ...rest }) => rest);
+
+  return {
+    results: cleanResults,
+    token_count: tokenCount,
+    truncated,
+    index_age_seconds: indexAgeSeconds,
+    last_indexed_at: lastIndexedAt,
+    indexingInProgress,
+    advisoryMessage
+  };
 }
 
 /**
@@ -1048,6 +1198,593 @@ export async function findRelatedFiles(
       message: `Error analyzing file relationships: ${e instanceof Error ? e.message : String(e)}`
     };
   }
+}
+
+// ============================================================================
+// Symbol Search & File Summary Tools
+// ============================================================================
+
+/**
+ * Search for symbols (functions, classes, types, variables) by name
+ * Uses fuzzy matching to find symbols across project files
+ */
+export async function searchSymbols(
+  name: string,
+  projectName: string,
+  options: {
+    type?: SymbolType | 'any';
+    fuzzy?: boolean;
+    limit?: number;
+  } = {}
+): Promise<{
+  success: boolean;
+  project: string;
+  results: Array<{
+    name: string;
+    type: string;
+    file: string;
+    line: number;
+    signature: string;
+    exported: boolean;
+    score: number;
+  }>;
+  message?: string;
+}> {
+  const config = loadMCPConfig();
+  const projects = getExposedProjects();
+  const project = projects.find(p => p.name === projectName);
+
+  if (!project) {
+    return {
+      success: false,
+      project: projectName,
+      results: [],
+      message: `Project '${projectName}' not found`
+    };
+  }
+
+  const projectRoot = project.sourcePath || project.path || '';
+  
+  if (!fs.existsSync(projectRoot)) {
+    return {
+      success: false,
+      project: projectName,
+      results: [],
+      message: `Project root not found: ${projectRoot}`
+    };
+  }
+
+  try {
+    // Collect all code files
+    const codeFiles: string[] = [];
+    const scanDir = (dir: string) => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (SKIP_DIRS.includes(entry.name)) continue;
+          scanDir(fullPath);
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          if (CODE_EXTENSIONS.includes(ext)) {
+            codeFiles.push(fullPath);
+          }
+        }
+      }
+    };
+    scanDir(projectRoot);
+
+    // Extract symbols from each file
+    const symbolResults: SymbolExtractionResult[] = [];
+    for (const file of codeFiles.slice(0, 500)) { // Limit to 500 files for performance
+      try {
+        const content = fs.readFileSync(file, 'utf-8');
+        const result = extractSymbols(content, file);
+        symbolResults.push(result);
+      } catch (e) {
+        // Skip files that can't be read
+      }
+    }
+
+    // Search across all extracted symbols
+    const matches = searchSymbolsInResults(symbolResults, name, {
+      type: options.type,
+      fuzzy: options.fuzzy ?? true,
+      limit: options.limit ?? 10,
+      minScore: 0.3
+    });
+
+    // Convert to relative paths
+    const results = matches.map(m => ({
+      name: m.name,
+      type: m.type,
+      file: path.relative(projectRoot, m.file),
+      line: m.line,
+      signature: m.signature,
+      exported: m.exported,
+      score: m.score
+    }));
+
+    return {
+      success: true,
+      project: projectName,
+      results
+    };
+  } catch (e) {
+    logger.error(`[searchSymbols] Error searching symbols in ${projectName}`, e);
+    return {
+      success: false,
+      project: projectName,
+      results: [],
+      message: `Error searching symbols: ${e instanceof Error ? e.message : String(e)}`
+    };
+  }
+}
+
+/**
+ * Get a summary of a file without reading its full content
+ * Returns: path, language, LOC, size, exports, imports, key symbols
+ */
+export async function getFileSummary(
+  filePath: string,
+  projectName: string
+): Promise<{
+  success: boolean;
+  summary?: {
+    path: string;
+    language: string;
+    lines: number;
+    size_bytes: number;
+    last_modified: string;
+    exports: string[];
+    imports: string[];
+    symbols: Array<{ name: string; type: string; line: number }>;
+  };
+  message?: string;
+}> {
+  const config = loadMCPConfig();
+  const projects = getExposedProjects();
+  const project = projects.find(p => p.name === projectName);
+
+  if (!project) {
+    return {
+      success: false,
+      message: `Project '${projectName}' not found`
+    };
+  }
+
+  const projectRoot = project.sourcePath || project.path || '';
+  
+  // Resolve file path
+  let absolutePath = filePath;
+  if (!path.isAbsolute(filePath)) {
+    absolutePath = path.resolve(projectRoot, filePath);
+  }
+
+  if (!fs.existsSync(absolutePath)) {
+    return {
+      success: false,
+      message: `File not found: ${filePath}`
+    };
+  }
+
+  try {
+    const stat = fs.statSync(absolutePath);
+    const content = fs.readFileSync(absolutePath, 'utf-8');
+    const lines = content.split('\n');
+    
+    // Extract symbols
+    const symbolResult = extractSymbols(content, absolutePath);
+    
+    return {
+      success: true,
+      summary: {
+        path: path.relative(projectRoot, absolutePath),
+        language: symbolResult.language,
+        lines: lines.length,
+        size_bytes: stat.size,
+        last_modified: stat.mtime.toISOString(),
+        exports: symbolResult.exports,
+        imports: symbolResult.imports,
+        symbols: symbolResult.symbols.map(s => ({
+          name: s.name,
+          type: s.type,
+          line: s.line
+        }))
+      }
+    };
+  } catch (e) {
+    logger.error(`[getFileSummary] Error reading ${filePath}`, e);
+    return {
+      success: false,
+      message: `Error reading file: ${e instanceof Error ? e.message : String(e)}`
+    };
+  }
+}
+
+/**
+ * Get a bundled context for a query - combines project context, knowledge, and code search
+ * Single-call context gathering to reduce multi-tool chaining
+ */
+export async function getContextBundle(
+  query: string,
+  projectName: string,
+  options: {
+    task_slug?: string;
+    max_tokens?: number;
+    include?: {
+      project_context?: boolean;
+      knowledge?: boolean;
+      code?: boolean;
+      related_files?: boolean;
+    };
+  } = {}
+): Promise<{
+  success: boolean;
+  project_context: string | null;
+  knowledge_results: Array<{ file: string; matches: string[]; score?: number }>;
+  code_results: Array<{ file: string; snippet: string; lineStart: number; lineEnd: number; context?: string; score: number }>;
+  related_files: string[];
+  token_count: number;
+  truncated: boolean;
+  index_age_seconds?: number;
+  message?: string;
+}> {
+  const maxTokens = options.max_tokens ?? 4000;
+  const include = {
+    project_context: options.include?.project_context ?? true,
+    knowledge: options.include?.knowledge ?? true,
+    code: options.include?.code ?? true,
+    related_files: options.include?.related_files ?? false
+  };
+
+  // Token budget allocation: 40% context, 30% knowledge, 30% code
+  const contextBudget = Math.floor(maxTokens * 0.4);
+  const knowledgeBudget = Math.floor(maxTokens * 0.3);
+  const codeBudget = Math.floor(maxTokens * 0.3);
+
+  let totalTokens = 0;
+  let truncated = false;
+  let indexAgeSeconds: number | undefined;
+
+  // 1. Get project context
+  let projectContext: string | null = null;
+  if (include.project_context) {
+    const rawContext = getProjectContext(projectName);
+    if (rawContext) {
+      const contextTokens = estimateTokens(rawContext);
+      if (contextTokens <= contextBudget) {
+        projectContext = rawContext;
+        totalTokens += contextTokens;
+      } else {
+        // Truncate to budget
+        const maxChars = contextBudget * 4;
+        projectContext = rawContext.slice(0, maxChars) + '\n\n[truncated]';
+        totalTokens += contextBudget;
+        truncated = true;
+      }
+    }
+  }
+
+  // 2. Search knowledge
+  const knowledgeResults: Array<{ file: string; matches: string[]; score?: number }> = [];
+  if (include.knowledge) {
+    const knowledgeSearch = await searchKnowledge(query, projectName, { max_tokens: knowledgeBudget });
+    for (const r of knowledgeSearch.results) {
+      knowledgeResults.push({
+        file: r.file,
+        matches: r.matches,
+        score: r.score
+      });
+    }
+    totalTokens += knowledgeSearch.token_count;
+    if (knowledgeSearch.truncated) truncated = true;
+    if (knowledgeSearch.index_age_seconds !== undefined) {
+      indexAgeSeconds = knowledgeSearch.index_age_seconds;
+    }
+  }
+
+  // 3. Search code
+  const codeResults: Array<{ file: string; snippet: string; lineStart: number; lineEnd: number; context?: string; score: number }> = [];
+  if (include.code) {
+    const codeSearch = await searchCode(query, projectName, 10, { max_tokens: codeBudget });
+    for (const r of codeSearch.results) {
+      codeResults.push({
+        file: r.file,
+        snippet: r.snippet,
+        lineStart: r.lineStart,
+        lineEnd: r.lineEnd,
+        context: r.context,
+        score: r.score
+      });
+    }
+    totalTokens += codeSearch.token_count;
+    if (codeSearch.truncated) truncated = true;
+    if (codeSearch.index_age_seconds !== undefined && indexAgeSeconds === undefined) {
+      indexAgeSeconds = codeSearch.index_age_seconds;
+    }
+  }
+
+  // 4. Find related files (if requested and we have code results)
+  const relatedFiles: string[] = [];
+  if (include.related_files && codeResults.length > 0) {
+    const topFile = codeResults[0]?.file;
+    if (topFile) {
+      const related = await findRelatedFiles(topFile, projectName, { depth: 1 });
+      if (related.success) {
+        for (const r of related.relationships.slice(0, 5)) {
+          relatedFiles.push(r.file);
+        }
+      }
+    }
+  }
+
+  return {
+    success: true,
+    project_context: projectContext,
+    knowledge_results: knowledgeResults,
+    code_results: codeResults,
+    related_files: relatedFiles,
+    token_count: totalTokens,
+    truncated,
+    index_age_seconds: indexAgeSeconds
+  };
+}
+
+/**
+ * Prefetch all context relevant to a specific task
+ * Reads task meta, gathers referenced files, runs knowledge/code search on task summary
+ */
+export async function prefetchTaskContext(
+  projectName: string,
+  taskSlug: string,
+  options: {
+    max_tokens?: number;
+  } = {}
+): Promise<{
+  success: boolean;
+  task: TaskMeta | null;
+  project_context: string | null;
+  referenced_files: Array<{ path: string; language: string; lines: number; exports: string[] }>;
+  knowledge_matches: Array<{ file: string; matches: string[]; score?: number }>;
+  code_matches: Array<{ file: string; snippet: string; lineStart: number; lineEnd: number; score: number }>;
+  token_count: number;
+  truncated: boolean;
+  message?: string;
+}> {
+  const maxTokens = options.max_tokens ?? 6000;
+  
+  // Get the task
+  const task = getTask(projectName, taskSlug);
+  if (!task) {
+    return {
+      success: false,
+      task: null,
+      project_context: null,
+      referenced_files: [],
+      knowledge_matches: [],
+      code_matches: [],
+      token_count: 0,
+      truncated: false,
+      message: `Task '${taskSlug}' not found in project '${projectName}'`
+    };
+  }
+
+  // Build search query from task
+  const searchQuery = `${task.title || ''} ${task.summary || ''}`.trim();
+  
+  // Get context bundle using the task summary as query
+  const bundle = await getContextBundle(searchQuery, projectName, {
+    max_tokens: Math.floor(maxTokens * 0.7), // Reserve 30% for referenced files
+    include: {
+      project_context: true,
+      knowledge: true,
+      code: true,
+      related_files: false
+    }
+  });
+
+  // Get summaries of referenced files
+  const referencedFiles: Array<{ path: string; language: string; lines: number; exports: string[] }> = [];
+  const references = (task as any).references as string[] | undefined;
+  if (references && Array.isArray(references)) {
+    for (const ref of references.slice(0, 5)) {
+      const summary = await getFileSummary(ref, projectName);
+      if (summary.success && summary.summary) {
+        referencedFiles.push({
+          path: summary.summary.path,
+          language: summary.summary.language,
+          lines: summary.summary.lines,
+          exports: summary.summary.exports
+        });
+      }
+    }
+  }
+
+  const taskTokens = estimateTokens(JSON.stringify(task));
+  const refTokens = estimateTokens(JSON.stringify(referencedFiles));
+  
+  return {
+    success: true,
+    task,
+    project_context: bundle.project_context,
+    referenced_files: referencedFiles,
+    knowledge_matches: bundle.knowledge_results,
+    code_matches: bundle.code_results,
+    token_count: bundle.token_count + taskTokens + refTokens,
+    truncated: bundle.truncated
+  };
+}
+
+/**
+ * Search across all tasks by keyword, status, agent phase, or date
+ */
+export function searchTasks(
+  projectName: string,
+  options: {
+    keyword?: string;
+    status?: string;
+    agent?: string;
+    since?: string;
+    limit?: number;
+  } = {}
+): Array<TaskMeta & { relevance?: number }> {
+  const allTasks = getProjectTasks(projectName) as TaskMeta[];
+  const limit = options.limit ?? 20;
+  
+  let filtered = allTasks;
+  
+  // Filter by status
+  if (options.status) {
+    filtered = filtered.filter(t => t.status === options.status);
+  }
+  
+  // Filter by agent phase status
+  if (options.agent) {
+    filtered = filtered.filter(t => {
+      const agents = (t as any).agents as Record<string, any> | undefined;
+      if (!agents) return false;
+      return agents[options.agent!]?.status !== undefined;
+    });
+  }
+  
+  // Filter by date (updated since)
+  if (options.since) {
+    const sinceDate = new Date(options.since).getTime();
+    filtered = filtered.filter(t => {
+      const updatedAt = (t as any).updated_at as string | undefined;
+      if (!updatedAt) return false;
+      return new Date(updatedAt).getTime() >= sinceDate;
+    });
+  }
+  
+  // Filter and score by keyword
+  if (options.keyword) {
+    const kw = options.keyword.toLowerCase();
+    filtered = filtered.map(t => {
+      const title = (t.title || '').toLowerCase();
+      const summary = (t.summary || '').toLowerCase();
+      
+      let relevance = 0;
+      if (title.includes(kw)) relevance += 2;
+      if (summary.includes(kw)) relevance += 1;
+      if (t.task_slug.toLowerCase().includes(kw)) relevance += 1;
+      
+      return { ...t, relevance };
+    }).filter(t => t.relevance > 0) as Array<TaskMeta & { relevance: number }>;
+    
+    // Sort by relevance
+    (filtered as Array<TaskMeta & { relevance: number }>).sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0));
+  } else {
+    // Sort by updated_at descending
+    filtered.sort((a, b) => {
+      const aDate = new Date((a as any).updated_at || 0).getTime();
+      const bDate = new Date((b as any).updated_at || 0).getTime();
+      return bDate - aDate;
+    });
+  }
+  
+  return filtered.slice(0, limit);
+}
+
+/**
+ * Validate if a task phase has all required prerequisites
+ */
+export function validatePhase(
+  projectName: string,
+  taskSlug: string,
+  phase: 'research' | 'planning' | 'execution' | 'documentation'
+): {
+  valid: boolean;
+  phase: string;
+  status: string;
+  missing_items: string[];
+  suggestions: string[];
+} {
+  const task = getTask(projectName, taskSlug);
+  
+  if (!task) {
+    return {
+      valid: false,
+      phase,
+      status: 'not_found',
+      missing_items: ['Task does not exist'],
+      suggestions: [`Create task with: create_task(project: "${projectName}", task_slug: "${taskSlug}")`]
+    };
+  }
+
+  const agents = (task as any).agents as Record<string, any> | undefined;
+  const phaseData = agents?.[phase === 'execution' ? 'executor' : phase];
+  const status = phaseData?.status || 'pending';
+  const missing: string[] = [];
+  const suggestions: string[] = [];
+
+  // Phase-specific validation rules
+  switch (phase) {
+    case 'research':
+      if (status !== 'complete') {
+        missing.push('Research phase not complete');
+        suggestions.push(`Run research phase: /rrce_research ${taskSlug}`);
+      }
+      if (!phaseData?.artifact) {
+        missing.push('Research artifact not saved');
+        suggestions.push('Save research brief to complete the phase');
+      }
+      break;
+      
+    case 'planning':
+      // Check research prerequisite
+      const researchStatus = agents?.research?.status;
+      if (researchStatus !== 'complete') {
+        missing.push('Research phase not complete');
+        suggestions.push(`Complete research first: /rrce_research ${taskSlug}`);
+      }
+      if (status !== 'complete') {
+        missing.push('Planning phase not complete');
+        suggestions.push(`Run planning phase: /rrce_plan ${taskSlug}`);
+      }
+      if (!phaseData?.artifact) {
+        missing.push('Planning artifact not saved');
+      }
+      if (!phaseData?.task_count) {
+        missing.push('Task breakdown not defined');
+      }
+      break;
+      
+    case 'execution':
+      // Check planning prerequisite
+      const planningStatus = agents?.planning?.status;
+      if (planningStatus !== 'complete') {
+        missing.push('Planning phase not complete');
+        suggestions.push(`Complete planning first: /rrce_plan ${taskSlug}`);
+      }
+      if (status !== 'complete') {
+        missing.push('Execution phase not complete');
+        suggestions.push(`Run execution phase: /rrce_execute ${taskSlug}`);
+      }
+      break;
+      
+    case 'documentation':
+      // Check execution prerequisite
+      const executorStatus = agents?.executor?.status;
+      if (executorStatus !== 'complete') {
+        missing.push('Execution phase not complete');
+        suggestions.push(`Complete execution first: /rrce_execute ${taskSlug}`);
+      }
+      if (status !== 'complete') {
+        missing.push('Documentation phase not complete');
+        suggestions.push(`Run documentation phase: /rrce_docs ${taskSlug}`);
+      }
+      break;
+  }
+
+  return {
+    valid: missing.length === 0,
+    phase,
+    status,
+    missing_items: missing,
+    suggestions
+  };
 }
 
 // ============================================================================
