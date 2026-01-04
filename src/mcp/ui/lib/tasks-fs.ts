@@ -5,6 +5,23 @@ import { getConfigPath, resolveDataPath } from '../../../lib/paths';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'blocked' | 'complete' | string;
 
+export interface AgentInfo {
+  status: 'pending' | 'in_progress' | 'complete' | string;
+  artifact?: string;
+  completed_at?: string;
+  notes?: string;
+  blocked?: boolean;
+  [key: string]: any;
+}
+
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  status: 'pending' | 'done' | string;
+  owner?: string;
+  notes?: string;
+}
+
 export interface TaskMeta {
   task_slug: string;
   title?: string;
@@ -13,9 +30,8 @@ export interface TaskMeta {
   updated_at?: string;
   created_at?: string;
   tags?: string[];
-  checklist?: Array<{ id?: string; label?: string; status?: string; owner?: string; notes?: string }>;
-  agents?: Record<string, any>;
-  [key: string]: any;
+  checklist?: ChecklistItem[];
+  agents?: Record<string, AgentInfo>;
 }
 
 export interface ProjectTasksResult {
@@ -44,17 +60,11 @@ function detectStorageModeFromConfig(workspaceRoot: string): 'global' | 'workspa
 }
 
 function getEffectiveGlobalBase(): string {
-  // resolveDataPath uses the effective global path internally
-  // but we need it as a prefix check. Importing getEffectiveGlobalPath here
-  // would be fine, but keep dependency surface minimal.
-  // We'll derive it by resolving a dummy global path, then stripping '/workspaces/<name>'.
   const dummy = resolveDataPath('global' as any, '__rrce_dummy__', '');
   return path.dirname(path.dirname(dummy));
 }
 
 export function getProjectRRCEData(project: DetectedProject): string {
-  // For local projects, project.path is the real workspaceRoot
-  // For global projects (detected from ~/.rrce-workflow/workspaces), the true workspace root is sourcePath when present.
   const workspaceRoot = project.sourcePath || project.path;
   const mode = detectStorageModeFromConfig(workspaceRoot);
   return resolveDataPath(mode as any, project.name, workspaceRoot);
@@ -80,7 +90,6 @@ export function listProjectTasks(project: DetectedProject): ProjectTasksResult {
       try {
         const raw = fs.readFileSync(metaPath, 'utf-8');
         const meta = JSON.parse(raw) as TaskMeta;
-        // Ensure slug exists
         if (!meta.task_slug) meta.task_slug = entry.name;
         tasks.push(meta);
       } catch {

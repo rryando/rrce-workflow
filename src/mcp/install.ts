@@ -66,69 +66,108 @@ export interface InstallStatus {
 }
 
 /**
+ * Configuration for each install target
+ * Centralizes config paths and RRCE server configuration
+ */
+interface TargetConfig {
+  path: string;
+  configKey: string;
+  mcpKey: string;
+  serverConfig: any;
+  requiresWorkspacePath?: boolean;
+}
+
+const TARGET_CONFIGS: Record<InstallTarget, TargetConfig> = {
+  antigravity: {
+    path: ANTIGRAVITY_CONFIG,
+    configKey: 'mcpServers',
+    mcpKey: 'rrce',
+    serverConfig: {
+      command: 'npx',
+      args: ['-y', 'rrce-workflow', 'mcp', 'start'],
+    },
+  },
+  claude: {
+    path: CLAUDE_CONFIG,
+    configKey: 'mcpServers',
+    mcpKey: 'rrce',
+    serverConfig: {
+      command: 'npx',
+      args: ['-y', 'rrce-workflow', 'mcp', 'start'],
+    },
+  },
+  'vscode-global': {
+    path: VSCODE_GLOBAL_CONFIG,
+    configKey: 'mcp.servers',
+    mcpKey: 'rrce',
+    serverConfig: {
+      command: 'npx',
+      args: ['-y', 'rrce-workflow', 'mcp', 'start'],
+    },
+  },
+  'vscode-workspace': {
+    path: '', // Resolved dynamically
+    configKey: 'servers',
+    mcpKey: 'rrce',
+    serverConfig: {
+      command: 'npx',
+      args: ['-y', 'rrce-workflow', 'mcp', 'start'],
+    },
+    requiresWorkspacePath: true,
+  },
+  opencode: {
+    path: OPENCODE_CONFIG,
+    configKey: 'mcp',
+    mcpKey: 'rrce',
+    serverConfig: {
+      type: 'local',
+      command: ['npx', '-y', 'rrce-workflow', 'mcp', 'start'],
+      enabled: true,
+    },
+  },
+};
+
+/**
+ * Check if RRCE is installed in a specific config
+ * Generic helper used by all check* functions
+ */
+function checkConfig(target: InstallTarget, workspacePath?: string): boolean {
+  const config = TARGET_CONFIGS[target];
+  const configPath = config.requiresWorkspacePath && workspacePath
+    ? path.join(workspacePath, '.vscode', 'mcp.json')
+    : config.path;
+
+  if (!fs.existsSync(configPath)) return false;
+
+  try {
+    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const targetContainer = config.configKey === 'mcp' && target === 'opencode'
+      ? (content as OpenCodeConfig).mcp
+      : config.configKey === 'mcp.servers'
+        ? (content as MCPServersConfig).mcpServers
+        : config.configKey === 'servers'
+          ? (content as VSCodeMCPConfig).servers
+          : config.configKey === 'mcp.servers'
+            ? (content as VSCodeSettings)['mcp.servers']
+            : content[config.configKey];
+
+    return !!(targetContainer && targetContainer[config.mcpKey]);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check if RRCE is installed in known locations
  */
 export function checkInstallStatus(workspacePath?: string): InstallStatus {
   return {
-    antigravity: checkAntigravityConfig(),
-    claude: checkClaudeConfig(),
-    vscodeGlobal: checkVSCodeGlobalConfig(),
-    vscodeWorkspace: workspacePath ? checkVSCodeWorkspaceConfig(workspacePath) : false,
-    opencode: checkOpenCodeConfig(),
+    antigravity: checkConfig('antigravity'),
+    claude: checkConfig('claude'),
+    vscodeGlobal: checkConfig('vscode-global'),
+    vscodeWorkspace: workspacePath ? checkConfig('vscode-workspace', workspacePath) : false,
+    opencode: checkConfig('opencode'),
   };
-}
-
-function checkAntigravityConfig(): boolean {
-  if (!fs.existsSync(ANTIGRAVITY_CONFIG)) return false;
-  try {
-    const content = JSON.parse(fs.readFileSync(ANTIGRAVITY_CONFIG, 'utf-8'));
-    return !!content.mcpServers?.['rrce'];
-  } catch {
-    return false;
-  }
-}
-
-function checkClaudeConfig(): boolean {
-  if (!fs.existsSync(CLAUDE_CONFIG)) return false;
-  try {
-    const content = JSON.parse(fs.readFileSync(CLAUDE_CONFIG, 'utf-8'));
-    return !!content.mcpServers?.['rrce'];
-  } catch {
-    return false;
-  }
-}
-
-function checkVSCodeGlobalConfig(): boolean {
-  // Check for common OS paths if default doesn't exist? 
-  // For now stick to Linux path as we know user is on Linux
-  if (!fs.existsSync(VSCODE_GLOBAL_CONFIG)) return false;
-  try {
-    const content = JSON.parse(fs.readFileSync(VSCODE_GLOBAL_CONFIG, 'utf-8')) as VSCodeSettings;
-    return !!content['mcp.servers']?.['rrce'];
-  } catch {
-    return false;
-  }
-}
-
-function checkVSCodeWorkspaceConfig(workspacePath: string): boolean {
-  const configPath = path.join(workspacePath, '.vscode', 'mcp.json');
-  if (!fs.existsSync(configPath)) return false;
-  try {
-    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as VSCodeMCPConfig;
-    return !!content.servers?.['rrce'];
-  } catch {
-    return false;
-  }
-}
-
-function checkOpenCodeConfig(): boolean {
-  if (!fs.existsSync(OPENCODE_CONFIG)) return false;
-  try {
-    const content = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf-8')) as OpenCodeConfig;
-    return !!content.mcp?.['rrce'];
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -141,311 +180,115 @@ export function isInstalledAnywhere(workspacePath?: string): boolean {
 }
 
 /**
+ * Generic helper to install RRCE to a config file
+ * Handles all install targets through config-driven approach
+ */
+function installToTarget(target: InstallTarget, workspacePath?: string): boolean {
+  const config = TARGET_CONFIGS[target];
+  const configPath = config.requiresWorkspacePath && workspacePath
+    ? path.join(workspacePath, '.vscode', 'mcp.json')
+    : config.path;
+
+  const dir = path.dirname(configPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  // Load existing config or start fresh
+  let existingConfig: any = {};
+  if (target === 'opencode') {
+    existingConfig = { $schema: "https://opencode.ai/config.json" };
+  } else if (config.configKey === 'servers') {
+    existingConfig = { servers: {} };
+  } else if (config.configKey === 'mcp.servers') {
+    existingConfig = { mcpServers: {} };
+  } else if (config.configKey === 'mcp') {
+    existingConfig = {};
+  }
+
+  if (fs.existsSync(configPath)) {
+    try {
+      existingConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    } catch (error) {
+      if (target === 'opencode') {
+        console.error('Warning: Could not parse existing OpenCode config, creating fresh config');
+      }
+      // For other targets, start fresh silently
+    }
+  }
+
+  // Ensure config container exists
+  const container = config.configKey === 'mcp' && target === 'opencode'
+    ? existingConfig.mcp || (existingConfig.mcp = {})
+    : config.configKey === 'mcp.servers'
+      ? existingConfig.mcpServers || (existingConfig.mcpServers = {})
+      : config.configKey === 'servers'
+        ? existingConfig.servers || (existingConfig.servers = {})
+        : config.configKey === 'mcp.servers'
+          ? existingConfig['mcp.servers'] || (existingConfig['mcp.servers'] = {})
+          : existingConfig[config.configKey] || (existingConfig[config.configKey] = {});
+
+  // Add RRCE server config
+  container[config.mcpKey] = config.serverConfig;
+
+  try {
+    const json = JSON.stringify(existingConfig, null, 2);
+    fs.writeFileSync(configPath, json + (target === 'opencode' ? '\n' : ''));
+    return true;
+  } catch (error) {
+    if (target === 'opencode') {
+      console.error('Failed to write OpenCode config:', error instanceof Error ? error.message : String(error));
+    }
+    return false;
+  }
+}
+
+/**
  * Install RRCE to a config file
  */
 export function installToConfig(target: InstallTarget, workspacePath?: string): boolean {
-  switch (target) {
-    case 'antigravity':
-      return installToAntigravity();
-    case 'claude':
-      return installToClaude();
-    case 'vscode-global':
-      return installToVSCodeGlobal();
-    case 'vscode-workspace':
-      return workspacePath ? installToVSCodeWorkspace(workspacePath) : false;
-    case 'opencode':
-      return installToOpenCode();
-    default:
-      return false;
-  }
-}
-
-function installToAntigravity(): boolean {
-  const dir = path.dirname(ANTIGRAVITY_CONFIG);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  let config: MCPServersConfig = { mcpServers: {} };
-  if (fs.existsSync(ANTIGRAVITY_CONFIG)) {
-    try {
-      config = JSON.parse(fs.readFileSync(ANTIGRAVITY_CONFIG, 'utf-8'));
-    } catch {
-      // Start fresh if invalid
-    }
-  }
-
-  if (!config.mcpServers) config.mcpServers = {};
-  config.mcpServers['rrce'] = {
-    command: 'npx',
-    args: ['-y', 'rrce-workflow', 'mcp', 'start'],
-  };
-
-  try {
-    fs.writeFileSync(ANTIGRAVITY_CONFIG, JSON.stringify(config, null, 2));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function installToClaude(): boolean {
-  const dir = path.dirname(CLAUDE_CONFIG);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  let config: MCPServersConfig = { mcpServers: {} };
-  if (fs.existsSync(CLAUDE_CONFIG)) {
-    try {
-      config = JSON.parse(fs.readFileSync(CLAUDE_CONFIG, 'utf-8'));
-    } catch {
-      // Start fresh if invalid
-    }
-  }
-
-  if (!config.mcpServers) config.mcpServers = {};
-  config.mcpServers['rrce'] = {
-    command: 'npx',
-    args: ['-y', 'rrce-workflow', 'mcp', 'start'],
-  };
-
-  try {
-    fs.writeFileSync(CLAUDE_CONFIG, JSON.stringify(config, null, 2));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function installToVSCodeGlobal(): boolean {
-  const dir = path.dirname(VSCODE_GLOBAL_CONFIG);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  let settings: VSCodeSettings = {};
-  if (fs.existsSync(VSCODE_GLOBAL_CONFIG)) {
-    try {
-      settings = JSON.parse(fs.readFileSync(VSCODE_GLOBAL_CONFIG, 'utf-8'));
-    } catch {
-      // Start fresh if invalid
-    }
-  }
-
-  if (!settings['mcp.servers']) settings['mcp.servers'] = {};
-  settings['mcp.servers']['rrce'] = {
-    command: 'npx',
-    args: ['-y', 'rrce-workflow', 'mcp', 'start'],
-  };
-
-  try {
-    fs.writeFileSync(VSCODE_GLOBAL_CONFIG, JSON.stringify(settings, null, 2));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function installToVSCodeWorkspace(workspacePath: string): boolean {
-  const vscodeDir = path.join(workspacePath, '.vscode');
-  const configPath = path.join(vscodeDir, 'mcp.json');
-
-  if (!fs.existsSync(vscodeDir)) {
-    fs.mkdirSync(vscodeDir, { recursive: true });
-  }
-
-  let config: VSCodeMCPConfig = { servers: {} };
-  if (fs.existsSync(configPath)) {
-    try {
-      config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    } catch {
-      // Start fresh if invalid
-    }
-  }
-
-  if (!config.servers) config.servers = {};
-  config.servers['rrce'] = {
-    command: 'npx',
-    args: ['-y', 'rrce-workflow', 'mcp', 'start'],
-  };
-
-  try {
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function installToOpenCode(): boolean {
-  const dir = path.dirname(OPENCODE_CONFIG);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  let config: OpenCodeConfig = {
-    $schema: "https://opencode.ai/config.json"
-  };
-  
-  if (fs.existsSync(OPENCODE_CONFIG)) {
-    try {
-      config = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf-8'));
-    } catch (error) {
-      console.error('Warning: Could not parse existing OpenCode config, creating fresh config');
-    }
-  }
-
-  if (!config.mcp) config.mcp = {};
-  config.mcp['rrce'] = {
-    type: 'local',
-    command: ['npx', '-y', 'rrce-workflow', 'mcp', 'start'],
-    enabled: true,
-  };
-
-  try {
-    fs.writeFileSync(OPENCODE_CONFIG, JSON.stringify(config, null, 2) + '\n');
-    return true;
-  } catch (error) {
-    console.error('Failed to write OpenCode config:', error instanceof Error ? error.message : String(error));
-    return false;
-  }
+  if (target === 'vscode-workspace' && !workspacePath) return false;
+  return installToTarget(target, workspacePath);
 }
 
 /**
- * Uninstall RRCE from OpenCode
+ * Generic helper to uninstall RRCE from a config file
+ * Handles all uninstall targets through config-driven approach
  */
-function uninstallFromOpenCode(): boolean {
-  if (!fs.existsSync(OPENCODE_CONFIG)) {
-    console.error('OpenCode config not found');
-    return false;
-  }
+function uninstallFromTarget(target: InstallTarget, workspacePath?: string): boolean {
+  const config = TARGET_CONFIGS[target];
+  const configPath = config.requiresWorkspacePath && workspacePath
+    ? path.join(workspacePath, '.vscode', 'mcp.json')
+    : config.path;
 
-  try {
-    const config: OpenCodeConfig = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf-8'));
-    
-    if (!config.mcp?.['rrce']) {
-      console.warn('RRCE not found in OpenCode config');
-      return false;
-    }
-
-    delete config.mcp['rrce'];
-    // Keep empty mcp object for future use
-    
-    fs.writeFileSync(OPENCODE_CONFIG, JSON.stringify(config, null, 2) + '\n');
-    return true;
-  } catch (error) {
-    console.error('Failed to uninstall from OpenCode:', error instanceof Error ? error.message : String(error));
-    return false;
-  }
-}
-
-/**
- * Uninstall RRCE from Antigravity
- */
-function uninstallFromAntigravity(): boolean {
-  if (!fs.existsSync(ANTIGRAVITY_CONFIG)) {
-    console.error('Antigravity config not found');
-    return false;
-  }
-
-  try {
-    const config: MCPServersConfig = JSON.parse(fs.readFileSync(ANTIGRAVITY_CONFIG, 'utf-8'));
-    
-    if (!config.mcpServers?.['rrce']) {
-      console.warn('RRCE not found in Antigravity config');
-      return false;
-    }
-
-    delete config.mcpServers['rrce'];
-    
-    fs.writeFileSync(ANTIGRAVITY_CONFIG, JSON.stringify(config, null, 2) + '\n');
-    return true;
-  } catch (error) {
-    console.error('Failed to uninstall from Antigravity:', error instanceof Error ? error.message : String(error));
-    return false;
-  }
-}
-
-/**
- * Uninstall RRCE from Claude Desktop
- */
-function uninstallFromClaude(): boolean {
-  if (!fs.existsSync(CLAUDE_CONFIG)) {
-    console.error('Claude Desktop config not found');
-    return false;
-  }
-
-  try {
-    const config: MCPServersConfig = JSON.parse(fs.readFileSync(CLAUDE_CONFIG, 'utf-8'));
-    
-    if (!config.mcpServers?.['rrce']) {
-      console.warn('RRCE not found in Claude Desktop config');
-      return false;
-    }
-
-    delete config.mcpServers['rrce'];
-    
-    fs.writeFileSync(CLAUDE_CONFIG, JSON.stringify(config, null, 2) + '\n');
-    return true;
-  } catch (error) {
-    console.error('Failed to uninstall from Claude Desktop:', error instanceof Error ? error.message : String(error));
-    return false;
-  }
-}
-
-/**
- * Uninstall RRCE from VSCode Global Settings
- */
-function uninstallFromVSCodeGlobal(): boolean {
-  if (!fs.existsSync(VSCODE_GLOBAL_CONFIG)) {
-    console.error('VSCode global config not found');
-    return false;
-  }
-
-  try {
-    const settings: VSCodeSettings = JSON.parse(fs.readFileSync(VSCODE_GLOBAL_CONFIG, 'utf-8'));
-    
-    if (!settings['mcp.servers']?.['rrce']) {
-      console.warn('RRCE not found in VSCode global settings');
-      return false;
-    }
-
-    delete settings['mcp.servers']['rrce'];
-    
-    fs.writeFileSync(VSCODE_GLOBAL_CONFIG, JSON.stringify(settings, null, 2) + '\n');
-    return true;
-  } catch (error) {
-    console.error('Failed to uninstall from VSCode (Global):', error instanceof Error ? error.message : String(error));
-    return false;
-  }
-}
-
-/**
- * Uninstall RRCE from VSCode Workspace
- */
-function uninstallFromVSCodeWorkspace(workspacePath: string): boolean {
-  const configPath = path.join(workspacePath, '.vscode', 'mcp.json');
-  
   if (!fs.existsSync(configPath)) {
-    console.error('VSCode workspace config not found');
+    console.error(`${getTargetLabel(target)} config not found`);
     return false;
   }
 
   try {
-    const config: VSCodeMCPConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    
-    if (!config.servers?.['rrce']) {
-      console.warn('RRCE not found in VSCode workspace config');
+    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const targetContainer = config.configKey === 'mcp' && target === 'opencode'
+      ? (content as OpenCodeConfig).mcp
+      : config.configKey === 'mcp.servers'
+        ? (content as MCPServersConfig).mcpServers
+        : config.configKey === 'servers'
+          ? (content as VSCodeMCPConfig).servers
+          : config.configKey === 'mcp.servers'
+            ? (content as VSCodeSettings)['mcp.servers']
+            : content[config.configKey];
+
+    if (!targetContainer || !targetContainer[config.mcpKey]) {
+      console.warn(`RRCE not found in ${getTargetLabel(target)} config`);
       return false;
     }
 
-    delete config.servers['rrce'];
+    delete targetContainer[config.mcpKey];
     
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+    fs.writeFileSync(configPath, JSON.stringify(content, null, 2) + '\n');
     return true;
   } catch (error) {
-    console.error('Failed to uninstall from VSCode (Workspace):', error instanceof Error ? error.message : String(error));
+    console.error(`Failed to uninstall from ${getTargetLabel(target)}:`, error instanceof Error ? error.message : String(error));
     return false;
   }
 }
@@ -454,20 +297,8 @@ function uninstallFromVSCodeWorkspace(workspacePath: string): boolean {
  * Uninstall RRCE from a config file
  */
 export function uninstallFromConfig(target: InstallTarget, workspacePath?: string): boolean {
-  switch (target) {
-    case 'antigravity':
-      return uninstallFromAntigravity();
-    case 'claude':
-      return uninstallFromClaude();
-    case 'vscode-global':
-      return uninstallFromVSCodeGlobal();
-    case 'vscode-workspace':
-      return workspacePath ? uninstallFromVSCodeWorkspace(workspacePath) : false;
-    case 'opencode':
-      return uninstallFromOpenCode();
-    default:
-      return false;
-  }
+  if (target === 'vscode-workspace' && !workspacePath) return false;
+  return uninstallFromTarget(target, workspacePath);
 }
 
 /**

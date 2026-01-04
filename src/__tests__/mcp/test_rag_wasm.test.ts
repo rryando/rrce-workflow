@@ -1,5 +1,5 @@
 
-import { RAGService } from './rag';
+import { RAGService } from '../../mcp/services/rag';
 import * as fs from 'fs';
 import * as path from 'path';
 

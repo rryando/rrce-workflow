@@ -234,6 +234,18 @@ RAG is enabled by default in Express Setup. You can toggle it per-project in the
 
 ---
 
+## 🛠 AI Agent Effectiveness & Code Health
+
+We've optimized the codebase to be **highly navigatable for AI coding agents**:
+
+### Codebase Optimization (v0.3.13)
+- **Deduplication**: Consolidated install/uninstall logic and project sorting.
+- **Function Extraction**: Split monolithic functions (like `index_knowledge`) into manageable helpers.
+- **Improved Type Safety**: Replaced `any` types with structured interfaces (`TaskMeta`, `AgentInfo`).
+- **AI Agent Guide**: Added [AI Agent Architecture Guide](docs/AI_AGENT_GUIDE.md) to help coding assistants navigate the project.
+
+---
+
 ## Requirements
 
 -   **Node.js 18+**

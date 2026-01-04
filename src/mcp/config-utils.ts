@@ -32,7 +32,7 @@ export function normalizeProjectPath(projectPath: string): string {
  */
 export function findProjectConfig(
   config: MCPConfig,
-  identifier: { name: string; path?: string }
+  identifier: { name?: string; path?: string }
 ): MCPProjectConfig | undefined {
   const targetPath = identifier.path ? normalizeProjectPath(identifier.path) : undefined;
 
@@ -45,12 +45,12 @@ export function findProjectConfig(
     }
     
     // If neither has path, match on name
-    if (!targetPath && !configPath) {
+    if (!targetPath && !configPath && identifier.name) {
       return p.name === identifier.name;
     }
     
     // If identifier has path but config doesn't, allow name match (legacy upgrade)
-    if (targetPath && !configPath) {
+    if (targetPath && !configPath && identifier.name) {
       return p.name === identifier.name;
     }
     

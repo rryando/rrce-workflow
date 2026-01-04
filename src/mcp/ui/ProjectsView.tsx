@@ -8,6 +8,7 @@ import type { DetectedProject } from '../../lib/detection';
 import { useConfig } from './ConfigContext';
 import { indexingJobs } from '../services/indexing-jobs';
 import { findProjectConfig } from '../config-utils';
+import { projectKey, sortProjects, formatProjectLabel } from '../../lib/project-utils';
 
 interface ProjectsViewProps {
   config: MCPConfig;
@@ -16,32 +17,13 @@ interface ProjectsViewProps {
   workspacePath: string;
 }
 
-function projectKey(p: DetectedProject): string {
-  return p.sourcePath ?? p.path;
-}
-
-function formatProjectLabel(p: DetectedProject): string {
-  const root = p.sourcePath ?? p.path;
-  return `${p.name} (${p.source})${root ? ` - ${root}` : ''}`;
-}
-
 export const ProjectsView = ({ config: initialConfig, projects: allProjects, onConfigChange, workspacePath }: ProjectsViewProps) => {
   const { driftReports, checkAllDrift } = useConfig();
   const [config, setConfig] = useState(initialConfig);
   const [indexingStats, setIndexingStats] = useState<Record<string, any>>({});
 
   const sortedProjects = useMemo(() => {
-    return [...allProjects].sort((a, b) => {
-      // workspacePath prioritization
-      const aIsCurrent = a.path === workspacePath;
-      const bIsCurrent = b.path === workspacePath;
-      if (aIsCurrent && !bIsCurrent) return -1;
-      if (!aIsCurrent && bIsCurrent) return 1;
-
-      const byName = a.name.localeCompare(b.name);
-      if (byName !== 0) return byName;
-      return projectKey(a).localeCompare(projectKey(b));
-    });
+    return sortProjects(allProjects, workspacePath);
   }, [allProjects, workspacePath]);
 
   // Indexing status polling
@@ -49,11 +31,8 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
     const updateStats = () => {
       const next: Record<string, any> = {};
       for (const p of allProjects) {
-        let projConfig = findProjectConfig(config, { name: p.name, path: p.path });
-        if (!projConfig && p.source === 'global') {
-          projConfig = config.projects.find(c => c.name === p.name);
-        }
-        const enabled = projConfig?.semanticSearch?.enabled || p.semanticSearchEnabled || false;
+        const projConfig = findProjectConfig(config, { name: p.name, path: p.path });
+        const enabled = projConfig?.semanticSearch?.enabled || (p as any).semanticSearchEnabled || false;
         const prog = indexingJobs.getProgress(p.name);
         next[p.name] = { enabled, ...prog };
       }
@@ -87,11 +66,7 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
 
   const projectItems = useMemo(() => {
     return sortedProjects.map(p => {
-      const projectConfig = config.projects.find(c =>
-        (c.path && c.path === p.path) ||
-        (p.source === 'global' && c.name === p.name) ||
-        (!c.path && c.name === p.name)
-      );
+      const projectConfig = findProjectConfig(config, { name: p.name, path: p.path });
 
       const isExposed = projectConfig ? projectConfig.expose : config.defaults.includeNew;
       const drift = driftReports[p.path];
@@ -133,7 +108,7 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
       const project = allProjects.find(p => p.path === item.value);
 
       if (project) {
-        const existingConfig = newConfig.projects.find(p => p.name === project.name);
+        const existingConfig = findProjectConfig(newConfig, { name: project.name, path: project.path });
         const projectPath = (project.source === 'global' && existingConfig?.path)
           ? existingConfig.path
           : project.path;

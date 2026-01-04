@@ -11,7 +11,7 @@ import ignore from 'ignore';
 import { logger } from './logger';
 import type { IndexJobState } from './services/indexing-jobs';
 import { loadMCPConfig, isProjectExposed, getProjectPermissions } from './config';
-import { normalizeProjectPath } from './config-utils';
+import { normalizeProjectPath, findProjectConfig } from './config-utils';
 import { type DetectedProject, findClosestProject } from '../lib/detection';
 import { projectService } from '../lib/detection-service';
 import { RAGService } from './services/rag';
@@ -26,6 +26,45 @@ import {
   getEffectiveGlobalPath,
   getWorkspaceName as getWorkspaceNameFromPath 
 } from '../lib/paths';
+import type { TaskMeta } from './ui/lib/tasks-fs';
+
+/**
+ * Constants for Indexing
+ */
+const INDEXABLE_EXTENSIONS = [
+    '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
+    '.py', '.pyw',
+    '.go',
+    '.rs',
+    '.java', '.kt', '.kts',
+    '.c', '.cpp', '.h', '.hpp',
+    '.cs',
+    '.rb',
+    '.php',
+    '.swift',
+    '.md', '.mdx',
+    '.json', '.yaml', '.yml', '.toml',
+    '.sh', '.bash', '.zsh',
+    '.sql',
+    '.html', '.css', '.scss', '.sass', '.less'
+];
+
+const CODE_EXTENSIONS = [
+    '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
+    '.py', '.pyw',
+    '.go',
+    '.rs',
+    '.java', '.kt', '.kts',
+    '.c', '.cpp', '.h', '.hpp',
+    '.cs',
+    '.rb',
+    '.php',
+    '.swift',
+    '.sh', '.bash', '.zsh',
+    '.sql'
+];
+
+const SKIP_DIRS = ['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', 'venv', '.venv', 'target', 'vendor'];
 
 /**
  * Resolve configuration paths for a project
@@ -37,7 +76,7 @@ export function resolveProjectPaths(project?: string, pathInput?: string): objec
 
     // 1. Resolve workspaceRoot if only project name is given
     if (!workspaceRoot && project) {
-        const projConfig = config.projects.find(p => p.name === project);
+        const projConfig = findProjectConfig(config, { name: project });
         if (projConfig?.path) {
             workspaceRoot = projConfig.path;
         }
@@ -45,8 +84,7 @@ export function resolveProjectPaths(project?: string, pathInput?: string): objec
 
     // 2. Resolve project name if only path is given
     if (!workspaceName && workspaceRoot) {
-        // Check MCP config
-        const projConfig = config.projects.find(p => p.path && normalizeProjectPath(p.path) === normalizeProjectPath(workspaceRoot!));
+        const projConfig = findProjectConfig(config, { path: workspaceRoot });
         workspaceName = projConfig?.name || getWorkspaceNameFromPath(workspaceRoot);
     }
 
@@ -261,13 +299,13 @@ export function getProjectTasks(projectName: string): object[] {
         try {
           const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
           tasks.push(meta);
-        } catch {
-          // Skip invalid JSON
+        } catch (err) {
+          logger.error(`[getProjectTasks] Failed to parse meta.json in ${dir.name}`, err);
         }
       }
     }
-  } catch {
-    // Ignore errors
+  } catch (err) {
+    logger.error(`[getProjectTasks] Failed to read tasks directory ${project.tasksPath}`, err);
   }
 
   return tasks;
@@ -320,9 +358,7 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
       : undefined;
 
     // Check for RAG configuration
-    const projConfig = config.projects.find(p =>
-      (p.path && normalizeProjectPath(p.path) === normalizeProjectPath(project.sourcePath || project.path)) || (!p.path && p.name === project.name)
-    );
+    const projConfig = findProjectConfig(config, { name: project.name, path: project.sourcePath || project.path });
     const useRAG = projConfig?.semanticSearch?.enabled;
 
     if (!useRAG) {
@@ -401,9 +437,7 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
       : undefined;
 
     // Check for RAG configuration
-    const projConfig = config.projects.find(p => 
-        (p.path && normalizeProjectPath(p.path) === normalizeProjectPath(project.sourcePath || project.path)) || (!p.path && p.name === project.name)
-    );
+    const projConfig = findProjectConfig(config, { name: project.name, path: project.sourcePath || project.path });
     const useRAG = projConfig?.semanticSearch?.enabled;
 
     if (useRAG) {
@@ -459,12 +493,54 @@ export async function searchKnowledge(query: string, projectFilter?: string): Pr
           });
         }
       }
-    } catch {
-      // Ignore errors
+    } catch (err) {
+      logger.error(`[searchKnowledge] Failed to read knowledge directory ${project.knowledgePath}`, err);
     }
   }
 
   return results;
+}
+
+/**
+ * Helper to get project scan root and gitignore configuration
+ */
+function getScanContext(project: DetectedProject, scanRoot: string) {
+    const gitignorePath = path.join(scanRoot, '.gitignore');
+    const ig = fs.existsSync(gitignorePath)
+      ? ignore().add(fs.readFileSync(gitignorePath, 'utf-8'))
+      : null;
+
+    const toPosixRelativePath = (absolutePath: string): string => {
+      const rel = path.relative(scanRoot, absolutePath);
+      return rel.split(path.sep).join('/');
+    };
+
+    const isUnderGitDir = (absolutePath: string): boolean => {
+      const rel = toPosixRelativePath(absolutePath);
+      return rel === '.git' || rel.startsWith('.git/');
+    };
+
+    const isIgnoredByGitignore = (absolutePath: string, isDir: boolean): boolean => {
+      if (!ig) return false;
+      const rel = toPosixRelativePath(absolutePath);
+      return ig.ignores(isDir ? `${rel}/` : rel);
+    };
+
+    const shouldSkipEntryDir = (absolutePath: string): boolean => {
+      const dirName = path.basename(absolutePath);
+      if (dirName === '.git') return true;
+      if (SKIP_DIRS.includes(dirName)) return true;
+      if (isIgnoredByGitignore(absolutePath, true)) return true;
+      return false;
+    };
+
+    const shouldSkipEntryFile = (absolutePath: string): boolean => {
+      if (isUnderGitDir(absolutePath)) return true;
+      if (isIgnoredByGitignore(absolutePath, false)) return true;
+      return false;
+    };
+
+    return { shouldSkipEntryDir, shouldSkipEntryFile };
 }
 
 /**
@@ -503,9 +579,8 @@ export async function indexKnowledge(projectName: string, force: boolean = false
      }
 
     // Find config with fallback for global projects
-    const projConfig = config.projects.find(p => 
-        (p.path && normalizeProjectPath(p.path) === normalizeProjectPath(project.sourcePath || project.path)) || (!p.path && p.name === project.name)
-    ) || (project.source === 'global' ? { semanticSearch: { enabled: true, model: 'Xenova/all-MiniLM-L6-v2' } } : undefined);
+    const projConfig = findProjectConfig(config, { name: project.name, path: project.sourcePath || project.path }) 
+        || (project.source === 'global' ? { semanticSearch: { enabled: true, model: 'Xenova/all-MiniLM-L6-v2' } } : undefined);
     
     // Check if RAG is actually enabled (either in config or detected)
     const isEnabled = projConfig?.semanticSearch?.enabled || (project as any).semanticSearchEnabled;
@@ -523,23 +598,6 @@ export async function indexKnowledge(projectName: string, force: boolean = false
      }
 
     // Use project root for scanning
-    // For global projects, project.path is the data path. We need to find the ACTUAL source path.
-    // However, in the current architecture 'scanForProjects' sets project.path = dataPath for global projects.
-    // This is a known limitation. We assumed global projects are wrapping the source?
-    // Wait, global setup stores config in ~/.rrce/workspaces/proj/config.yaml
-    // The ACTUAL source code is where 'npx rrce-workflow' was run.
-    // BUT 'scanGlobalStorage' ONLY finds the ~/.rrce entry, it doesn't know where the request came from unless we store it.
-    // CHECK: Does config.yaml in global storage contain the source path?
-    
-    // If not, we can only index what's inside the global storage (which is just metadata). 
-    // This is a CRITICAL ISSUE for global mode RAG if we don't store source path.
-    // Workaround: Check if project has a 'sourcePath' or similar in config.
-    
-    // Let's assume for now we scan 'project.path'. If it's global, that's ~/.rrce/... which is WRONG for code indexing.
-    // We need to read the source path from somewhere.
-    
-    // Use project root for scanning
-    // Prefer explicit sourcePath (Global mode) or detect from path (Workspace mode)
     const scanRoot = project.sourcePath || project.path || project.dataPath;
 
      if (!fs.existsSync(scanRoot)) {
@@ -554,84 +612,12 @@ export async function indexKnowledge(projectName: string, force: boolean = false
          };
      }
 
-    // Extensions to index (common source files)
-    const INDEXABLE_EXTENSIONS = [
-        '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
-        '.py', '.pyw',
-        '.go',
-        '.rs',
-        '.java', '.kt', '.kts',
-        '.c', '.cpp', '.h', '.hpp',
-        '.cs',
-        '.rb',
-        '.php',
-        '.swift',
-        '.md', '.mdx',
-        '.json', '.yaml', '.yml', '.toml',
-        '.sh', '.bash', '.zsh',
-        '.sql',
-        '.html', '.css', '.scss', '.sass', '.less'
-    ];
-
-    // Code-only extensions (for code-embeddings.json)
-    const CODE_EXTENSIONS = [
-        '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
-        '.py', '.pyw',
-        '.go',
-        '.rs',
-        '.java', '.kt', '.kts',
-        '.c', '.cpp', '.h', '.hpp',
-        '.cs',
-        '.rb',
-        '.php',
-        '.swift',
-        '.sh', '.bash', '.zsh',
-        '.sql'
-    ];
-
-     // Directories to skip (still applied when .gitignore missing)
-     const SKIP_DIRS = ['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', 'venv', '.venv', 'target', 'vendor'];
-
-     const gitignorePath = path.join(scanRoot, '.gitignore');
-     const ig = fs.existsSync(gitignorePath)
-       ? ignore().add(fs.readFileSync(gitignorePath, 'utf-8'))
-       : null;
-
-     const toPosixRelativePath = (absolutePath: string): string => {
-       const rel = path.relative(scanRoot, absolutePath);
-       return rel.split(path.sep).join('/');
-     };
-
-     const isUnderGitDir = (absolutePath: string): boolean => {
-       const rel = toPosixRelativePath(absolutePath);
-       return rel === '.git' || rel.startsWith('.git/');
-     };
-
-     const isIgnoredByGitignore = (absolutePath: string, isDir: boolean): boolean => {
-       if (!ig) return false;
-       const rel = toPosixRelativePath(absolutePath);
-       return ig.ignores(isDir ? `${rel}/` : rel);
-     };
-
-     const shouldSkipEntryDir = (absolutePath: string): boolean => {
-       const dirName = path.basename(absolutePath);
-       if (dirName === '.git') return true;
-       if (SKIP_DIRS.includes(dirName)) return true;
-       if (isIgnoredByGitignore(absolutePath, true)) return true;
-       return false;
-     };
-
-     const shouldSkipEntryFile = (absolutePath: string): boolean => {
-       if (isUnderGitDir(absolutePath)) return true;
-       if (isIgnoredByGitignore(absolutePath, false)) return true;
-       return false;
-     };
-
       const runIndexing = async (): Promise<void> => {
+         const { shouldSkipEntryDir, shouldSkipEntryFile } = getScanContext(project, scanRoot);
+         
          const indexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'embeddings.json');
          const codeIndexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'code-embeddings.json');
          
-         // Fix lint error: ensure model is defined or provide default
          const model = projConfig?.semanticSearch?.model || 'Xenova/all-MiniLM-L6-v2';
          const rag = new RAGService(indexPath, model);
          const codeRag = new RAGService(codeIndexPath, model);
@@ -689,25 +675,17 @@ export async function indexKnowledge(projectName: string, force: boolean = false
                  const fullPath = path.join(dir, entry.name);
                  
                   if (entry.isDirectory()) {
-                      // Skip excluded directories
-                      if (shouldSkipEntryDir(fullPath)) {
-                          continue;
-                      }
+                      if (shouldSkipEntryDir(fullPath)) continue;
                       await scanDir(fullPath);
                   } else if (entry.isFile()) {
                       const ext = path.extname(entry.name).toLowerCase();
-                      if (!INDEXABLE_EXTENSIONS.includes(ext)) {
-                          continue;
-                      }
-
-                      if (shouldSkipEntryFile(fullPath)) {
-                          continue;
-                      }
+                      if (!INDEXABLE_EXTENSIONS.includes(ext)) continue;
+                      if (shouldSkipEntryFile(fullPath)) continue;
                       
                       try {
                           indexingJobs.update(project.name, { currentItem: fullPath, itemsDone });
                           const stat = fs.statSync(fullPath);
-                          const mtime = force ? undefined : stat.mtimeMs; // Force ignores mtime
+                          const mtime = force ? undefined : stat.mtimeMs; 
                           const content = fs.readFileSync(fullPath, 'utf-8');
                           
                           // Index in knowledge index (all files)
@@ -720,36 +698,30 @@ export async function indexKnowledge(projectName: string, force: boolean = false
                           
                           // For code files, also index with line numbers + context in code index
                           if (CODE_EXTENSIONS.includes(ext)) {
-                              // Check if needs re-indexing
                               if (!mtime || codeRag.needsReindex(fullPath, mtime)) {
                                   const language = getLanguageFromExtension(ext);
                                   const chunks = codeRag.chunkContentWithLines(content);
-                                  
-                                  // Clear existing chunks for this file
                                   codeRag.clearFileChunks(fullPath);
                                   
-                                  // Index each chunk with context
                                   for (const chunk of chunks) {
                                       const context = extractContext(content, chunk.lineStart, language);
                                       await codeRag.indexCodeChunk(fullPath, chunk, context, language, mtime);
                                   }
                                   
-                                  // Update file metadata
                                   codeRag.updateFileMetadata(fullPath, chunks.length, mtime ?? Date.now(), language);
                                   codeIndexed++;
                               }
                           }
                       } catch (err) {
-                          // Skip files that can't be read (binary, permissions, etc.)
+                          logger.error(`[indexKnowledge] Failed to index ${fullPath}`, err);
                      } finally {
                          itemsDone++;
                          indexingJobs.update(project.name, { itemsDone });
-                         // Cooperative yield: keep event-loop responsive
                          if (itemsDone % 10 === 0) {
                            await new Promise<void>(resolve => setImmediate(resolve));
                          }
                      }
-                 }
+                  }
              }
          };
 
@@ -760,16 +732,13 @@ export async function indexKnowledge(projectName: string, force: boolean = false
           const stats = rag.getStats();
           const codeStats = codeRag.getStats();
           const message = `Indexed ${indexed} files (${codeIndexed} code files), skipped ${skipped} unchanged. Knowledge: ${stats.totalChunks} chunks. Code: ${codeStats.totalChunks} chunks.`;
-          // Store final details in logger (tool will report status via job state)
           logger.info(`[RAG] ${project.name}: ${message}`);
          indexingJobs.update(project.name, { currentItem: undefined });
-     };
+      };
 
      const startResult = indexingJobs.startOrStatus(project.name, runIndexing);
-
      const p = startResult.progress;
 
-     // Fast return for start-or-status
      return {
        state: startResult.state,
        status: startResult.status,
@@ -856,7 +825,7 @@ WARNING: No projects exposed. Run 'npx rrce-workflow mcp configure'.
 /**
  * Get a specific task by slug
  */
-export function getTask(projectName: string, taskSlug: string): object | null {
+export function getTask(projectName: string, taskSlug: string): TaskMeta | null {
   const config = loadMCPConfig();
   const projects = projectService.scan();
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
@@ -867,8 +836,9 @@ export function getTask(projectName: string, taskSlug: string): object | null {
   if (!fs.existsSync(metaPath)) return null;
 
   try {
-    return JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
-  } catch {
+    return JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as TaskMeta;
+  } catch (err) {
+    logger.error(`[getTask] Failed to parse meta.json for task ${taskSlug}`, err);
     return null;
   }
 }
@@ -876,7 +846,7 @@ export function getTask(projectName: string, taskSlug: string): object | null {
 /**
  * Create a new task
  */
-export async function createTask(projectName: string, taskSlug: string, taskData: any): Promise<object | null> {
+export async function createTask(projectName: string, taskSlug: string, taskData: Partial<TaskMeta>): Promise<TaskMeta | null> {
     const config = loadMCPConfig();
     const projects = projectService.scan();
     const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
@@ -931,14 +901,14 @@ export async function createTask(projectName: string, taskSlug: string, taskData
     const metaPath = path.join(taskDir, 'meta.json');
     fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
 
-    return meta;
+    return meta as TaskMeta;
 }
 
 /**
  * Update an existing task
  */
-export async function updateTask(projectName: string, taskSlug: string, taskData: any): Promise<object | null> {
-    const meta = getTask(projectName, taskSlug) as any;
+export async function updateTask(projectName: string, taskSlug: string, taskData: Partial<TaskMeta>): Promise<TaskMeta | null> {
+    const meta = getTask(projectName, taskSlug);
     if (!meta) throw new Error(`Task '${taskSlug}' not found.`);
 
     // Smart merge
@@ -948,7 +918,7 @@ export async function updateTask(projectName: string, taskSlug: string, taskData
         updated_at: new Date().toISOString(),
         // Ensure nested objects are merged if they exist in taskData
         agents: taskData.agents ? { ...meta.agents, ...taskData.agents } : meta.agents,
-        workspace: meta.workspace // Protect workspace metadata
+        workspace: (meta as any).workspace // Protect workspace metadata
     };
 
     const config = loadMCPConfig();
@@ -960,7 +930,7 @@ export async function updateTask(projectName: string, taskSlug: string, taskData
     const metaPath = path.join(project.tasksPath, taskSlug, 'meta.json');
     fs.writeFileSync(metaPath, JSON.stringify(updatedMeta, null, 2));
 
-    return updatedMeta;
+    return updatedMeta as TaskMeta;
 }
 
 /**
@@ -1046,7 +1016,6 @@ export async function findRelatedFiles(
 
   try {
     // Build dependency graph for the project
-    // TODO: In future, cache this graph in the knowledge directory
     const graph = await scanProjectDependencies(projectRoot);
     
     // Find related files

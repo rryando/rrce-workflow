@@ -15,11 +15,14 @@ interface TabBarProps {
 
 export const TabBar = ({ tabs, activeTab, onChange }: TabBarProps) => {
   useInput((input, key) => {
+    if (tabs.length === 0) return;
+
     if (key.leftArrow) {
       const index = tabs.findIndex(t => t.id === activeTab);
       if (index !== -1) {
           const nextIndex = (index - 1 + tabs.length) % tabs.length;
-          onChange(tabs[nextIndex]?.id || tabs[0].id);
+          const nextTab = tabs[nextIndex];
+          if (nextTab) onChange(nextTab.id);
       }
     }
     
@@ -27,7 +30,8 @@ export const TabBar = ({ tabs, activeTab, onChange }: TabBarProps) => {
       const index = tabs.findIndex(t => t.id === activeTab);
       if (index !== -1) {
           const nextIndex = (index + 1) % tabs.length;
-          onChange(tabs[nextIndex]?.id || tabs[0].id);
+          const nextTab = tabs[nextIndex];
+          if (nextTab) onChange(nextTab.id);
       }
     }
     
