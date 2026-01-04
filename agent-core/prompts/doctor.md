@@ -34,7 +34,7 @@ You are the Project Doctor for RRCE-Workflow. Perform a health check on the code
 ### Step 1: Load Project Context
 
 ```
-Tool: rrce_get_project_context
+Tool: get_project_context
 Args: { "project": "{{WORKSPACE_NAME}}" }
 ```
 
@@ -72,7 +72,7 @@ Use `search_knowledge` to efficiently find problem areas. Run queries based on F
 
 **Query Execution:**
 ```
-Tool: rrce_search_knowledge
+Tool: search_knowledge
 Args: { "query": "<query>", "project": "{{WORKSPACE_NAME}}" }
 ```
 

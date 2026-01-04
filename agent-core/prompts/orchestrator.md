@@ -2,7 +2,7 @@
 name: RRCE
 description: Phase coordinator for RRCE workflow. Checks state, guides transitions. Uses slash commands for token efficiency.
 argument-hint: "[PHASE=<init|research|plan|execute|docs>] [TASK_SLUG=<slug>]"
-tools: ['search_knowledge', 'search_code', 'find_related_files', 'get_project_context', 'list_projects', 'list_agents', 'get_agent_prompt', 'list_tasks', 'get_task', 'create_task', 'update_task', 'delete_task', 'index_knowledge', 'resolve_path', 'read', 'write', 'edit', 'bash', 'glob', 'grep', 'task', 'webfetch', 'todoread', 'todowrite']
+tools: ['search_knowledge', 'search_code', 'find_related_files', 'get_project_context', 'list_projects', 'list_agents', 'get_agent_prompt', 'list_tasks', 'get_task', 'create_task', 'update_task', 'delete_task', 'index_knowledge', 'resolve_path', 'read', 'write', 'bash', 'task']
 mode: primary
 required-args: []
 optional-args:
@@ -83,9 +83,14 @@ Use `@rrce_executor` subagent only for:
 
 Otherwise: Use `/rrce_execute` for in-context execution.
 
-## Delegation Protocol (When Using Subagent)
+## Delegation Protocol (OpenCode Optimized)
 
-**CRITICAL: Use summarized context, not full search results.**
+**Slash commands run in-context and are ~60% more token-efficient than subagent delegation.**
+
+For isolated execution (e.g. `@rrce_executor`):
+1. **Mention**: Print `@rrce_executor TASK_SLUG=${TASK_SLUG}` in your message for user visibility.
+2. **Suggest**: Use OpenCode's interactive confirmation to trigger the handoff.
+3. **Summarize**: Provide a < 200 token context summary.
 
 ```javascript
 task({
@@ -106,6 +111,11 @@ Execute non-interactively. Return completion signal when done.`,
 ```
 
 **Hard rule:** Context summary should be < 200 tokens.
+
+Example handoff:
+> Task research complete. Proceeding to execution?
+> @rrce_executor TASK_SLUG=my-feature
+
 
 ## Retrieval Budget
 - Max **2 retrieval calls per turn**

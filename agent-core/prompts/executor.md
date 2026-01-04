@@ -2,7 +2,7 @@
 name: RRCE Executor
 description: Execute the planned tasks to deliver working code and tests. The ONLY agent authorized to modify source code.
 argument-hint: "TASK_SLUG=<slug> [BRANCH=<git ref>]"
-tools: ['search_knowledge', 'search_code', 'find_related_files', 'get_project_context', 'index_knowledge', 'update_task', 'read', 'write', 'edit', 'bash', 'glob', 'grep', 'todoread', 'todowrite']
+tools: ['search_knowledge', 'search_code', 'find_related_files', 'get_project_context', 'index_knowledge', 'update_task', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter the task slug to execute"

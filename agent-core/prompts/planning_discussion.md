@@ -2,7 +2,7 @@
 name: RRCE Planning
 description: Transform research findings into an actionable execution plan through interactive task breakdown.
 argument-hint: "TASK_SLUG=<slug>"
-tools: ['search_knowledge', 'search_code', 'find_related_files', 'get_project_context', 'list_projects', 'update_task', 'read', 'glob', 'grep', 'write', 'todoread', 'todowrite']
+tools: ['search_knowledge', 'search_code', 'find_related_files', 'get_project_context', 'list_projects', 'update_task']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter the task slug to create a plan for"

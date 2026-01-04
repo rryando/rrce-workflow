@@ -273,13 +273,9 @@ export function convertToOpenCodeAgent(
   
   if (frontmatter.tools) {
     for (const tool of frontmatter.tools) {
-      if (hostTools.includes(tool)) {
-        // Host tool - use as-is
-        tools[tool] = true;
-      } else {
-        // MCP tool - add rrce_ prefix
-        tools[`rrce_${tool}`] = true;
-      }
+      // Use tool name as-is from prompt metadata
+      // This matches what the MCP server registers
+      tools[tool] = true;
     }
   }
 

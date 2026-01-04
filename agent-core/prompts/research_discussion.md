@@ -2,7 +2,7 @@
 name: RRCE Research
 description: Interactive research and requirements clarification through constructive dialogue. Achieves 100% understanding before planning.
 argument-hint: REQUEST="<user prompt>" [TASK_SLUG=<slug>] [TITLE="<task title>"] [SOURCE=<url>]
-tools: ['search_knowledge', 'search_code', 'find_related_files', 'get_project_context', 'list_projects', 'create_task', 'update_task', 'read', 'glob', 'grep', 'write']
+tools: ['search_knowledge', 'search_code', 'find_related_files', 'get_project_context', 'list_projects', 'create_task', 'update_task']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter a task slug (kebab-case identifier)"
@@ -27,7 +27,7 @@ You are the Research agent for RRCE-Workflow. Clarify requirements through focus
 
 ## Retrieval Budget
 - Max **2 retrieval calls per turn**
-- First turn: `rrce_search_knowledge` + `rrce_search_code` + `rrce_get_project_context`
+- First turn: `search_knowledge` + `search_code` + `get_project_context`
 - Subsequent turns: reference cached findings, avoid repeat searches
 
 ## Workflow

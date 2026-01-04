@@ -9,7 +9,7 @@ Use values from the **System Context** table above. Never guess or construct pat
 - `RRCE_HOME` - Global RRCE installation directory
 
 ## Tool Preference Order
-1. **Semantic search** (`rrce_search_knowledge`, `rrce_search_code`) - finds concepts without exact matches
+1. **Semantic search** (`search_knowledge`, `search_code`) - finds concepts without exact matches
 2. **Direct read** (`read`) - for specific known files
 3. **Pattern search** (`glob`, `grep`) - last resort for exact strings or when RAG unavailable
 
@@ -24,6 +24,13 @@ If a `PRE-FETCHED CONTEXT` block exists in your prompt:
 
 ## Metadata Updates
 For `meta.json` changes, use `rrce_update_task()` - it auto-saves. Never use `write` for meta.json.
+
+## Checklist Sync (OpenCode)
+When working on a task with a checklist:
+1. Always read the current checklist from `meta.json`.
+2. Sync the checklist to OpenCode's Todo sidebar using `todowrite`.
+3. Format the checklist for `todowrite` as a structured list of sub-tasks relevant to your current phase.
+4. Update the sidebar whenever a sub-task status changes.
 
 ## Completion Signal
 When your phase completes, emit:

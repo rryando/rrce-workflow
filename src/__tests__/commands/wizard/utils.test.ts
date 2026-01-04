@@ -57,9 +57,9 @@ describe('commands/wizard/utils', () => {
       expect(agent.tools.write).toBe(true);
       expect(agent.tools.bash).toBe(true);
 
-      // MCP tools must be prefixed
-      expect(agent.tools.rrce_search_knowledge).toBe(true);
-      expect(agent.tools.rrce_get_project_context).toBe(true);
+      // MCP tools (direct match)
+      expect(agent.tools.search_knowledge).toBe(true);
+      expect(agent.tools.get_project_context).toBe(true);
 
       // Always enabled
       expect(agent.tools.webfetch).toBe(true);

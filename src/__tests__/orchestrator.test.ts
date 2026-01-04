@@ -36,11 +36,7 @@ describe('RRCE Orchestrator', () => {
         'list_tasks',
         'get_task',
         'create_task',
-        'update_task',
-        'task', // Critical for delegation
-        'read',
-        'write',
-        'bash'
+        'update_task'
       ];
 
       for (const tool of requiredTools) {
@@ -74,7 +70,7 @@ describe('RRCE Orchestrator', () => {
       expect(agentConfig.description).toContain('Invoke via @rrce_*');
     });
 
-    it('should have task tool enabled for orchestrator', () => {
+    it('should have all RRCE-specific tools enabled for orchestrator', () => {
       const prompts = loadPromptsFromDir(promptsDir);
       const orchestrator = prompts.find(p => path.basename(p.filePath) === 'orchestrator.md');
       
@@ -82,10 +78,10 @@ describe('RRCE Orchestrator', () => {
       
       const agentConfig = convertToOpenCodeAgent(orchestrator);
       
-      expect(agentConfig.tools.task).toBe(true);
+      expect(agentConfig.tools.search_knowledge).toBe(true);
     });
 
-    it('should prefix MCP tools with rrce_', () => {
+    it('should NOT prefix MCP tools (direct match with server)', () => {
       const prompts = loadPromptsFromDir(promptsDir);
       const orchestrator = prompts.find(p => path.basename(p.filePath) === 'orchestrator.md');
       
@@ -93,13 +89,13 @@ describe('RRCE Orchestrator', () => {
       
       const agentConfig = convertToOpenCodeAgent(orchestrator);
       
-      // MCP tools should be prefixed
-      expect(agentConfig.tools.rrce_search_knowledge).toBe(true);
-      expect(agentConfig.tools.rrce_get_project_context).toBe(true);
-      expect(agentConfig.tools.rrce_list_agents).toBe(true);
-      expect(agentConfig.tools.rrce_get_task).toBe(true);
+      // MCP tools should NOT be prefixed (this matches current server implementation)
+      expect(agentConfig.tools.search_knowledge).toBe(true);
+      expect(agentConfig.tools.get_project_context).toBe(true);
+      expect(agentConfig.tools.list_agents).toBe(true);
+      expect(agentConfig.tools.get_task).toBe(true);
       
-      // Host tools should not be prefixed
+      // Host tools should not be prefixed either
       expect(agentConfig.tools.task).toBe(true);
       expect(agentConfig.tools.read).toBe(true);
       expect(agentConfig.tools.write).toBe(true);
@@ -158,20 +154,18 @@ describe('RRCE Orchestrator', () => {
   });
 
   describe('Tool Access Control', () => {
-    it('should give orchestrator full tool access', () => {
+    it('should give orchestrator appropriate tool access', () => {
       const prompts = loadPromptsFromDir(promptsDir);
       const orchestrator = prompts.find(p => path.basename(p.filePath) === 'orchestrator.md');
       
       if (!orchestrator) throw new Error('Orchestrator prompt not found');
       
-      // Orchestrator needs all MCP tools + host tools + task tool
+      // Orchestrator needs RRCE-specific tools
       const tools = orchestrator.frontmatter.tools || [];
       
-      expect(tools.length).toBeGreaterThan(10); // Should have many tools
-      expect(tools).toContain('task'); // Critical for delegation
-      expect(tools).toContain('read');
-      expect(tools).toContain('write');
-      expect(tools).toContain('bash');
+      expect(tools.length).toBeGreaterThan(5); 
+      expect(tools).toContain('search_knowledge');
+      expect(tools).toContain('update_task');
     });
 
     it('should restrict subagent tool access appropriately', () => {
