@@ -23,108 +23,60 @@
     }
   },
   "agent": {
-    "rrce_research_discussion": {
-      "description": "Interactive research and requirements clarification (optimized for direct invocation)",
-      "mode": "subagent",
+    "rrce_orchestrator": {
+      "description": "RRCE Phase Coordinator - guides workflow with minimal token overhead",
+      "mode": "primary",
       "tools": {
-        "search_knowledge": true,
-        "search_code": true,
-        "find_related_files": true,
-        "get_project_context": true,
+        "rrce_search_knowledge": true,
+        "rrce_search_code": true,
+        "rrce_find_related_files": true,
+        "rrce_get_project_context": true,
+        "rrce_list_projects": true,
+        "rrce_list_agents": true,
+        "rrce_get_agent_prompt": true,
+        "rrce_list_tasks": true,
+        "rrce_get_task": true,
+        "rrce_create_task": true,
+        "rrce_update_task": true,
+        "rrce_delete_task": true,
+        "rrce_index_knowledge": true,
+        "rrce_resolve_path": true,
         "read": true,
         "glob": true,
         "grep": true,
         "write": true,
-        "update_task": true,
+        "webfetch": true,
+        "task": true,
+        "todoread": true,
+        "todowrite": true,
         "bash": false,
-        "edit": false,
-        "task": false,
-        "todowrite": false,
-        "todoread": false
-      }
-    },
-    "rrce_planning_discussion": {
-      "description": "Transform research into actionable execution plan",
-      "mode": "subagent",
-      "tools": {
-        "search_knowledge": true,
-        "search_code": true,
-        "find_related_files": true,
-        "get_project_context": true,
-        "read": true,
-        "glob": true,
-        "grep": true,
-        "write": true,
-        "update_task": true,
-        "bash": false,
-        "edit": false,
-        "task": false,
-        "todowrite": false,
-        "todoread": false
+        "edit": false
       }
     },
     "rrce_executor": {
-      "description": "Execute planned tasks - ONLY agent authorized to modify source code",
+      "description": "Execute planned tasks - use /rrce_execute (in-context) or @rrce_executor (isolated)",
       "mode": "subagent",
       "tools": {
-        "search_knowledge": true,
-        "search_code": true,
-        "find_related_files": true,
-        "get_project_context": true,
-        "index_knowledge": true,
+        "rrce_search_knowledge": true,
+        "rrce_search_code": true,
+        "rrce_find_related_files": true,
+        "rrce_get_project_context": true,
+        "rrce_index_knowledge": true,
+        "rrce_update_task": true,
         "read": true,
         "glob": true,
         "grep": true,
         "write": true,
         "edit": true,
         "bash": true,
-        "update_task": true,
-        "task": false,
-        "todowrite": false,
-        "todoread": false
-      }
-    },
-    "rrce_orchestrator": {
-      "description": "Orchestrates full RRCE workflow lifecycle with session reuse (for multi-phase automation)",
-      "mode": "primary",
-      "tools": {
-        "search_knowledge": true,
-        "search_code": true,
-        "find_related_files": true,
-        "get_project_context": true,
-        "index_knowledge": true,
-        "list_tasks": true,
-        "get_task": true,
-        "create_task": true,
-        "update_task": true,
-        "delete_task": true,
-        "read": true,
-        "glob": true,
-        "grep": true,
-        "write": true,
-        "bash": true,
-        "webfetch": true,
-        "task": true,
-        "todowrite": true,
         "todoread": true,
-        "edit": false
+        "todowrite": true,
+        "webfetch": true,
+        "task": false
       }
     },
-    "rrce_init": {
-      "description": "Initialize project context and semantic search index",
-      "mode": "subagent"
-    },
-    "rrce_sync": {
-      "description": "Reconcile project state with RRCE knowledge base",
-      "mode": "subagent"
-    },
-    "rrce_doctor": {
-      "description": "Analyze codebase health using semantic search",
-      "mode": "subagent"
-    },
-    "rrce_documentation": {
-      "description": "Produce project documentation aligned with latest delivery",
-      "mode": "subagent"
+    "plan": {
+      "disable": true
     }
   }
 }

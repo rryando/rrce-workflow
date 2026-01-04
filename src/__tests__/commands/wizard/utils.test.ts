@@ -201,24 +201,28 @@ describe('commands/wizard/utils', () => {
   });
 
   describe('surgicalUpdateOpenCodeAgents', () => {
-    it('clears old agents in workspace mode', () => {
+    it('creates agents only for orchestrator and executor, commands for others (workspace mode)', () => {
       (os.homedir as any).mockReturnValue('/home/user');
       (fs.existsSync as any).mockReturnValue(true);
       (fs.readdirSync as any).mockReturnValue([
         { name: 'rrce_old.md', isFile: () => true },
-        { name: 'rrce_stale.md', isFile: () => true },
       ]);
       const unlinkSpy = vi.spyOn(fs, 'unlinkSync').mockImplementation(() => {});
       const writeSpy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
 
       const prompts = [
         {
-          filePath: '/tmp/init.md',
-          frontmatter: { description: 'Init', tools: ['read'] },
-          content: 'Init content',
+          filePath: '/tmp/orchestrator.md',
+          frontmatter: { description: 'Orchestrator', mode: 'primary', tools: ['read'] },
+          content: 'Orchestrator content',
         },
         {
-          filePath: '/tmp/research.md',
+          filePath: '/tmp/executor.md',
+          frontmatter: { description: 'Executor', tools: ['read', 'edit', 'bash'] },
+          content: 'Executor content',
+        },
+        {
+          filePath: '/tmp/research_discussion.md',
           frontmatter: { description: 'Research', tools: ['read'] },
           content: 'Research content',
         },
@@ -226,21 +230,27 @@ describe('commands/wizard/utils', () => {
 
       surgicalUpdateOpenCodeAgents(prompts, 'workspace', '/data/path');
 
-      // Should clear old files first
-      expect(unlinkSpy).toHaveBeenCalledTimes(2);
+      // Should clear old files
+      expect(unlinkSpy).toHaveBeenCalled();
       
-      // Should write new agents
+      // Should write orchestrator and executor as agents
       expect(writeSpy).toHaveBeenCalledWith(
-        '/data/path/.opencode/agent/rrce_init.md',
-        expect.stringContaining('Init content')
+        '/data/path/.opencode/agent/rrce_orchestrator.md',
+        expect.stringContaining('Orchestrator content')
       );
       expect(writeSpy).toHaveBeenCalledWith(
-        '/data/path/.opencode/agent/rrce_research.md',
+        '/data/path/.opencode/agent/rrce_executor.md',
+        expect.stringContaining('Executor content')
+      );
+      
+      // Should write research as a command (not agent)
+      expect(writeSpy).toHaveBeenCalledWith(
+        '/data/path/.opencode/command/rrce_research.md',
         expect.stringContaining('Research content')
       );
     });
 
-    it('updates global mode using surgical config update', () => {
+    it('updates global mode with agents and commands', () => {
       (os.homedir as any).mockReturnValue('/home/user');
       
       const existingConfig = {
@@ -252,9 +262,20 @@ describe('commands/wizard/utils', () => {
       
       (fs.existsSync as any).mockReturnValue(true);
       (fs.readFileSync as any).mockReturnValue(JSON.stringify(existingConfig));
+      (fs.readdirSync as any).mockReturnValue([]);
       const writeSpy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
 
       const prompts = [
+        {
+          filePath: '/tmp/orchestrator.md',
+          frontmatter: { description: 'Orchestrator', mode: 'primary', tools: ['read'] },
+          content: 'Orchestrator content',
+        },
+        {
+          filePath: '/tmp/executor.md',
+          frontmatter: { description: 'Executor', tools: ['read', 'edit'] },
+          content: 'Executor content',
+        },
         {
           filePath: '/tmp/init.md',
           frontmatter: { description: 'Init', tools: ['read'] },
@@ -264,10 +285,20 @@ describe('commands/wizard/utils', () => {
 
       surgicalUpdateOpenCodeAgents(prompts, 'global', '/data/path');
 
-      // Should write prompt file
+      // Should write prompt files for agents (orchestrator, executor)
       expect(writeSpy).toHaveBeenCalledWith(
-        '/home/user/.config/opencode/prompts/rrce-init.md',
-        'Init content'
+        '/home/user/.config/opencode/prompts/rrce-orchestrator.md',
+        expect.stringContaining('Orchestrator content')
+      );
+      expect(writeSpy).toHaveBeenCalledWith(
+        '/home/user/.config/opencode/prompts/rrce-executor.md',
+        expect.stringContaining('Executor content')
+      );
+      
+      // Should write command file for init
+      expect(writeSpy).toHaveBeenCalledWith(
+        '/home/user/.config/opencode/command/rrce_init.md',
+        expect.stringContaining('Init content')
       );
       
       // Should update opencode.json surgically
@@ -279,8 +310,10 @@ describe('commands/wizard/utils', () => {
       if (configWriteCall) {
         const written = JSON.parse(configWriteCall[1] as string);
         expect(written.agent.user_agent).toBeDefined(); // Preserved
-        expect(written.agent.rrce_init).toBeDefined(); // Added
+        expect(written.agent.rrce_orchestrator).toBeDefined(); // Added
+        expect(written.agent.rrce_executor).toBeDefined(); // Added
         expect(written.agent.rrce_old).toBeUndefined(); // Removed (stale)
+        expect(written.agent.rrce_init).toBeUndefined(); // Not an agent anymore
       }
     });
   });

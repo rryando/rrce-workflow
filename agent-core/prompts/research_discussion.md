@@ -96,7 +96,7 @@ After saving brief AND updating metadata, return:
 ```
 
 Then tell user:
-> "Research complete! Next: `@rrce_planning_discussion TASK_SLUG={{TASK_SLUG}}`"
+> "Research complete! Next: `/rrce_plan {{TASK_SLUG}}`"
 
 ## Completion Checklist
 

@@ -18,7 +18,7 @@ Verify before proceeding:
 1. Research artifact: `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/research/{{TASK_SLUG}}-research.md`
 2. Research status: `meta.json -> agents.research.status === "complete"`
 
-**If missing:** "Planning requires completed research. Run `@rrce_research_discussion` first."
+**If missing:** "Planning requires completed research. Run `/rrce_research` first."
 
 ## Session State
 - First turn: load research brief + project context, keep compact summary in memory
@@ -108,7 +108,7 @@ rrce_update_task({
 </rrce_completion>
 ```
 
-Then: "Planning complete! Next: `@rrce_executor TASK_SLUG={{TASK_SLUG}}`"
+Then: "Planning complete! Next: `/rrce_execute {{TASK_SLUG}}`"
 
 ## Completion Checklist
 

@@ -110,7 +110,7 @@ Then report:
 - Tests passing
 - Any follow-ups
 
-Optional: "Ready for documentation? `@rrce_documentation TASK_SLUG={{TASK_SLUG}}`"
+Optional: "Ready for documentation? `/rrce_docs {{TASK_SLUG}}`"
 
 ## Completion Checklist
 
