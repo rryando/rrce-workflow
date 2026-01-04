@@ -1,6 +1,8 @@
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
+import * as fs from 'fs';
+import * as path from 'path';
 import { SimpleSelect } from './components/SimpleSelect';
 import { saveMCPConfig, setProjectConfig } from '../config';
 import type { MCPConfig } from '../types';
@@ -9,6 +11,50 @@ import { useConfig } from './ConfigContext';
 import { indexingJobs } from '../services/indexing-jobs';
 import { findProjectConfig } from '../config-utils';
 import { projectKey, sortProjects, formatProjectLabel } from '../../lib/project-utils';
+import { formatRelativeTime } from './ui-helpers';
+
+interface ProjectsViewProps {
+  config: MCPConfig;
+  projects: DetectedProject[];
+  onConfigChange?: () => void;
+  workspacePath: string;
+}
+
+interface IndexStats {
+  knowledgeCount: number;
+  codeCount: number;
+  lastIndexed: string | null;
+}
+
+function getIndexStats(project: DetectedProject): IndexStats {
+  const stats: IndexStats = { knowledgeCount: 0, codeCount: 0, lastIndexed: null };
+  
+  try {
+    const knowledgePath = project.knowledgePath;
+    if (knowledgePath) {
+      const embPath = path.join(knowledgePath, 'embeddings.json');
+      const codeEmbPath = path.join(knowledgePath, 'code-embeddings.json');
+      
+      if (fs.existsSync(embPath)) {
+        const stat = fs.statSync(embPath);
+        stats.lastIndexed = stat.mtime.toISOString();
+        try {
+          const data = JSON.parse(fs.readFileSync(embPath, 'utf-8'));
+          stats.knowledgeCount = Array.isArray(data) ? data.length : Object.keys(data).length;
+        } catch {}
+      }
+      
+      if (fs.existsSync(codeEmbPath)) {
+        try {
+          const data = JSON.parse(fs.readFileSync(codeEmbPath, 'utf-8'));
+          stats.codeCount = Array.isArray(data) ? data.length : Object.keys(data).length;
+        } catch {}
+      }
+    }
+  } catch {}
+  
+  return stats;
+}
 
 interface ProjectsViewProps {
   config: MCPConfig;
@@ -71,30 +117,46 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
       const isExposed = projectConfig ? projectConfig.expose : config.defaults.includeNew;
       const drift = driftReports[p.path];
       const idx = indexingStats[p.name];
+      const stats = getIndexStats(p);
+      const isCurrentProject = p.path === workspacePath;
 
       let label = formatProjectLabel(p);
+      if (isCurrentProject) {
+        label += ' (current)';
+      }
       if (drift?.hasDrift) {
-        label += ` ⚠`;
+        label += ' ⚠';
       }
 
-      // Add indexing status as sub-line
+      // Build stats row
+      let statsRow = '';
       if (idx?.state === 'running') {
-        label += `\n⟳ Indexing ${idx.itemsDone}/${idx.itemsTotal ?? '?'}`;
+        statsRow = `   ⟳ Indexing... ${idx.itemsDone}/${idx.itemsTotal ?? '?'}`;
       } else if (idx?.state === 'failed') {
-        label += `\n✕ Index Fail`;
-      } else if (idx?.enabled && idx?.state === 'complete') {
-        label += `\n✓ Indexed`;
+        statsRow = '   ✕ Index failed';
+      } else if (stats.knowledgeCount > 0 || stats.codeCount > 0) {
+        const parts = [];
+        if (stats.knowledgeCount > 0) parts.push(`📚 ${stats.knowledgeCount} docs`);
+        if (stats.codeCount > 0) parts.push(`💻 ${stats.codeCount} files`);
+        if (stats.lastIndexed) parts.push(`🕐 ${formatRelativeTime(stats.lastIndexed)}`);
+        statsRow = `   📊 ${parts.join(' │ ')}`;
+      } else if (isExposed) {
+        statsRow = '   📊 Not indexed';
       }
+
+      // Combine label with stats
+      const fullLabel = statsRow ? `${label}\n${statsRow}` : label;
 
       return {
-        label,
+        label: fullLabel,
         value: p.path,
         key: p.path,
         exposed: isExposed,
         indexing: idx,
+        isCurrentProject,
       };
     });
-  }, [sortedProjects, config, driftReports, indexingStats]);
+  }, [sortedProjects, config, driftReports, indexingStats, workspacePath]);
 
   const initialSelected = useMemo(() => {
     return projectItems.filter(p => p.exposed).map(p => p.value);

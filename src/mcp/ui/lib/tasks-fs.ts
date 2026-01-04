@@ -5,6 +5,116 @@ import { getConfigPath, resolveDataPath } from '../../../lib/paths';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'blocked' | 'complete' | string;
 
+// ============================================================================
+// Session Tracking Types & Helpers
+// ============================================================================
+
+export type AgentType = 'research' | 'planning' | 'executor' | 'documentation';
+
+export interface AgentSession {
+  agent: AgentType;
+  phase: string;
+  task_slug: string;
+  started_at: string;
+  heartbeat: string;
+}
+
+const SESSION_STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+export function readSession(project: DetectedProject, taskSlug: string): AgentSession | null {
+  const rrceData = getProjectRRCEData(project);
+  const sessionPath = path.join(rrceData, 'tasks', taskSlug, 'session.json');
+  
+  if (!fs.existsSync(sessionPath)) {
+    return null;
+  }
+  
+  try {
+    const raw = fs.readFileSync(sessionPath, 'utf-8');
+    return JSON.parse(raw) as AgentSession;
+  } catch {
+    return null;
+  }
+}
+
+export function writeSession(project: DetectedProject, taskSlug: string, session: AgentSession): void {
+  const rrceData = getProjectRRCEData(project);
+  const taskDir = path.join(rrceData, 'tasks', taskSlug);
+  const sessionPath = path.join(taskDir, 'session.json');
+  
+  // Ensure task directory exists
+  if (!fs.existsSync(taskDir)) {
+    fs.mkdirSync(taskDir, { recursive: true });
+  }
+  
+  fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2));
+}
+
+export function clearSession(project: DetectedProject, taskSlug: string): void {
+  const rrceData = getProjectRRCEData(project);
+  const sessionPath = path.join(rrceData, 'tasks', taskSlug, 'session.json');
+  
+  if (fs.existsSync(sessionPath)) {
+    fs.unlinkSync(sessionPath);
+  }
+}
+
+export function isSessionStale(session: AgentSession, thresholdMs: number = SESSION_STALE_THRESHOLD_MS): boolean {
+  const heartbeatTime = Date.parse(session.heartbeat);
+  if (isNaN(heartbeatTime)) return true;
+  return Date.now() - heartbeatTime > thresholdMs;
+}
+
+// ============================================================================
+// Agent Todos Types & Helpers
+// ============================================================================
+
+export type TodoStatus = 'pending' | 'in_progress' | 'completed';
+export type TodoPriority = 'high' | 'medium' | 'low';
+
+export interface AgentTodoItem {
+  id: string;
+  content: string;
+  status: TodoStatus;
+  priority: TodoPriority;
+}
+
+export interface AgentTodos {
+  phase: string;
+  agent: string;
+  items: AgentTodoItem[];
+  updated_at: string;
+}
+
+export function readAgentTodos(project: DetectedProject, taskSlug: string): AgentTodos | null {
+  const rrceData = getProjectRRCEData(project);
+  const todosPath = path.join(rrceData, 'tasks', taskSlug, 'agent-todos.json');
+  
+  if (!fs.existsSync(todosPath)) {
+    return null;
+  }
+  
+  try {
+    const raw = fs.readFileSync(todosPath, 'utf-8');
+    return JSON.parse(raw) as AgentTodos;
+  } catch {
+    return null;
+  }
+}
+
+export function writeAgentTodos(project: DetectedProject, taskSlug: string, todos: AgentTodos): void {
+  const rrceData = getProjectRRCEData(project);
+  const taskDir = path.join(rrceData, 'tasks', taskSlug);
+  const todosPath = path.join(taskDir, 'agent-todos.json');
+  
+  // Ensure task directory exists
+  if (!fs.existsSync(taskDir)) {
+    fs.mkdirSync(taskDir, { recursive: true });
+  }
+  
+  fs.writeFileSync(todosPath, JSON.stringify(todos, null, 2));
+}
+
 export interface AgentInfo {
   status: 'pending' | 'in_progress' | 'complete' | string;
   artifact?: string;

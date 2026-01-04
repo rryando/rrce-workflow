@@ -46,6 +46,14 @@ When your phase completes, emit:
 </rrce_completion>
 ```
 
+## Session Tracking (Optional)
+For active task visibility in the MCP TUI:
+1. At phase start: `rrce_start_session(project, task_slug, agent, phase)`
+2. During work: `rrce_update_agent_todos(project, task_slug, phase, agent, items)`
+3. Before completion: `rrce_end_session(project, task_slug)`
+
+This enables real-time progress display in the Overview tab.
+
 ## Workspace Constraints
 - Most agents are **read-only** on `WORKSPACE_ROOT`
 - Only **Executor** may modify source code

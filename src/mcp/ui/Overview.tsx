@@ -3,7 +3,20 @@ import React, { useMemo } from 'react';
 import { Box, Text } from 'ink';
 import { Header } from './Header';
 import { useConfig } from './ConfigContext';
-import { listProjectTasks } from './lib/tasks-fs';
+import { 
+  listProjectTasks, 
+  readSession, 
+  readAgentTodos,
+  isSessionStale,
+  type AgentSession,
+  type AgentTodos
+} from './lib/tasks-fs';
+import { 
+  getPhaseIcon, 
+  getTodoStatusIcon, 
+  formatRelativeTime,
+  getTreeBranch 
+} from './ui-helpers';
 
 interface OverviewProps {
   serverStatus: {
@@ -19,17 +32,35 @@ interface OverviewProps {
   logs: string[];
 }
 
+interface ActiveTaskInfo {
+  project: string;
+  title: string;
+  slug: string;
+  session: AgentSession | null;
+  todos: AgentTodos | null;
+  isStale: boolean;
+}
+
 export const Overview = ({ serverStatus, stats, logs }: OverviewProps) => {
   const { projects } = useConfig();
 
-  // Find active tasks
-  const activeTasks = useMemo(() => {
-    const active: Array<{ project: string; title: string; slug: string }> = [];
+  // Find active tasks with session info
+  const activeTasks = useMemo<ActiveTaskInfo[]>(() => {
+    const active: ActiveTaskInfo[] = [];
     for (const p of projects) {
       const { tasks } = listProjectTasks(p);
       const inProgress = tasks.filter(t => t.status === 'in_progress');
       for (const t of inProgress) {
-        active.push({ project: p.name, title: t.title || t.task_slug, slug: t.task_slug });
+        const session = readSession(p, t.task_slug);
+        const todos = readAgentTodos(p, t.task_slug);
+        active.push({ 
+          project: p.name, 
+          title: t.title || t.task_slug, 
+          slug: t.task_slug,
+          session,
+          todos,
+          isStale: session ? isSessionStale(session) : false
+        });
       }
     }
     return active;
@@ -38,6 +69,17 @@ export const Overview = ({ serverStatus, stats, logs }: OverviewProps) => {
   const recentLogs = useMemo(() => {
     return logs.slice(-5).reverse();
   }, [logs]);
+
+  // Calculate elapsed time
+  const getElapsedTime = (startedAt: string): string => {
+    const start = Date.parse(startedAt);
+    if (isNaN(start)) return '';
+    const elapsed = Date.now() - start;
+    const mins = Math.floor(elapsed / 60000);
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    return `${hours}h ${mins % 60}m`;
+  };
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -74,7 +116,7 @@ export const Overview = ({ serverStatus, stats, logs }: OverviewProps) => {
             </Box>
          </Box>
 
-         {/* Middle Row: Active Tasks */}
+         {/* Middle Row: Active Tasks with Session Info */}
          <Box marginTop={1} borderStyle="single" borderColor="blue" flexDirection="column" paddingX={1}>
             <Text bold color="blue">🏃 Active Tasks</Text>
             {activeTasks.length === 0 ? (
@@ -83,9 +125,45 @@ export const Overview = ({ serverStatus, stats, logs }: OverviewProps) => {
                 </Box>
             ) : (
                 activeTasks.slice(0, 3).map((t, i) => (
-                    <Box key={`${t.project}-${t.slug}`} marginTop={i === 0 ? 0 : 0}>
-                        <Text color="yellow">🔄 {t.project}: </Text>
-                        <Text>{t.title}</Text>
+                    <Box key={`${t.project}-${t.slug}`} flexDirection="column" marginTop={i === 0 ? 0 : 1}>
+                        {/* Task header */}
+                        <Box>
+                            <Text color="yellow">🔄 </Text>
+                            <Text bold color="white">{t.project}</Text>
+                            <Text color="dim">: </Text>
+                            <Text color="white">{t.title}</Text>
+                        </Box>
+                        
+                        {/* Session info (if available) */}
+                        {t.session && (
+                            <Box marginLeft={3}>
+                                <Text>{getPhaseIcon(t.session.agent)} </Text>
+                                <Text color={t.isStale ? 'dim' : 'cyan'}>{t.session.agent}</Text>
+                                <Text color="dim"> • </Text>
+                                <Text color={t.isStale ? 'dim' : 'white'}>{t.session.phase}</Text>
+                                <Text color="dim"> • </Text>
+                                <Text color={t.isStale ? 'red' : 'green'}>
+                                    {t.isStale ? 'stale' : `${getElapsedTime(t.session.started_at)} elapsed`}
+                                </Text>
+                            </Box>
+                        )}
+                        
+                        {/* Top 3 todos (if available) */}
+                        {t.todos && t.todos.items.length > 0 && (
+                            <Box flexDirection="column" marginLeft={3}>
+                                {t.todos.items.slice(0, 3).map((item, idx) => (
+                                    <Box key={item.id}>
+                                        <Text color="dim">{getTreeBranch(idx === Math.min(2, t.todos!.items.length - 1))} </Text>
+                                        <Text color={item.status === 'completed' ? 'green' : item.status === 'in_progress' ? 'yellow' : 'dim'}>
+                                            {getTodoStatusIcon(item.status)}
+                                        </Text>
+                                        <Text color={item.status === 'completed' ? 'dim' : 'white'}>
+                                            {' '}{item.content.length > 40 ? item.content.substring(0, 37) + '...' : item.content}
+                                        </Text>
+                                    </Box>
+                                ))}
+                            </Box>
+                        )}
                     </Box>
                 ))
             )}
@@ -113,7 +191,7 @@ export const Overview = ({ serverStatus, stats, logs }: OverviewProps) => {
                 <Text color="dim">r:Restart q:Quit 1-4/◄ ►:Tabs</Text>
              </Box>
              <Box>
-                <Text color="dim">RRCE MCP Hub v0.3.7</Text>
+                <Text color="dim">RRCE MCP Hub v0.3.14</Text>
              </Box>
          </Box>
       </Box>

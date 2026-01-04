@@ -62,27 +62,41 @@ export const TasksView = ({ projects: allProjects, workspacePath }: TasksViewPro
     setTaskCache(next);
   };
 
-  // Tasks-mode flattened rows
+  // Tasks-mode flattened rows with metadata
   type Row =
-    | { kind: 'project'; project: DetectedProject }
-    | { kind: 'task'; project: DetectedProject; task: TaskMeta };
+    | { kind: 'project'; project: DetectedProject; isCurrentProject: boolean }
+    | { kind: 'task'; project: DetectedProject; task: TaskMeta; isLastTask: boolean };
 
   const flattenedRows: Row[] = useMemo(() => {
     const rows: Row[] = [];
     for (const p of sortedProjects) {
-      rows.push({ kind: 'project', project: p });
+      const isCurrentProject = p.path === workspacePath;
+      rows.push({ kind: 'project', project: p, isCurrentProject });
+      
       const k = projectKey(p);
       if (!expanded.has(k)) continue;
+      
       const tasks = taskCache[k] || [];
-      for (const t of tasks) {
-        rows.push({ kind: 'task', project: p, task: t });
-      }
-      if ((taskCache[k] || []).length === 0) {
-        rows.push({ kind: 'task', project: p, task: { task_slug: '__none__', title: '(no tasks)', status: '' } });
+      tasks.forEach((t, idx) => {
+        rows.push({ 
+          kind: 'task', 
+          project: p, 
+          task: t, 
+          isLastTask: idx === tasks.length - 1 
+        });
+      });
+      
+      if (tasks.length === 0) {
+        rows.push({ 
+          kind: 'task', 
+          project: p, 
+          task: { task_slug: '__none__', title: '(no tasks)', status: '' },
+          isLastTask: true
+        });
       }
     }
     return rows;
-  }, [sortedProjects, expanded, taskCache]);
+  }, [sortedProjects, expanded, taskCache, workspacePath]);
 
   useInput((input, key) => {
     if (input === 'R') {
@@ -119,7 +133,7 @@ export const TasksView = ({ projects: allProjects, workspacePath }: TasksViewPro
 
     if (input === 's') {
       const row = flattenedRows[selectedIndex];
-      if (row?.kind === 'task') {
+      if (row?.kind === 'task' && row.task.task_slug !== '__none__') {
         setErrorLine(null);
         const desired = nextStatus(row.task.status);
         const result = updateTaskStatus(row.project, row.task.task_slug, desired);
@@ -147,54 +161,74 @@ export const TasksView = ({ projects: allProjects, workspacePath }: TasksViewPro
 
   const selectedRow = flattenedRows[selectedIndex];
   const selectedTask: TaskMeta | null = selectedRow?.kind === 'task' && selectedRow.task.task_slug !== '__none__' ? selectedRow.task : null;
+  
+  // Count totals
+  const totalTasks = Object.values(taskCache).flat().length;
 
   return (
-    <Box flexDirection="column" padding={1} borderStyle="round" borderColor="white" flexGrow={1}>
-      <Box justifyContent="space-between">
+    <Box flexDirection="column" borderStyle="round" borderColor="white" flexGrow={1}>
+      {/* Header */}
+      <Box paddingX={1} justifyContent="space-between" borderBottom>
         <Box>
           <Text bold color="cyan">⚙ Tasks</Text>
-          <Text dimColor> • </Text>
+          <Text color="dim"> │ </Text>
           <Text>{sortedProjects.length} projects</Text>
-          <Text dimColor> • </Text>
-          <Text>{Object.values(taskCache).flat().length} tasks</Text>
+          <Text color="dim"> • </Text>
+          <Text>{totalTasks} tasks</Text>
         </Box>
-        <Text color="dim">↑/↓:Nav Enter:Expand s:Status R:Refresh</Text>
+        <Text color="dim">↑↓:Nav  Enter:Expand  s:Status  R:Refresh</Text>
       </Box>
 
+      {/* Error line */}
       {errorLine && (
-        <Box marginTop={0}>
-          <Text color="red">{errorLine}</Text>
+        <Box paddingX={1}>
+          <Text color="red">⚠ {errorLine}</Text>
         </Box>
       )}
 
-      <Box marginTop={1} flexDirection="row" flexGrow={1}>
-        <Box flexDirection="column" width="55%">
+      {/* Main content: Tree + Details */}
+      <Box flexDirection="row" flexGrow={1} paddingX={1} paddingY={1}>
+        {/* Tree pane */}
+        <Box flexDirection="column" width="55%" borderStyle="single" borderColor="dim" borderRight paddingRight={1}>
           {flattenedRows.length === 0 ? (
-            <Text color="dim">No projects detected.</Text>
+            <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
+              <Text color="dim">No projects detected.</Text>
+              <Text color="dim">Run the wizard to set up projects.</Text>
+            </Box>
           ) : (
-            flattenedRows.map((row, idx) => {
-              const k = projectKey(row.project);
-              return (
-                <TaskRow 
-                  key={row.kind === 'project' ? `p:${k}` : `t:${k}:${row.task.task_slug}`}
-                  row={row}
-                  isSelected={idx === selectedIndex}
-                  isExpanded={expanded.has(k)}
-                  taskCount={(taskCache[k] || []).length}
-                  hasDrift={!!driftReports[row.project.path]?.hasDrift}
-                />
-              );
-            })
+            <Box flexDirection="column">
+              {flattenedRows.map((row, idx) => {
+                const k = projectKey(row.project);
+                const isCurrentProject = row.kind === 'project' ? row.isCurrentProject : false;
+                const isLastTask = row.kind === 'task' ? row.isLastTask : false;
+                
+                return (
+                  <TaskRow 
+                    key={row.kind === 'project' ? `p:${k}` : `t:${k}:${row.task.task_slug}`}
+                    row={row}
+                    isSelected={idx === selectedIndex}
+                    isExpanded={expanded.has(k)}
+                    taskCount={(taskCache[k] || []).length}
+                    hasDrift={!!driftReports[row.project.path]?.hasDrift}
+                    isCurrentProject={isCurrentProject}
+                    isLastTask={isLastTask}
+                  />
+                );
+              })}
+            </Box>
           )}
-
-          <Box marginTop={1}>
-            <Text color="gray">▲/▼ navigate • Enter expand/collapse • s cycle status • R refresh</Text>
-          </Box>
         </Box>
 
-        <Box flexDirection="column" width="45%" paddingLeft={2}>
+        {/* Details pane */}
+        <Box flexDirection="column" width="45%" paddingLeft={1}>
           <TaskDetails task={selectedTask} />
         </Box>
+      </Box>
+
+      {/* Footer */}
+      <Box paddingX={1} justifyContent="space-between" borderTop>
+        <Text color="dim">s:Cycle Status  R:Refresh  ?:Help</Text>
+        <Text color="dim">RRCE MCP Hub v0.3.14</Text>
       </Box>
     </Box>
   );

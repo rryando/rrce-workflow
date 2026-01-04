@@ -102,3 +102,58 @@ export const getAgentStatusIcon = (status: string): string => {
   };
   return icons[status as keyof typeof icons] || '—';
 };
+
+/**
+ * Get phase icon for agent type
+ */
+export const getPhaseIcon = (agent: string): string => {
+  const icons: Record<string, string> = {
+    research: '🔬',
+    planning: '📝',
+    executor: '⚡',
+    documentation: '📚'
+  };
+  return icons[agent] || '🔧';
+};
+
+/**
+ * Get tree branch character
+ * @param isLast Whether this is the last item in the list
+ */
+export const getTreeBranch = (isLast: boolean): string => {
+  return isLast ? '└─' : '├─';
+};
+
+/**
+ * Format relative time from ISO date string
+ */
+export const formatRelativeTime = (dateString: string): string => {
+  if (!dateString) return '—';
+  
+  const date = Date.parse(dateString);
+  if (isNaN(date)) return '—';
+  
+  const now = Date.now();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return `${Math.floor(diffDays / 7)}w ago`;
+};
+
+/**
+ * Get todo item status icon
+ */
+export const getTodoStatusIcon = (status: string): string => {
+  const icons: Record<string, string> = {
+    completed: '✓',
+    in_progress: '⟳',
+    pending: '○'
+  };
+  return icons[status] || '○';
+};

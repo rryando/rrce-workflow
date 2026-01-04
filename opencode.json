@@ -66,9 +66,6 @@
         "grep": true,
         "task": false
       }
-    },
-    "plan": {
-      "disable": true
     }
   }
 }
