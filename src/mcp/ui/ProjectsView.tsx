@@ -5,21 +5,9 @@ import { SimpleSelect } from './components/SimpleSelect';
 import { saveMCPConfig, setProjectConfig } from '../config';
 import type { MCPConfig } from '../types';
 import type { DetectedProject } from '../../lib/detection';
-import type { TaskMeta, TaskStatus } from './lib/tasks-fs';
-import { listProjectTasks, updateTaskStatus } from './lib/tasks-fs';
 import { useConfig } from './ConfigContext';
-import type { DriftReport } from '../../lib/drift-service';
-import {
-  getStatusIcon,
-  getStatusColor,
-  getChecklistProgress,
-  getCheckbox,
-  getRelativeTime,
-  getProgressBar,
-  getFolderIcon,
-  getExpandIndicator,
-  getAgentStatusIcon
-} from './ui-helpers';
+import { indexingJobs } from '../services/indexing-jobs';
+import { findProjectConfig } from '../config-utils';
 
 interface ProjectsViewProps {
   config: MCPConfig;
@@ -27,41 +15,21 @@ interface ProjectsViewProps {
   onConfigChange?: () => void;
 }
 
-type Mode = 'expose' | 'tasks';
-
-const STATUS_CYCLE: TaskStatus[] = ['pending', 'in_progress', 'blocked', 'complete'];
-
-function nextStatus(current: string | undefined): TaskStatus {
-  const idx = STATUS_CYCLE.indexOf((current || '') as TaskStatus);
-  if (idx === -1) return STATUS_CYCLE[0]!;
-  return STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]!;
-}
-
 function projectKey(p: DetectedProject): string {
-  // Use a stable key; for global projects sourcePath is preferable but keep a hard fallback.
   return p.sourcePath ?? p.path;
 }
 
-function formatProjectLabel(p: DetectedProject, drift?: DriftReport): string {
+function formatProjectLabel(p: DetectedProject): string {
   const root = p.sourcePath ?? p.path;
-  const label = `${p.name} (${p.source})${root ? ` - ${root}` : ''}`;
-  return label;
+  return `${p.name} (${p.source})${root ? ` - ${root}` : ''}`;
 }
-
 
 export const ProjectsView = ({ config: initialConfig, projects: allProjects, onConfigChange }: ProjectsViewProps) => {
   const { driftReports, checkAllDrift } = useConfig();
   const [config, setConfig] = useState(initialConfig);
-  const [mode, setMode] = useState<Mode>('expose');
-
-  // Tasks-mode state
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [taskCache, setTaskCache] = useState<Record<string, TaskMeta[]>>({});
-  const [errorLine, setErrorLine] = useState<string | null>(null);
+  const [indexingStats, setIndexingStats] = useState<Record<string, any>>({});
 
   const sortedProjects = useMemo(() => {
-    // Deterministic order
     return [...allProjects].sort((a, b) => {
       const byName = a.name.localeCompare(b.name);
       if (byName !== 0) return byName;
@@ -69,120 +37,49 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
     });
   }, [allProjects]);
 
-  const refreshTasksForProject = (project: DetectedProject) => {
-    const res = listProjectTasks(project);
-    setTaskCache(prev => ({ ...prev, [projectKey(project)]: res.tasks }));
-  };
+  // Indexing status polling
+  useEffect(() => {
+    const updateStats = () => {
+      const next: Record<string, any> = {};
+      for (const p of allProjects) {
+        let projConfig = findProjectConfig(config, { name: p.name, path: p.path });
+        if (!projConfig && p.source === 'global') {
+          projConfig = config.projects.find(c => c.name === p.name);
+        }
+        const enabled = projConfig?.semanticSearch?.enabled || p.semanticSearchEnabled || false;
+        const prog = indexingJobs.getProgress(p.name);
+        next[p.name] = { enabled, ...prog };
+      }
+      setIndexingStats(next);
+    };
 
-  const refreshAllTasks = () => {
-    const next: Record<string, TaskMeta[]> = {};
-    for (const p of sortedProjects) {
-      next[projectKey(p)] = listProjectTasks(p).tasks;
-    }
-    setTaskCache(next);
-  };
+    updateStats();
+    const interval = setInterval(updateStats, 2000);
+    return () => clearInterval(interval);
+  }, [allProjects, config]);
 
-
-  // Global input handler for ProjectsView
   useInput((input, key) => {
-    // mode toggle always available
-    if (input === 't') {
-      setErrorLine(null);
-      setMode(prev => (prev === 'expose' ? 'tasks' : 'expose'));
-      return;
-    }
-
     if (input === 'u') {
       checkAllDrift();
       return;
     }
 
-    if (mode === 'expose') {
-      if (input === 'a') {
-        const newConfig = {
-          ...config,
-          defaults: {
-            ...config.defaults,
-            includeNew: !config.defaults.includeNew,
-          },
-        };
-        saveMCPConfig(newConfig);
-        setConfig(newConfig);
-        onConfigChange?.();
-      }
-      return;
-    }
-
-    // Tasks mode key bindings
-    if (mode === 'tasks') {
-      if (input === 'R') {
-        setErrorLine(null);
-        refreshAllTasks();
-        return;
-      }
-
-      if (key.upArrow) {
-        setSelectedIndex(prev => (prev > 0 ? prev - 1 : Math.max(0, flattenedRows.length - 1)));
-        return;
-      }
-
-      if (key.downArrow) {
-        setSelectedIndex(prev => (prev < flattenedRows.length - 1 ? prev + 1 : 0));
-        return;
-      }
-
-      if (key.return) {
-        const row = flattenedRows[selectedIndex];
-        if (row?.kind === 'project') {
-          const k = projectKey(row.project);
-          const next = new Set(expanded);
-          if (next.has(k)) {
-            next.delete(k);
-          } else {
-            next.add(k);
-            // Lazy-load tasks on expand
-            refreshTasksForProject(row.project);
-          }
-          setExpanded(next);
-        }
-        return;
-      }
-
-      if (input === 's') {
-        const row = flattenedRows[selectedIndex];
-        if (row?.kind === 'task') {
-          setErrorLine(null);
-          const desired = nextStatus(row.task.status);
-          const result = updateTaskStatus(row.project, row.task.task_slug, desired);
-          if (!result.ok) {
-            setErrorLine(`Failed to update status: ${result.error}`);
-            return;
-          }
-          // Update cache
-          setTaskCache(prev => {
-            const k = projectKey(row.project);
-            const tasks = prev[k] || [];
-            const updated = tasks.map(t => (t.task_slug === row.task.task_slug ? result.meta : t));
-            return { ...prev, [k]: updated };
-          });
-        }
-        return;
-      }
+    if (input === 'a') {
+      const newConfig = {
+        ...config,
+        defaults: {
+          ...config.defaults,
+          includeNew: !config.defaults.includeNew,
+        },
+      };
+      saveMCPConfig(newConfig);
+      setConfig(newConfig);
+      onConfigChange?.();
     }
   });
 
-  // Ensure selection always in bounds when rows change
-  useEffect(() => {
-    setSelectedIndex(prev => {
-      if (flattenedRows.length === 0) return 0;
-      return Math.min(prev, flattenedRows.length - 1);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, allProjects, expanded, taskCache]);
-
-  // Expose-mode uses existing SimpleSelect flow
   const projectItems = useMemo(() => {
-    return allProjects.map(p => {
+    return sortedProjects.map(p => {
       const projectConfig = config.projects.find(c =>
         (c.path && c.path === p.path) ||
         (p.source === 'global' && c.name === p.name) ||
@@ -191,15 +88,29 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
 
       const isExposed = projectConfig ? projectConfig.expose : config.defaults.includeNew;
       const drift = driftReports[p.path];
+      const idx = indexingStats[p.name];
+
+      let label = formatProjectLabel(p);
+      if (idx?.state === 'running') {
+        label += ` [⟳ Indexing ${idx.itemsDone}/${idx.itemsTotal ?? '?'}]`;
+      } else if (idx?.state === 'failed') {
+        label += ` [✕ Index Fail]`;
+      } else if (idx?.enabled && idx?.state === 'complete') {
+        label += ` [✓ Indexed]`;
+      }
+      if (drift?.hasDrift) {
+        label += ` ⚠`;
+      }
 
       return {
-        label: formatProjectLabel(p, drift),
+        label,
         value: p.path,
         key: p.path,
         exposed: isExposed,
+        indexing: idx,
       };
     });
-  }, [allProjects, config, driftReports]);
+  }, [sortedProjects, config, driftReports, indexingStats]);
 
   const initialSelected = useMemo(() => {
     return projectItems.filter(p => p.exposed).map(p => p.value);
@@ -233,222 +144,38 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
     onConfigChange?.();
   };
 
-  // Tasks-mode flattened rows
-  type Row =
-    | { kind: 'project'; project: DetectedProject }
-    | { kind: 'task'; project: DetectedProject; task: TaskMeta };
-
-  const flattenedRows: Row[] = useMemo(() => {
-    const rows: Row[] = [];
-    for (const p of sortedProjects) {
-      rows.push({ kind: 'project', project: p });
-      const k = projectKey(p);
-      if (!expanded.has(k)) continue;
-      const tasks = taskCache[k] || [];
-      for (const t of tasks) {
-        rows.push({ kind: 'task', project: p, task: t });
-      }
-      if ((taskCache[k] || []).length === 0) {
-        // show empty indication as a pseudo-task row
-        rows.push({ kind: 'task', project: p, task: { task_slug: '__none__', title: '(no tasks)', status: '' } });
-      }
-    }
-    return rows;
-  }, [sortedProjects, expanded, taskCache]);
-
-  const selectedRow = flattenedRows[selectedIndex];
-  const selectedTask: TaskMeta | null = selectedRow?.kind === 'task' && selectedRow.task.task_slug !== '__none__' ? selectedRow.task : null;
-
-  if (mode === 'expose') {
-    return (
-      <Box flexDirection="column" padding={1} borderStyle="round" borderColor="cyan" flexGrow={1}>
-        <Box justifyContent="space-between">
-          <Text bold color="cyan"> Projects (Expose Mode) </Text>
-          <Box>
-            <Text dimColor>Auto-expose new: </Text>
-            <Text color={config.defaults.includeNew ? 'green' : 'red'}>
-              {config.defaults.includeNew ? 'ON' : 'OFF'}
-            </Text>
-            <Text dimColor> (Press 'a' to toggle)</Text>
-          </Box>
-        </Box>
-
-        <Text color="dim"> Space toggles, Enter saves. Press 't' to switch to Tasks Mode.</Text>
-
-        <Box marginTop={1} flexDirection="column">
-          <SimpleSelect
-            key={JSON.stringify(initialSelected) + config.defaults.includeNew}
-            message=""
-            items={projectItems}
-            isMulti={true}
-            initialSelected={initialSelected}
-            onSelect={() => { }}
-            onSubmit={handleSubmit}
-            onCancel={() => { }}
-          />
-        </Box>
-      </Box>
-    );
-  }
-
-  // Tasks mode UI
   return (
     <Box flexDirection="column" padding={1} borderStyle="round" borderColor="cyan" flexGrow={1}>
       <Box justifyContent="space-between">
         <Box>
-          <Text bold color="cyan">⚙ Tasks Mode</Text>
+          <Text bold color="cyan"> Projects </Text>
           <Text dimColor> • </Text>
-          <Text>{sortedProjects.length} projects</Text>
-          <Text dimColor> • </Text>
-          <Text>{Object.values(taskCache).flat().length} tasks</Text>
+          <Text color={config.defaults.includeNew ? 'green' : 'red'}>
+            Auto-expose: {config.defaults.includeNew ? 'ON' : 'OFF'}
+          </Text>
         </Box>
-        <Text color="dim">t:Expose ↑/↓:Nav Enter:Expand s:Status R:Refresh u:Drift</Text>
+        <Box>
+          <Text color="dim">a:Toggle Auto u:Drift Space:Select Enter:Save</Text>
+        </Box>
       </Box>
 
-      {errorLine && (
-        <Box marginTop={0}>
-          <Text color="red">{errorLine}</Text>
-        </Box>
-      )}
+      <Text color="dim"> Manage which projects are exposed to the MCP server. Indexing status shown in-line.</Text>
 
-      <Box marginTop={1} flexDirection="row" flexGrow={1}>
-        {/* Left pane: tree */}
-        <Box flexDirection="column" width="55%">
-          {flattenedRows.length === 0 ? (
-            <Text color="dim">No projects detected.</Text>
-          ) : (
-            flattenedRows.map((row, idx) => {
-              const isSel = idx === selectedIndex;
-              
-              if (row.kind === 'project') {
-                const k = projectKey(row.project);
-                const isOpen = expanded.has(k);
-                const count = (taskCache[k] || []).length;
-                const drift = driftReports[row.project.path];
-                
-                return (
-                  <Box key={`p:${k}`} flexDirection="column">
-                    <Box>
-                      <Text color={isSel ? 'cyan' : 'white'}>{isSel ? '> ' : '  '}</Text>
-                      <Text color={isSel ? 'cyan' : 'white'}>
-                        {getFolderIcon(isOpen)} {formatProjectLabel(row.project, drift)}
-                      </Text>
-                      {drift?.hasDrift && <Text color="magenta"> ⚠</Text>}
-                      <Text color="dim"> {count > 0 ? `(${count})` : ''}</Text>
-                    </Box>
-                    {isSel && drift?.hasDrift && (
-                      <Box marginLeft={4}>
-                         <Text color="magenta" dimColor italic>
-                           {drift.type === 'version' ? 'New version available. ' : 'Modifications detected. '}
-                           Run 'rrce-workflow wizard' to update.
-                         </Text>
-                      </Box>
-                    )}
-                  </Box>
-                );
-              }
-
-              // task
-              const taskLabel = row.task.title || row.task.task_slug;
-              const status = row.task.status || '';
-              return (
-                <Box key={`t:${projectKey(row.project)}:${row.task.task_slug}`}>
-                  <Text color={isSel ? 'cyan' : 'white'}>{isSel ? '> ' : '  '}</Text>
-                  <Text color="dim">    - </Text>
-                  <Text color={isSel ? 'cyan' : 'white'}>{taskLabel}</Text>
-                  {row.task.task_slug !== '__none__' && (
-                    <Text backgroundColor={getStatusColor(status)} color="black">
-                      {` ${getStatusIcon(status)} ${status.toUpperCase().replace('_', ' ')} `}
-                    </Text>
-                  )}
-                </Box>
-              );
-            })
-          )}
-
-          <Box marginTop={1}>
-            <Text color="gray">▲/▼ navigate • Enter expand/collapse • s cycle status • R refresh • t expose mode</Text>
-          </Box>
-        </Box>
-
-        {/* Right pane: details */}
-        <Box flexDirection="column" width="45%" paddingLeft={2}>
-          {!selectedTask ? (
-            <Box flexDirection="column" justifyContent="center" alignItems="center" gap={1}>
-              <Text bold color="dim">─ No Task Selected ─</Text>
-              <Text color="dim">Use ↑/↓ to navigate, Enter to expand projects</Text>
-              <Text color="dim">Press 's' to cycle task status, 't' to switch modes</Text>
-            </Box>
-          ) : (
-            <Box flexDirection="column">
-              <Text bold color="cyan">{selectedTask.title || selectedTask.task_slug}</Text>
-              {selectedTask.summary && <Text>{selectedTask.summary}</Text>}
-
-              <Box marginTop={1} borderStyle="single" borderColor="dim" padding={1} flexDirection="column">
-                <Text bold color="cyan">📋 Status</Text>
-                <Box flexDirection="column" marginTop={0}>
-                  <Text><Text color="dim">Status:</Text> <Text>{selectedTask.status || 'unknown'}</Text></Text>
-                  <Text><Text color="dim">Updated:</Text> <Text>{selectedTask.updated_at || '—'}</Text></Text>
-                  <Text>
-                    <Text color="dim">Tags:</Text> {' '}
-                    {(() => {
-                      const tags = selectedTask.tags || [];
-                      return tags.length > 0
-                        ? tags.map((tag: string, i: number) => (
-                            <Text key={tag}>
-                              <Text color="cyan">{tag}</Text>
-                              {i < tags.length - 1 && <Text color="dim">, </Text>}
-                            </Text>
-                          ))
-                        : <Text color="dim">—</Text>;
-                    })()}
-                  </Text>
-                </Box>
-              </Box>
-
-              <Box marginTop={1} borderStyle="single" borderColor="dim" padding={1} flexDirection="column">
-                <Text bold color="cyan">📋 Checklist</Text>
-                {selectedTask.checklist && selectedTask.checklist.length > 0 && (
-                  <Box marginTop={0} flexDirection="column">
-                    <Box>
-                      <Text backgroundColor="white">{getProgressBar(getChecklistProgress(selectedTask.checklist).percentage)}</Text>
-                      <Text dimColor> {' '}{getChecklistProgress(selectedTask.checklist).completed}/{getChecklistProgress(selectedTask.checklist).total} ({getChecklistProgress(selectedTask.checklist).percentage}%)</Text>
-                    </Box>
-                  </Box>
-                )}
-                {(selectedTask.checklist || []).length === 0 ? (
-                  <Text color="dim">—</Text>
-                ) : (
-                  (selectedTask.checklist || []).slice(0, 12).map((c: any, i: number) => (
-                    <Text key={c.id || i}>
-                      <Text color="dim">{getCheckbox(c.status || 'pending')} </Text>
-                      {c.label || c.id || 'item'}
-                    </Text>
-                  ))
-                )}
-              </Box>
-
-              <Box marginTop={1} borderStyle="single" borderColor="dim" padding={1} flexDirection="column">
-                <Text bold color="cyan">🤖 Agents</Text>
-                {!selectedTask.agents ? (
-                  <Text color="dim">—</Text>
-                ) : (
-                  Object.entries(selectedTask.agents).map(([agent, info]: any) => (
-                    <Text key={agent}>
-                      <Text color="dim">- {agent}: </Text>
-                      {info?.status === 'complete' && <Text color="green">✓</Text>}
-                      {info?.status === 'in_progress' && <Text color="yellow">⟳</Text>}
-                      {info?.status === 'pending' && <Text color="dim">○</Text>}
-                      {info?.blocked && <Text color="red">✕</Text>}
-                      <Text dimColor> {info?.status || '—'}</Text>
-                      {info?.artifact && <Text dimColor>({info.artifact})</Text>}
-                    </Text>
-                  ))
-                )}
-              </Box>
-            </Box>
-          )}
-        </Box>
+      <Box marginTop={1} flexDirection="column" flexGrow={1}>
+        <SimpleSelect
+          key={JSON.stringify(initialSelected) + config.defaults.includeNew + JSON.stringify(indexingStats)}
+          message=""
+          items={projectItems}
+          isMulti={true}
+          initialSelected={initialSelected}
+          onSelect={() => { }}
+          onSubmit={handleSubmit}
+          onCancel={() => { }}
+        />
+      </Box>
+      
+      <Box marginTop={1} borderStyle="single" borderColor="dim" paddingX={1}>
+         <Text color="dim">Use 'rrce-workflow wizard' to manage project exposures and settings.</Text>
       </Box>
     </Box>
   );

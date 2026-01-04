@@ -2,8 +2,8 @@
 import React, { useMemo } from 'react';
 import { Box, Text } from 'ink';
 import { Header } from './Header';
-import { getAllPrompts } from '../prompts';
-
+import { useConfig } from './ConfigContext';
+import { listProjectTasks } from './lib/tasks-fs';
 
 interface OverviewProps {
   serverStatus: {
@@ -16,60 +16,105 @@ interface OverviewProps {
     totalProjects: number;
     installedIntegrations: number;
   };
+  logs: string[];
 }
 
-export const Overview = ({ serverStatus, stats }: OverviewProps) => {
-  const agents = useMemo(() => getAllPrompts(), []);
+export const Overview = ({ serverStatus, stats, logs }: OverviewProps) => {
+  const { projects } = useConfig();
+
+  // Find active tasks
+  const activeTasks = useMemo(() => {
+    const active: Array<{ project: string; title: string; slug: string }> = [];
+    for (const p of projects) {
+      const { tasks } = listProjectTasks(p);
+      const inProgress = tasks.filter(t => t.status === 'in_progress');
+      for (const t of inProgress) {
+        active.push({ project: p.name, title: t.title || t.task_slug, slug: t.task_slug });
+      }
+    }
+    return active;
+  }, [projects]);
+
+  const recentLogs = useMemo(() => {
+    return logs.slice(-5).reverse();
+  }, [logs]);
 
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Header />
       
-      <Box borderStyle="round" padding={1} borderColor="white" flexDirection="column" flexGrow={1}>
+      <Box borderStyle="round" paddingX={1} borderColor="white" flexDirection="column" flexGrow={1}>
+         {/* Top Row: System Status & Quick Commands */}
          <Box justifyContent="space-between">
-            <Box flexDirection="column">
-                <Text bold underline>System Status</Text>
+            <Box flexDirection="column" width="50%">
+                <Text bold color="cyan">🚀 System Cockpit</Text>
                 <Box marginTop={1}>
-                    <Text>Integrations Installed: </Text>
-                    <Text color={stats.installedIntegrations > 0 ? 'green' : 'yellow'}>{stats.installedIntegrations}</Text>
+                    <Text>Integrations: </Text>
+                    <Text color={stats.installedIntegrations > 0 ? 'green' : 'yellow'}>{stats.installedIntegrations} active</Text>
                 </Box>
                 <Box>
-                    <Text>Server Port: </Text>
-                    <Text color="cyan">{serverStatus.port}</Text>
+                    <Text>MCP Server: </Text>
+                    <Text color="green">Running</Text>
+                    <Text color="dim"> (Port: {serverStatus.port})</Text>
+                </Box>
+                <Box>
+                    <Text>Projects: </Text>
+                    <Text>{stats.exposedProjects} / {stats.totalProjects} exposed</Text>
                 </Box>
             </Box>
             
-            <Box flexDirection="column" marginLeft={4}>
-                <Text bold underline>Quick Start</Text>
+            <Box flexDirection="column" width="50%" paddingLeft={2}>
+                <Text bold color="magenta">⚡ Slash Commands</Text>
                 <Box marginTop={1} flexDirection="column">
-                    <Text>1. Install "MCP" extension in VSCode / Antigravity</Text>
-                    <Text>2. Configure Extension to use this server:</Text>
-                    <Text color="dim">   (This is handled automatically by 'Install to IDE')</Text>
-                    <Text>3. In your Agent IDE, ask:</Text>
-                    <Text color="cyan">   "Use the rrce tools to analyze this project"</Text>
+                    <Text color="cyan">/rrce_init <Text color="dim">- Setup workspace</Text></Text>
+                    <Text color="cyan">/rrce_research <Text color="dim">- Clarify requirements</Text></Text>
+                    <Text color="cyan">/rrce_plan <Text color="dim">- Generate plan</Text></Text>
+                    <Text color="cyan">/rrce_execute <Text color="dim">- Run executor</Text></Text>
                 </Box>
             </Box>
          </Box>
 
-          <Box marginTop={1} borderStyle="single" borderColor="gray" flexDirection="column" paddingX={1} flexGrow={1}>
-             <Text bold>Available Agents & Instructions:</Text>
-             {agents.map(agent => (
-                <Box key={agent.id} flexDirection="column" marginTop={1}>
-                    <Text color="yellow">➤ {agent.name} <Text color="dim">({agent.id})</Text></Text>
-                    <Text color="white">   {agent.description}</Text>
-                    {agent.arguments.length > 0 && (
-                        <Text color="dim">   Args: {agent.arguments.map(a => a.name + (a.required ? '*' : '')).join(', ')}</Text>
-                    )}
-                    <Text color="cyan">   Instruction: "Use the {agent.name} to..."</Text>
+         {/* Middle Row: Active Tasks */}
+         <Box marginTop={1} borderStyle="single" borderColor="blue" flexDirection="column" paddingX={1}>
+            <Text bold color="blue">🏃 Active Tasks</Text>
+            {activeTasks.length === 0 ? (
+                <Box paddingY={1}>
+                    <Text color="dim">No tasks currently in progress.</Text>
                 </Box>
-             ))}
-          </Box>
+            ) : (
+                activeTasks.slice(0, 3).map((t, i) => (
+                    <Box key={`${t.project}-${t.slug}`} marginTop={i === 0 ? 0 : 0}>
+                        <Text color="yellow">🔄 {t.project}: </Text>
+                        <Text>{t.title}</Text>
+                    </Box>
+                ))
+            )}
+            {activeTasks.length > 3 && <Text color="dim">   ...and {activeTasks.length - 3} more</Text>}
+         </Box>
 
-         <Box marginTop={1} flexDirection="column">
-             <Text color="dim">Controls:</Text>
-             <Text color="dim">  • Press 'r' to restart server</Text>
-             <Text color="dim">  • Use 1-4 or ◄/► to navigate tabs</Text>
-             <Text color="dim">  • Press 'q' to stop server and exit</Text>
+         {/* Bottom Row: Recent Activity */}
+         <Box marginTop={1} borderStyle="single" borderColor="dim" flexDirection="column" paddingX={1} flexGrow={1}>
+            <Text bold color="dim">📜 Recent Activity</Text>
+            <Box flexDirection="column" marginTop={0}>
+                {recentLogs.length === 0 ? (
+                    <Text color="dim">Waiting for activity...</Text>
+                ) : (
+                    recentLogs.map((log, i) => (
+                        <Text key={i} color="white" wrap="truncate-end">
+                             {log.length > 80 ? log.substring(0, 77) + '...' : log}
+                        </Text>
+                    ))
+                )}
+            </Box>
+         </Box>
+
+         <Box marginTop={0} justifyContent="space-between">
+             <Box>
+                <Text color="dim">r:Restart q:Quit 1-4/◄ ►:Tabs</Text>
+             </Box>
+             <Box>
+                <Text color="dim">RRCE MCP Hub v0.3.7</Text>
+             </Box>
          </Box>
       </Box>
     </Box>

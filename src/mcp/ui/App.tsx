@@ -3,19 +3,15 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Box, useInput, useApp } from 'ink';
 import { Overview } from './Overview';
 import { ProjectsView } from './ProjectsView';
-import { InstallView } from './InstallView';
+import { TasksView } from './TasksView';
 import { LogViewer } from './LogViewer';
 import { StatusBoard } from './StatusBoard';
-import { IndexingStatus } from './IndexingStatus';
 import { TabBar, type Tab } from './components/TabBar';
-import { loadMCPConfig, isProjectExposed } from '../config';
 import { findProjectConfig } from '../config-utils';
-import { scanForProjects } from '../../lib/detection';
 import { getLogFilePath } from '../logger';
 import { stopMCPServer, startMCPServer, getMCPServerStatus } from '../server';
-import { getExposedProjects } from '../resources';
-import { checkInstallStatus } from '../install';
 import { detectWorkspaceRoot } from '../../lib/paths';
+import { checkInstallStatus } from '../install';
 import fs from 'fs';
 import { useConfig } from './ConfigContext';
 
@@ -39,7 +35,6 @@ export const App = ({ onExit, initialPort }: AppProps) => {
   const isRAGEnabled = useMemo(() => {
       return exposedProjects.some(p => {
           const cfg = findProjectConfig(config, { name: p.name, path: p.path });
-          // Check config first, then fallback to detected status (important for global projects)
           return cfg?.semanticSearch?.enabled || p.semanticSearchEnabled;
       });
   }, [exposedProjects, config]);
@@ -49,20 +44,14 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     [driftReports]
   );
 
-
   const tabs = useMemo<Tab[]>(() => {
-      const baseTabs = [
+      return [
         { id: 'overview', label: 'Overview' },
         { id: 'logs', label: 'Logs' },
+        { id: 'tasks', label: 'Tasks' },
         { id: 'projects', label: 'Projects' },
-        { id: 'install', label: 'Install' },
       ];
-      if (isRAGEnabled) {
-          // Insert after projects
-          baseTabs.splice(3, 0, { id: 'indexing', label: 'Indexing' });
-      }
-      return baseTabs;
-  }, [isRAGEnabled]);
+  }, []);
 
   const workspacePath = detectWorkspaceRoot();
   const installStatus = checkInstallStatus(workspacePath);
@@ -92,7 +81,7 @@ export const App = ({ onExit, initialPort }: AppProps) => {
     start();
   }, []);
 
-  // Log Tailing Effect (omitted for brevity, same as before)
+  // Log Tailing Effect
   useEffect(() => {
     const logPath = getLogFilePath();
     let lastSize = 0;
@@ -146,7 +135,6 @@ export const App = ({ onExit, initialPort }: AppProps) => {
 
   // Layout Calc
   const termHeight = process.stdout.rows || 24;
-  // Reduce content height to account for TabBar (header) AND StatusBoard (footer)
   const contentHeight = termHeight - 8; 
 
   const handleConfigChange = useCallback(() => {
@@ -165,13 +153,13 @@ export const App = ({ onExit, initialPort }: AppProps) => {
                      exposedProjects: exposedProjects.length, 
                      totalProjects: projects.length,
                      installedIntegrations: installedCount
-                 }} 
+                 }}
+                 logs={logs}
                />
            )}
-           {activeTab === 'projects' && <ProjectsView config={config} projects={projects} onConfigChange={handleConfigChange} />}
-           {activeTab === 'indexing' && <IndexingStatus config={config} projects={exposedProjects} />}
-           {activeTab === 'install' && <InstallView />}
            {activeTab === 'logs' && <LogViewer logs={logs} height={contentHeight} />}
+           {activeTab === 'tasks' && <TasksView projects={projects} />}
+           {activeTab === 'projects' && <ProjectsView config={config} projects={projects} onConfigChange={handleConfigChange} />}
        </Box>
 
         {/* Persistent Status Bar */}
