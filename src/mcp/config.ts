@@ -2,6 +2,9 @@
  * MCP Configuration Parser/Writer
  * Manages mcp.yaml in the effective RRCE home directory
  * Respects custom globalPath set by the wizard
+ *
+ * NOTE: For single source of truth with caching and pub/sub,
+ * import { configService, configEmitter, onConfigChange, offConfigChange } from './config-service';
  */
 
 import * as fs from 'fs';
@@ -11,6 +14,10 @@ import { getEffectiveRRCEHome, detectWorkspaceRoot, getEffectiveGlobalPath } fro
 import type { MCPConfig, MCPProjectConfig, MCPPermissions, MCPSemanticSearchConfig } from './types';
 import { DEFAULT_MCP_CONFIG, DEFAULT_PERMISSIONS } from './types';
 import { findProjectConfig, normalizeProjectPath } from './config-utils';
+import { configService } from './config-service';
+
+// Re-export for convenience - single source of truth with caching and pub/sub
+export { configService, configEmitter, onConfigChange, offConfigChange } from './config-service';
 
 /**
  * Migrate configuration to latest format

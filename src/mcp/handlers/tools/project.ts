@@ -5,6 +5,7 @@ import {
   resolveProjectPaths 
 } from '../../resources';
 import { logger } from '../../logger';
+import { configService } from '../../config-service';
 import type { DetectedProject } from '../../../lib/detection';
 
 export const projectTools = [
@@ -46,11 +47,16 @@ export const projectTools = [
       required: ['project']
     },
   },
+  {
+    name: 'reload_config',
+    description: 'Reload MCP configuration from disk. Use this after manually editing mcp.yaml or when changes are not reflecting automatically.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 export async function handleProjectTool(name: string, args: Record<string, any> | undefined) {
   if (!args) {
-    if (name === 'list_projects' || name === 'help_setup') {
+    if (name === 'list_projects' || name === 'help_setup' || name === 'reload_config') {
       // These don't need args
     } else {
       return null;
@@ -103,6 +109,22 @@ To fix this:
 3. Select the projects you want to expose to the AI.
 4. Restart the MCP server (or it may pick up changes automatically).
 `;
+      return { content: [{ type: 'text', text: msg }] };
+    }
+
+    case 'reload_config': {
+      // Invalidate cache and reload config
+      configService.invalidate();
+      const newConfig = configService.load();
+      const exposedProjects = getExposedProjects().map((p: DetectedProject) => p.name);
+      
+      const msg = `Config reloaded successfully.
+- Cache invalidated
+- Config file: ${configService.getConfigPath()}
+- Exposed projects: ${exposedProjects.join(', ') || 'none'}
+- Total projects in config: ${newConfig.projects.length}
+`;
+      logger.info('Config reloaded via reload_config tool', { exposedProjects });
       return { content: [{ type: 'text', text: msg }] };
     }
 

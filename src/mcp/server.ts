@@ -5,9 +5,11 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import * as fs from 'fs';
 
 import { logger } from './logger';
 import { loadMCPConfig } from './config';
+import { configService } from './config-service';
 import { getExposedProjects } from './resources';
 
 // Import handlers from decomposed modules
@@ -24,6 +26,7 @@ interface ServerStatus {
 // In-memory server state
 let serverState: ServerStatus = { running: false };
 let mcpServer: Server | null = null;
+let configWatcher: fs.FSWatcher | null = null;
 
 /**
  * Start the MCP server
@@ -61,6 +64,27 @@ export async function startMCPServer(options: { interactive?: boolean } = {}): P
     registerToolHandlers(mcpServer);
     registerPromptHandlers(mcpServer);
 
+    // Watch config file for changes (for non-interactive mode / separate process)
+    // This ensures the server picks up config changes made by the TUI
+    const configPath = configService.getConfigPath();
+
+    if (!options.interactive) {
+      try {
+        // Check if config file exists before watching
+        if (fs.existsSync(configPath)) {
+          configWatcher = fs.watch(configPath, () => {
+            // Invalidate cache so next loadMCPConfig() reads fresh data
+            configService.invalidate();
+            const exposed = getExposedProjects().map(p => p.name).join(', ');
+            logger.info('Config file changed, refreshed exposed projects', { exposedProjects: exposed });
+          });
+          logger.info('Watching config file for changes', { configPath });
+        }
+      } catch (err) {
+        logger.warn('Failed to watch config file', { error: String(err) });
+      }
+    }
+
     // Only attach transport if NOT interactive (TUI mode)
     // In TUI mode, we run the logic but don't bind to stdio to avoid conflict with Ink
     if (!options.interactive) {
@@ -93,6 +117,12 @@ export async function startMCPServer(options: { interactive?: boolean } = {}): P
  * Stop the MCP server
  */
 export function stopMCPServer(): void {
+  // Close config file watcher if active
+  if (configWatcher) {
+    configWatcher.close();
+    configWatcher = null;
+  }
+
   if (mcpServer) {
     logger.info('Stopping MCP Server...');
     mcpServer.close();
