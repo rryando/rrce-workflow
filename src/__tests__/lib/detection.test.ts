@@ -356,5 +356,29 @@ linked_projects:
       
       expect(result?.name).toBe('specific');
     });
+
+    it('should prefer exact path match over longer prefix match', async () => {
+      const { findClosestProject } = await import('../../lib/detection');
+      
+      const projects = [
+        {
+          name: 'parent',
+          path: '/home/user',
+          dataPath: '/home/user/.rrce-workflow',
+          source: 'local' as const,
+        },
+        {
+          name: 'exact-match',
+          path: '/home/user/projects/exact-match',
+          dataPath: '/home/user/projects/exact-match/.rrce-workflow',
+          source: 'local' as const,
+        },
+      ];
+      
+      // When CWD exactly matches a project path, prefer it over parent prefix
+      const result = findClosestProject(projects, '/home/user/projects/exact-match');
+      
+      expect(result?.name).toBe('exact-match');
+    });
   });
 });
