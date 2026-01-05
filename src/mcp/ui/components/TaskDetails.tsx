@@ -33,25 +33,28 @@ export const TaskDetails = ({ task, agentTodos }: TaskDetailsProps) => {
   return (
     <Box flexDirection="column">
       {/* Title & Summary */}
-      <Box marginBottom={1} flexDirection="column">
+      <Box marginBottom={0} flexDirection="column">
         <Text bold color="cyan">{task.title || task.task_slug}</Text>
         {task.summary && (
-          <Text color="white" wrap="wrap">
-            {task.summary.length > 100 ? task.summary.substring(0, 97) + '...' : task.summary}
-          </Text>
+          <Box marginTop={0}>
+            <Text color="white" wrap="wrap">
+              {task.summary.length > 150 ? task.summary.substring(0, 147) + '...' : task.summary}
+            </Text>
+          </Box>
         )}
       </Box>
 
-      <Text dimColor>────────────────────────────────────</Text>
+      <Box marginY={0}>
+        <Text color="dim">────────────────────────────────────────</Text>
+      </Box>
 
       {/* Status Section */}
-      <Box marginTop={1} flexDirection="column">
-        <Text bold color="white">📋 STATUS</Text>
+      <Box flexDirection="column">
+        <Box justifyContent="space-between">
+          <Text bold color="white">📋 STATUS</Text>
+          <Text color={getStatusColor(task.status || '')}>{task.status?.toUpperCase() || 'UNKNOWN'}</Text>
+        </Box>
         <Box flexDirection="column" marginTop={0} marginLeft={1}>
-          <Box>
-            <Text color="dim">Status:  </Text>
-            <Text color={getStatusColor(task.status || '')}>{task.status || 'unknown'}</Text>
-          </Box>
           <Box>
             <Text color="dim">Updated: </Text>
             <Text>{formatRelativeTime(task.updated_at || '')}</Text>
@@ -59,22 +62,19 @@ export const TaskDetails = ({ task, agentTodos }: TaskDetailsProps) => {
           {task.tags && task.tags.length > 0 && (
             <Box>
               <Text color="dim">Tags:    </Text>
-              {task.tags.map((tag: string, i: number) => (
-                <Text key={tag}>
-                  <Text color="cyan">{tag}</Text>
-                  {i < task.tags!.length - 1 && <Text color="dim">, </Text>}
-                </Text>
-              ))}
+              <Text color="cyan">{task.tags.join(', ')}</Text>
             </Box>
           )}
         </Box>
       </Box>
 
-      <Text dimColor>────────────────────────────────────</Text>
+      <Box marginY={0}>
+        <Text color="dim">────────────────────────────────────────</Text>
+      </Box>
 
       {/* Checklist Section */}
-      <Box marginTop={1} flexDirection="column">
-        <Box>
+      <Box flexDirection="column">
+        <Box justifyContent="space-between">
           <Text bold color="white">📋 CHECKLIST </Text>
           {progress.total > 0 && (
             <Text color="dim">
@@ -86,28 +86,30 @@ export const TaskDetails = ({ task, agentTodos }: TaskDetailsProps) => {
           {(task.checklist || []).length === 0 ? (
             <Text color="dim">No checklist items</Text>
           ) : (
-            (task.checklist || []).slice(0, 8).map((c: any, i: number) => {
+            (task.checklist || []).slice(0, 10).map((c: any, i: number) => {
               const isDone = c.status === 'done';
               return (
                 <Text key={c.id || i} color={isDone ? 'dim' : 'white'}>
                   <Text color={isDone ? 'green' : 'dim'}>{getCheckbox(c.status || 'pending')} </Text>
-                  {(c.label || c.id || 'item').substring(0, 35)}
+                  {(c.label || c.id || 'item').substring(0, 40)}
                 </Text>
               );
             })
           )}
-          {(task.checklist || []).length > 8 && (
-            <Text color="dim">...and {(task.checklist || []).length - 8} more</Text>
+          {(task.checklist || []).length > 10 && (
+            <Text color="dim">  ...and {(task.checklist || []).length - 10} more</Text>
           )}
         </Box>
       </Box>
 
-      <Text dimColor>────────────────────────────────────</Text>
+      <Box marginY={0}>
+        <Text color="dim">────────────────────────────────────────</Text>
+      </Box>
 
       {/* Agent Todos Section (from agent-todos.json) */}
       {agentTodos && agentTodos.items.length > 0 && (
         <>
-          <Box marginTop={1} flexDirection="column">
+          <Box flexDirection="column">
             <Box>
               <Text bold color="white">🎯 AGENT TODOS </Text>
               <Text color="dim">({agentTodos.agent} • {agentTodos.phase})</Text>
@@ -119,21 +121,23 @@ export const TaskDetails = ({ task, agentTodos }: TaskDetailsProps) => {
                     {getTodoStatusIcon(item.status)}{' '}
                   </Text>
                   <Text color={item.status === 'completed' ? 'dim' : 'white'}>
-                    {item.content.substring(0, 35)}
+                    {item.content.substring(0, 40)}
                   </Text>
                 </Text>
               ))}
               {agentTodos.items.length > 5 && (
-                <Text color="dim">...and {agentTodos.items.length - 5} more</Text>
+                <Text color="dim">  ...and {agentTodos.items.length - 5} more</Text>
               )}
             </Box>
           </Box>
-          <Text dimColor>────────────────────────────────────</Text>
+          <Box marginY={0}>
+            <Text color="dim">────────────────────────────────────────</Text>
+          </Box>
         </>
       )}
 
       {/* Agents Section */}
-      <Box marginTop={1} flexDirection="column">
+      <Box flexDirection="column">
         <Text bold color="white">🤖 AGENTS</Text>
         <Box flexDirection="column" marginLeft={1}>
           {!task.agents || Object.keys(task.agents).length === 0 ? (

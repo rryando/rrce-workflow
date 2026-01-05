@@ -131,17 +131,17 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
       // Build stats row
       let statsRow = '';
       if (idx?.state === 'running') {
-        statsRow = `   ⟳ Indexing... ${idx.itemsDone}/${idx.itemsTotal ?? '?'}`;
+        statsRow = `  ⟳ Indexing... ${idx.itemsDone}/${idx.itemsTotal ?? '?'}`;
       } else if (idx?.state === 'failed') {
-        statsRow = '   ✕ Index failed';
+        statsRow = '  ✕ Index failed';
       } else if (stats.knowledgeCount > 0 || stats.codeCount > 0) {
         const parts = [];
         if (stats.knowledgeCount > 0) parts.push(`📚 ${stats.knowledgeCount} docs`);
         if (stats.codeCount > 0) parts.push(`💻 ${stats.codeCount} files`);
         if (stats.lastIndexed) parts.push(`🕐 ${formatRelativeTime(stats.lastIndexed)}`);
-        statsRow = `   📊 ${parts.join(' │ ')}`;
+        statsRow = `  📊 ${parts.join(' │ ')}`;
       } else if (isExposed) {
-        statsRow = '   📊 Not indexed';
+        statsRow = '  📊 Not indexed';
       }
 
       // Combine label with stats
@@ -191,23 +191,23 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
   };
 
   return (
-    <Box flexDirection="column" padding={1} borderStyle="round" borderColor="white" flexGrow={1}>
-      <Box justifyContent="space-between">
+    <Box flexDirection="column" borderStyle="round" borderColor="white" flexGrow={1}>
+      <Box paddingX={1} justifyContent="space-between" borderBottom>
         <Box>
-          <Text bold color="cyan"> Projects </Text>
-          <Text dimColor> • </Text>
+          <Text bold color="cyan">Projects</Text>
+          <Text color="dim"> │ </Text>
           <Text color={config.defaults.includeNew ? 'green' : 'red'}>
             Auto-expose: {config.defaults.includeNew ? 'ON' : 'OFF'}
           </Text>
         </Box>
-        <Box>
-          <Text color="dim">a:Toggle Auto u:Drift Space:Select Enter:Save</Text>
-        </Box>
+        <Text color="dim">v0.3.14</Text>
       </Box>
 
-      <Text color="dim"> Manage which projects are exposed to the MCP server.</Text>
+      <Box marginTop={1} paddingX={1}>
+        <Text color="dim">Manage which projects are exposed to the MCP server.</Text>
+      </Box>
 
-      <Box marginTop={1} flexDirection="column" flexGrow={1}>
+      <Box marginTop={1} paddingX={1} flexDirection="column" flexGrow={1}>
         <SimpleSelect
           key={JSON.stringify(initialSelected) + config.defaults.includeNew + JSON.stringify(indexingStats)}
           message=""
@@ -220,8 +220,9 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
         />
       </Box>
       
-      <Box marginTop={1} borderStyle="single" borderColor="dim" paddingX={1}>
-         <Text color="dim">Use 'rrce-workflow wizard' to manage project exposures and settings.</Text>
+      <Box paddingX={1} justifyContent="space-between" borderTop>
+        <Text color="dim">Space:Select  Enter:Save  a:Toggle Auto  u:Refresh Drift</Text>
+        <Text color="dim">Use 'rrce-workflow wizard' for advanced config</Text>
       </Box>
     </Box>
   );

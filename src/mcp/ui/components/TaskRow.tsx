@@ -59,8 +59,8 @@ export const TaskRow = ({
   isLastTask = false
 }: TaskRowProps) => {
   if (row.kind === 'project') {
-    const projectColor = isCurrentProject ? 'cyan' : (isSelected ? 'yellow' : 'white');
-    const isBold = isCurrentProject || isSelected;
+    const projectColor = isSelected ? 'cyan' : (isCurrentProject ? 'yellow' : 'white');
+    const isBold = isSelected || isCurrentProject;
     
     return (
       <Box>
@@ -68,7 +68,7 @@ export const TaskRow = ({
         <Text bold={isBold} color={projectColor}>
           {getFolderIcon(isExpanded)} {formatProjectLabel(row.project)}
         </Text>
-        {isCurrentProject && <Text color="cyan" dimColor> (current)</Text>}
+        {isCurrentProject && <Text color="yellow" dimColor> (current)</Text>}
         {hasDrift && <Text color="magenta"> ⚠</Text>}
         <Text color="dim"> {taskCount > 0 ? `[${taskCount}]` : ''}</Text>
       </Box>
@@ -96,7 +96,7 @@ export const TaskRow = ({
   if (isPlaceholder) {
     return (
       <Box>
-        <Text color="dim">     {branch} </Text>
+        <Text color="dim">  {branch} </Text>
         <Text color="dim" italic>{taskLabel}</Text>
       </Box>
     );
@@ -105,16 +105,18 @@ export const TaskRow = ({
   return (
     <Box>
       {/* Selection indicator */}
-      <Text color={isSelected ? 'cyan' : 'dim'}>{isSelected ? '▸' : ' '}</Text>
+      <Text color={isSelected ? 'cyan' : 'dim'}>{isSelected ? '▸ ' : '  '}</Text>
       
       {/* Tree branch */}
-      <Text color="dim">   {branch} </Text>
+      <Text color="dim">{branch} </Text>
       
       {/* Task icon and title */}
       <Text color={isSelected ? 'cyan' : 'white'}>📋 </Text>
-      <Text bold={isSelected} color={isSelected ? 'cyan' : 'white'}>
-        {taskLabel.length > 25 ? taskLabel.substring(0, 22) + '...' : taskLabel}
-      </Text>
+      <Box flexGrow={1}>
+        <Text bold={isSelected} color={isSelected ? 'cyan' : 'white'}>
+          {taskLabel.length > 25 ? taskLabel.substring(0, 22) + '...' : taskLabel}
+        </Text>
+      </Box>
       
       {/* Phase indicator */}
       {activeAgent && (
@@ -139,10 +141,10 @@ export const TaskRow = ({
         <Text color="dim"> {relativeTime}</Text>
       )}
       
-      {/* Status badge for non-active tasks */}
+      {/* Status badge for non-active tasks - Quieter version */}
       {!activeAgent && status && (
-        <Text backgroundColor={getStatusColor(status)} color="black">
-          {` ${getStatusIcon(status)} `}
+        <Text color={getStatusColor(status)}>
+          {` ${getStatusIcon(status)} ${status}`}
         </Text>
       )}
     </Box>

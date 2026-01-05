@@ -36,7 +36,12 @@ Manual verification:
 
 - Max **3 retrieval calls per turn** (develop legitimately needs more)
 - **Preferred:** `rrce_prefetch_task_context` (gets task + context in one call)
-- Order: `rrce_prefetch_task_context` -> `read` plan/research -> `rrce_search_symbols` -> `glob/grep` (last resort)
+- Order: `rrce_prefetch_task_context` -> `read` plan/research (explicit artifact read) -> `rrce_search_code`/`rrce_search_knowledge` -> `rrce_search_symbols` -> `glob/grep` (last resort)
+
+**Semantic Search First:**
+- Use `rrce_search_code` and `rrce_search_knowledge` before direct file reads
+- Semantic search finds relevant code/concepts without exact matches
+- Only use `read` after semantic search has identified specific files to examine
 
 ## Plan Adherence (STRICT)
 
@@ -57,6 +62,34 @@ Manual verification:
 - Knowledge matches
 - Code matches
 
+**CRITICAL: Read artifacts explicitly:**
+
+After prefetching, you must read the research brief and plan to understand:
+- **Research brief** (`{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/research/{{TASK_SLUG}}-research.md`):
+  - Requirements and constraints
+  - Alternatives and trade-offs
+  - Best practices
+  - RAG comparison insights
+
+**Focus on research brief sections:**
+- **Alternatives**: What approaches were considered and why they were rejected
+- **Best Practices**: Industry standards and patterns to follow
+- **RAG Comparison**: Semantic search strategies vs. traditional approaches
+- **Technical Constraints**: Performance, security, or architectural limitations
+
+- **Plan** (`{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/planning/{{TASK_SLUG}}-plan.md`):
+  - Task breakdown
+  - Chosen approach (if alternatives were considered)
+  - Implementation strategy
+  - Validation criteria
+
+**If plan mentions multiple approaches:**
+- Read the "Chosen Approach" section carefully
+- If no clear choice is documented, ask user: "The plan lists multiple approaches. Which approach should I implement?"
+- Do not assume - clarity prevents rework
+
+Use `read` for these files to ensure you capture all details including alternatives, trade-offs, and technical decisions.
+
 ### 2. Setup
 
 Create: `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/execution/`
@@ -74,9 +107,20 @@ For each task:
 1. **Announce**: "Task [N]/[Total]: [description]"
 2. **Find code**: Use `rrce_search_symbols` to locate functions/classes to modify
 3. **Understand structure**: Use `rrce_get_file_summary` for quick file overview
-4. **Implement**: Make code changes per plan
-5. **Verify**: Run validation from plan
-6. **Document**: Note what was done
+4. **Use semantic search actively**: Before implementing, use `rrce_search_code` and `rrce_search_knowledge` to:
+   - Find existing implementations of similar patterns
+   - Locate relevant code examples in the codebase
+   - Understand prior decisions and trade-offs
+   - Identify best practices already in use
+5. **Implement**: Make code changes per plan
+6. **Verify**: Run validation from plan
+7. **Document**: Note what was done
+
+**Active RAG Usage Guidelines:**
+- Search for conceptual terms (e.g., "error handling", "authentication") not just exact function names
+- Use semantic search to understand patterns before reading individual files
+- When unsure about implementation approach, search for similar implementations first
+- Use `rrce_search_code` for code patterns, `rrce_search_knowledge` for documentation/prior decisions
 
 ### 4. Validation
 

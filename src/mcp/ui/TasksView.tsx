@@ -176,27 +176,27 @@ export const TasksView = ({ projects: allProjects, workspacePath }: TasksViewPro
           <Text color="dim"> • </Text>
           <Text>{totalTasks} tasks</Text>
         </Box>
-        <Text color="dim">↑↓:Nav  Enter:Expand  s:Status  R:Refresh</Text>
+        <Text color="dim">v0.3.14</Text>
       </Box>
 
       {/* Error line */}
       {errorLine && (
-        <Box paddingX={1}>
+        <Box paddingX={1} marginTop={1}>
           <Text color="red">⚠ {errorLine}</Text>
         </Box>
       )}
 
       {/* Main content: Tree + Details */}
-      <Box flexDirection="row" flexGrow={1} paddingX={1} paddingY={1}>
+      <Box flexDirection="row" flexGrow={1}>
         {/* Tree pane */}
-        <Box flexDirection="column" width="55%" borderStyle="single" borderColor="dim" borderRight paddingRight={1}>
+        <Box flexDirection="column" width="50%" borderStyle="single" borderColor="dim" borderRight paddingX={1}>
           {flattenedRows.length === 0 ? (
             <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
               <Text color="dim">No projects detected.</Text>
               <Text color="dim">Run the wizard to set up projects.</Text>
             </Box>
           ) : (
-            <Box flexDirection="column">
+            <Box flexDirection="column" marginTop={1}>
               {flattenedRows.map((row, idx) => {
                 const k = projectKey(row.project);
                 const isCurrentProject = row.kind === 'project' ? row.isCurrentProject : false;
@@ -220,15 +220,15 @@ export const TasksView = ({ projects: allProjects, workspacePath }: TasksViewPro
         </Box>
 
         {/* Details pane */}
-        <Box flexDirection="column" width="45%" paddingLeft={1}>
+        <Box flexDirection="column" width="50%" paddingX={1} marginTop={1}>
           <TaskDetails task={selectedTask} />
         </Box>
       </Box>
 
       {/* Footer */}
       <Box paddingX={1} justifyContent="space-between" borderTop>
-        <Text color="dim">s:Cycle Status  R:Refresh  ?:Help</Text>
-        <Text color="dim">RRCE MCP Hub v0.3.14</Text>
+        <Text color="dim">↑↓:Nav  Enter:Expand  s:Cycle Status  R:Refresh</Text>
+        <Text color="dim">Press 'q' to exit</Text>
       </Box>
     </Box>
   );

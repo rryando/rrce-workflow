@@ -62,7 +62,7 @@ describe('RRCE Token Optimization Tests', () => {
       
       expect(content).toContain('## Phase 1: Research Mode');
       expect(content).toContain('## Phase 2: Planning Mode');
-      expect(content).toContain('Proceed to planning?');
+      expect(content).toContain('Ready to plan?');
       expect(content).toContain('Ready to develop?');
     });
 
@@ -95,7 +95,7 @@ describe('RRCE Token Optimization Tests', () => {
         path.join(PROMPTS_DIR, 'develop.md'),
         'utf-8'
       );
-      
+
       expect(content).toContain('validate_phase');
       expect(content).toContain('design');
       expect(content).toContain('research + planning');
@@ -106,10 +106,50 @@ describe('RRCE Token Optimization Tests', () => {
         path.join(PROMPTS_DIR, 'develop.md'),
         'utf-8'
       );
-      
+
       expect(content).toContain('## Authority');
       expect(content).toContain('ONLY agent');
       expect(content).toContain('modify');
+    });
+
+    test('develop prompt should explicitly read research and plan artifacts', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'develop.md'),
+        'utf-8'
+      );
+
+      // Should mention reading research and plan files
+      expect(content).toContain('research/{{TASK_SLUG}}-research.md');
+      expect(content).toContain('planning/{{TASK_SLUG}}-plan.md');
+      expect(content).toContain('CRITICAL: Read artifacts explicitly');
+
+      // Should mention focusing on research brief sections
+      expect(content).toContain('Alternatives');
+      expect(content).toContain('Best Practices');
+      expect(content).toContain('RAG Comparison');
+    });
+
+    test('develop prompt should ask about chosen approach if alternatives exist', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'develop.md'),
+        'utf-8'
+      );
+
+      expect(content).toContain('Chosen Approach');
+      expect(content.toLowerCase()).toContain('which approach');
+      expect(content).toContain('Do not assume');
+    });
+
+    test('develop prompt should use semantic search actively', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'develop.md'),
+        'utf-8'
+      );
+
+      expect(content).toContain('Active RAG Usage');
+      expect(content).toContain('rrce_search_code');
+      expect(content).toContain('rrce_search_knowledge');
+      expect(content).toContain('Semantic Search First');
     });
   });
 
