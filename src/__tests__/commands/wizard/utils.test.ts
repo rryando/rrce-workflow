@@ -201,7 +201,7 @@ describe('commands/wizard/utils', () => {
   });
 
   describe('surgicalUpdateOpenCodeAgents', () => {
-    it('creates agents only for orchestrator and executor, commands for others (workspace mode)', () => {
+    it('creates agents only for orchestrator and develop, commands for others (workspace mode)', () => {
       (os.homedir as any).mockReturnValue('/home/user');
       (fs.existsSync as any).mockReturnValue(true);
       (fs.readdirSync as any).mockReturnValue([
@@ -217,14 +217,14 @@ describe('commands/wizard/utils', () => {
           content: 'Orchestrator content',
         },
         {
-          filePath: '/tmp/executor.md',
-          frontmatter: { description: 'Executor', tools: ['read', 'edit', 'bash'] },
-          content: 'Executor content',
+          filePath: '/tmp/develop.md',
+          frontmatter: { description: 'Develop', tools: ['read', 'edit', 'bash'] },
+          content: 'Develop content',
         },
         {
-          filePath: '/tmp/research_discussion.md',
-          frontmatter: { description: 'Research', tools: ['read'] },
-          content: 'Research content',
+          filePath: '/tmp/design.md',
+          frontmatter: { description: 'Design', tools: ['read'] },
+          content: 'Design content',
         },
       ] as any;
 
@@ -233,20 +233,20 @@ describe('commands/wizard/utils', () => {
       // Should clear old files
       expect(unlinkSpy).toHaveBeenCalled();
       
-      // Should write orchestrator and executor as agents
+      // Should write orchestrator and develop as agents
       expect(writeSpy).toHaveBeenCalledWith(
         '/data/path/.opencode/agent/rrce_orchestrator.md',
         expect.stringContaining('Orchestrator content')
       );
       expect(writeSpy).toHaveBeenCalledWith(
-        '/data/path/.opencode/agent/rrce_executor.md',
-        expect.stringContaining('Executor content')
+        '/data/path/.opencode/agent/rrce_develop.md',
+        expect.stringContaining('Develop content')
       );
       
-      // Should write research as a command (not agent)
+      // Should write design as a command (not agent)
       expect(writeSpy).toHaveBeenCalledWith(
-        '/data/path/.opencode/command/rrce_research.md',
-        expect.stringContaining('Research content')
+        '/data/path/.opencode/command/rrce_design.md',
+        expect.stringContaining('Design content')
       );
     });
 
@@ -272,9 +272,9 @@ describe('commands/wizard/utils', () => {
           content: 'Orchestrator content',
         },
         {
-          filePath: '/tmp/executor.md',
-          frontmatter: { description: 'Executor', tools: ['read', 'edit'] },
-          content: 'Executor content',
+          filePath: '/tmp/develop.md',
+          frontmatter: { description: 'Develop', tools: ['read', 'edit'] },
+          content: 'Develop content',
         },
         {
           filePath: '/tmp/init.md',
@@ -285,14 +285,14 @@ describe('commands/wizard/utils', () => {
 
       surgicalUpdateOpenCodeAgents(prompts, 'global', '/data/path');
 
-      // Should write prompt files for agents (orchestrator, executor)
+      // Should write prompt files for agents (orchestrator, develop)
       expect(writeSpy).toHaveBeenCalledWith(
         '/home/user/.config/opencode/prompts/rrce-orchestrator.md',
         expect.stringContaining('Orchestrator content')
       );
       expect(writeSpy).toHaveBeenCalledWith(
-        '/home/user/.config/opencode/prompts/rrce-executor.md',
-        expect.stringContaining('Executor content')
+        '/home/user/.config/opencode/prompts/rrce-develop.md',
+        expect.stringContaining('Develop content')
       );
       
       // Should write command file for init
@@ -311,7 +311,7 @@ describe('commands/wizard/utils', () => {
         const written = JSON.parse(configWriteCall[1] as string);
         expect(written.agent.user_agent).toBeDefined(); // Preserved
         expect(written.agent.rrce_orchestrator).toBeDefined(); // Added
-        expect(written.agent.rrce_executor).toBeDefined(); // Added
+        expect(written.agent.rrce_develop).toBeDefined(); // Added
         expect(written.agent.rrce_old).toBeUndefined(); // Removed (stale)
         expect(written.agent.rrce_init).toBeUndefined(); // Not an agent anymore
       }

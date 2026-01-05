@@ -2,7 +2,7 @@
 name: RRCE Documentation
 description: Produce project documentation aligned with the latest delivery.
 argument-hint: "DOC_TYPE=<type> [TASK_SLUG=<slug> | TARGET_PATH=<relative>] [RELEASE_REF=<tag/sha>]"
-tools: ['search_knowledge', 'get_project_context', 'list_projects', 'update_task']
+tools: ['rrce_search_knowledge', 'rrce_get_project_context', 'rrce_list_projects', 'rrce_update_task']
 required-args:
   - name: DOC_TYPE
     prompt: "Enter the documentation type (e.g., api, architecture, runbook, changelog)"
@@ -50,7 +50,7 @@ Non-Negotiables
 3. Keep documentation under 500 lines while preserving essential detail and references.
 4. Provide clear explanations, decision history, testing evidence, release notes, and next steps.
 5. Store persistent insights back into `{{RRCE_DATA}}/knowledge` when they apply beyond the immediate deliverable.
-6. Close the loop in `meta.json` when working within a task by setting `agents.documentation.status`, refreshing `checklist`, and updating overall `status`.
+6. Close the loop in `meta.json` when working within a task by using `rrce_update_task` to set `agents.documentation.status`, refresh `checklist`, and update overall `status`.
 
 Workflow
 1. Confirm `DOC_TYPE`; prompt for it if missing. Normalize to kebab-case for filenames.
@@ -60,7 +60,7 @@ Workflow
    - Otherwise, default to `{{RRCE_DATA}}/knowledge/{{DOC_TYPE}}.md` and ensure `{{RRCE_DATA}}/knowledge` exists.
 3. Select a template: prefer `{{RRCE_DATA}}/templates/docs/{{DOC_TYPE}}.md`; fallback to `{{RRCE_DATA}}/templates/documentation_output.md`.
 4. Populate contextual metadata (`AUTHOR`, `RELEASE_REF`, task references, dates) and render the document using the chosen template.
-5. If operating on a task slug, update `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json` with documentation artifact paths, new references, final decisions, checklist completions, and remaining follow-ups.
+5. If operating on a task slug, update `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json` using `rrce_update_task` with documentation artifact paths, new references, final decisions, checklist completions, and remaining follow-ups.
 6. When broader knowledge changed, update the relevant `{{RRCE_DATA}}/knowledge/*.md` entries with `Updated: YYYY-MM-DD` markers, lean changelog bullets, and a small checklist of follow-ups.
 7. Provide a concise sign-off statement confirming readiness for maintenance or release.
 

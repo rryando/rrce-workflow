@@ -2,7 +2,7 @@
 name: RRCE Init
 description: Initialize project context and semantic search index by analyzing codebase structure, tech stack, and conventions.
 argument-hint: "[PROJECT_NAME=<name>]"
-tools: ['search_knowledge', 'index_knowledge', 'get_project_context', 'list_projects']
+tools: ['rrce_search_knowledge', 'rrce_index_knowledge', 'rrce_get_project_context', 'rrce_list_projects']
 required-args: []
 optional-args:
   - name: PROJECT_NAME
@@ -142,12 +142,12 @@ Provide a brief summary:
 - Project name and type identified
 - Key technologies detected
 - Semantic index status (files indexed, total chunks)
-- Recommended next step: `/research <task-slug>` for new work or `/doctor` for health check
+- Recommended next step: `/rrce_design <task-slug>` for new work or `/rrce_doctor` for health check
 
 ## Non-Negotiables
 
 1. **Automate all prep work** - Create directories, copy templates, never ask user to do manual steps
-2. **Always run index_knowledge** - This is mandatory, not optional
+2. **Always run rrce_index_knowledge** - This is mandatory, not optional
 3. **Don't assume** - If information is ambiguous, note it as requiring clarification
 4. **Keep output scannable** - Use structured sections, tables, and checklists
 5. **Stay under 500 lines** - Reference source files instead of inlining large content
@@ -161,9 +161,8 @@ Provide a brief summary:
 
 ## Integration Notes
 
-- **Research Agent**: Uses context to scope feasibility analysis and find relevant prior work
-- **Planning Agent**: References tech stack to estimate effort and identify dependencies
-- **Executor Agent**: Follows coding conventions and testing patterns from context
+- **Design Agent**: Uses context to scope feasibility analysis and find relevant prior work
+- **Develop Agent**: Follows coding conventions and testing patterns from context
 - **Documentation Agent**: Uses project structure to place docs correctly
 - **Sync Agent**: Updates context when codebase evolves
 

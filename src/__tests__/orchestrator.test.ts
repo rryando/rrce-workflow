@@ -58,13 +58,13 @@ describe('RRCE Orchestrator', () => {
       expect(agentConfig.description).not.toContain('Invoke via @rrce_*');
     });
 
-    it('should convert other agents to subagent mode', () => {
+    it('should convert design agent to subagent mode', () => {
       const prompts = loadPromptsFromDir(promptsDir);
-      const research = prompts.find(p => path.basename(p.filePath) === 'research_discussion.md');
+      const design = prompts.find(p => path.basename(p.filePath) === 'design.md');
       
-      if (!research) throw new Error('Research prompt not found');
+      if (!design) throw new Error('Design prompt not found');
       
-      const agentConfig = convertToOpenCodeAgent(research);
+      const agentConfig = convertToOpenCodeAgent(design);
       
       expect(agentConfig.mode).toBe('subagent');
       expect(agentConfig.description).toContain('Invoke via @rrce_*');
@@ -117,11 +117,11 @@ describe('RRCE Orchestrator', () => {
         !p.frontmatter.mode || p.frontmatter.mode === 'subagent'
       );
       
+      // Updated for new architecture: design + develop instead of research/planning/executor
       const expectedSubagents = [
         'init',
-        'research_discussion',
-        'planning_discussion',
-        'executor',
+        'design',
+        'develop',
         'documentation',
         'doctor',
         'sync'
@@ -144,12 +144,11 @@ describe('RRCE Orchestrator', () => {
       
       const content = orchestrator.content.toLowerCase();
       
-      // Check for documented phase dependencies
-      expect(content).toContain('planning');
-      expect(content).toContain('research');
-      expect(content).toContain('execution');
+      // Check for documented phase dependencies (updated for new naming)
+      expect(content).toContain('design');
+      expect(content).toContain('develop');
       expect(content).toContain('prerequisite'); // phase dependencies documented
-      expect(content).toContain('meta.json');
+      expect(content).toContain('validate_phase');
     });
   });
 
@@ -171,19 +170,16 @@ describe('RRCE Orchestrator', () => {
     it('should restrict subagent tool access appropriately', () => {
       const prompts = loadPromptsFromDir(promptsDir);
       
-      // Research and Planning should NOT have edit/bash
-      const research = prompts.find(p => path.basename(p.filePath) === 'research_discussion.md');
-      const planning = prompts.find(p => path.basename(p.filePath) === 'planning_discussion.md');
+      // Design should NOT have edit/bash
+      const design = prompts.find(p => path.basename(p.filePath) === 'design.md');
       
-      expect(research?.frontmatter.tools).not.toContain('edit');
-      expect(research?.frontmatter.tools).not.toContain('task');
-      expect(planning?.frontmatter.tools).not.toContain('edit');
-      expect(planning?.frontmatter.tools).not.toContain('task');
+      expect(design?.frontmatter.tools).not.toContain('edit');
+      expect(design?.frontmatter.tools).not.toContain('bash');
       
-      // Executor SHOULD have edit/bash
-      const executor = prompts.find(p => path.basename(p.filePath) === 'executor.md');
-      expect(executor?.frontmatter.tools).toContain('edit');
-      expect(executor?.frontmatter.tools).toContain('bash');
+      // Develop SHOULD have edit/bash
+      const develop = prompts.find(p => path.basename(p.filePath) === 'develop.md');
+      expect(develop?.frontmatter.tools).toContain('edit');
+      expect(develop?.frontmatter.tools).toContain('bash');
     });
   });
 });
@@ -203,7 +199,7 @@ describe('OpenCode Setup Integration', () => {
 
   describe('Agent Naming', () => {
     it('should use rrce_ prefix for all agents in OpenCode', () => {
-      const prompts = loadPromptsFromDir(path.join(__dirname, '../../../agent-core/prompts'));
+      const prompts = loadPromptsFromDir(path.join(__dirname, '../../agent-core/prompts'));
       
       for (const prompt of prompts) {
         const baseName = path.basename(prompt.filePath, '.md');
@@ -219,7 +215,7 @@ describe('OpenCode Setup Integration', () => {
 describe('Orchestrator Behavior Simulation', () => {
   describe('State Management', () => {
     it('should track completion via meta.json status fields', () => {
-      // Simulated meta.json structure
+      // Simulated meta.json structure (updated for new phases)
       const mockMeta = {
         task_slug: 'test-feature',
         agents: {
@@ -237,26 +233,24 @@ describe('Orchestrator Behavior Simulation', () => {
   });
 
   describe('Phase Progression Logic', () => {
-    it('should follow correct phase order', () => {
-      const correctOrder = ['research', 'planning', 'executor', 'documentation'];
+    it('should follow correct phase order (new: design → develop)', () => {
+      // Updated for new architecture
+      const correctOrder = ['design', 'develop', 'documentation'];
       
       // Orchestrator must respect this order
-      expect(correctOrder.indexOf('planning')).toBeGreaterThan(correctOrder.indexOf('research'));
-      expect(correctOrder.indexOf('executor')).toBeGreaterThan(correctOrder.indexOf('planning'));
-      expect(correctOrder.indexOf('documentation')).toBeGreaterThan(correctOrder.indexOf('executor'));
+      expect(correctOrder.indexOf('develop')).toBeGreaterThan(correctOrder.indexOf('design'));
+      expect(correctOrder.indexOf('documentation')).toBeGreaterThan(correctOrder.indexOf('develop'));
     });
 
     it('should not skip prerequisites', () => {
       const prerequisites = {
-        planning: ['research'],
-        executor: ['planning'],
-        documentation: ['executor']
+        develop: ['design'],
+        documentation: ['develop']
       };
 
       // Orchestrator must check these before delegating
-      expect(prerequisites.planning).toContain('research');
-      expect(prerequisites.executor).toContain('planning');
-      expect(prerequisites.documentation).toContain('executor');
+      expect(prerequisites.develop).toContain('design');
+      expect(prerequisites.documentation).toContain('develop');
     });
   });
 });

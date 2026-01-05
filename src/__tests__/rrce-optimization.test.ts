@@ -5,8 +5,8 @@ import * as path from 'path';
 /**
  * Token Optimization Tests for RRCE Workflow
  * 
- * These tests validate the token usage optimizations made to subagent prompts.
- * Target: 70% reduction in prompt size (from ~15K to ~4K tokens per agent)
+ * These tests validate the token usage optimizations made to agent prompts.
+ * Updated for v2.0 architecture: design + develop pattern
  */
 
 describe('RRCE Token Optimization Tests', () => {
@@ -18,38 +18,27 @@ describe('RRCE Token Optimization Tests', () => {
   };
 
   describe('Prompt Size Validation', () => {
-    test('research_discussion.md should be under 5K tokens', () => {
+    test('design.md should be under 8K tokens (merged research + planning)', () => {
       const content = fs.readFileSync(
-        path.join(PROMPTS_DIR, 'research_discussion.md'),
+        path.join(PROMPTS_DIR, 'design.md'),
         'utf-8'
       );
       const tokens = estimateTokens(content);
       
-      expect(tokens).toBeLessThan(5000);
-      console.log(`Research prompt: ${tokens} tokens (target: <5K)`);
+      // Design combines research + planning, so larger threshold
+      expect(tokens).toBeLessThan(8000);
+      console.log(`Design prompt: ${tokens} tokens (target: <8K)`);
     });
 
-    test('planning_discussion.md should be under 5K tokens', () => {
+    test('develop.md should be under 6K tokens', () => {
       const content = fs.readFileSync(
-        path.join(PROMPTS_DIR, 'planning_discussion.md'),
+        path.join(PROMPTS_DIR, 'develop.md'),
         'utf-8'
       );
       const tokens = estimateTokens(content);
       
-      expect(tokens).toBeLessThan(5000);
-      console.log(`Planning prompt: ${tokens} tokens (target: <5K)`);
-    });
-
-    test('executor.md should be under 6K tokens', () => {
-      const content = fs.readFileSync(
-        path.join(PROMPTS_DIR, 'executor.md'),
-        'utf-8'
-      );
-      const tokens = estimateTokens(content);
-      
-      // Executor needs more complexity, so slightly higher threshold
       expect(tokens).toBeLessThan(6000);
-      console.log(`Executor prompt: ${tokens} tokens (target: <6K)`);
+      console.log(`Develop prompt: ${tokens} tokens (target: <6K)`);
     });
 
     test('orchestrator.md should be under 5K tokens', () => {
@@ -64,27 +53,63 @@ describe('RRCE Token Optimization Tests', () => {
     });
   });
 
-  describe('Session State Management', () => {
-    test('research prompt should include session state guidance', () => {
+  describe('Design Agent Structure', () => {
+    test('design prompt should have two-phase flow', () => {
       const content = fs.readFileSync(
-        path.join(PROMPTS_DIR, 'research_discussion.md'),
+        path.join(PROMPTS_DIR, 'design.md'),
         'utf-8'
       );
       
-      expect(content).toContain('## Session State');
-      expect(content).toContain('First turn ONLY');
-      expect(content).toContain('Store results');
-      expect(content).toContain('Only re-search if');
+      expect(content).toContain('## Phase 1: Research Mode');
+      expect(content).toContain('## Phase 2: Planning Mode');
+      expect(content).toContain('Proceed to planning?');
+      expect(content).toContain('Ready to develop?');
     });
 
-    test('planning prompt should include session state guidance', () => {
+    test('design prompt should include interactive transitions', () => {
       const content = fs.readFileSync(
-        path.join(PROMPTS_DIR, 'planning_discussion.md'),
+        path.join(PROMPTS_DIR, 'design.md'),
         'utf-8'
       );
       
-      expect(content).toContain('Session State');
-      expect(content).toContain('First turn');
+      expect(content).toContain('(y/n)');
+      expect(content).toContain('task tool');
+      expect(content).toContain('subagent_type');
+    });
+
+    test('design prompt should implement hybrid clarification', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'design.md'),
+        'utf-8'
+      );
+      
+      expect(content).toContain('Max 2');
+      expect(content).toContain('critical questions');
+      expect(content).toContain('assumptions');
+    });
+  });
+
+  describe('Develop Agent Structure', () => {
+    test('develop prompt should require design completion', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'develop.md'),
+        'utf-8'
+      );
+      
+      expect(content).toContain('validate_phase');
+      expect(content).toContain('design');
+      expect(content).toContain('research + planning');
+    });
+
+    test('develop prompt should have authority section', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, 'develop.md'),
+        'utf-8'
+      );
+      
+      expect(content).toContain('## Authority');
+      expect(content).toContain('ONLY agent');
+      expect(content).toContain('modify');
     });
   });
 
@@ -96,7 +121,7 @@ describe('RRCE Token Optimization Tests', () => {
       );
       
       expect(content).toContain('session_id');
-      expect(content).toContain('executor-${TASK_SLUG}');
+      expect(content).toContain('develop-${TASK_SLUG}');
     });
 
     test('orchestrator should have delegation protocol', () => {
@@ -105,30 +130,59 @@ describe('RRCE Token Optimization Tests', () => {
         'utf-8'
       );
       
-      // New: check for token-optimized delegation
       expect(content).toContain('Delegation Protocol');
       expect(content).toContain('CONTEXT SUMMARY');
       expect(content).toContain('token-efficient');
     });
-  });
 
-  describe('Hybrid Research Approach', () => {
-    test('research prompt should implement hybrid clarification', () => {
+    test('orchestrator should reference new command names', () => {
       const content = fs.readFileSync(
-        path.join(PROMPTS_DIR, 'research_discussion.md'),
+        path.join(PROMPTS_DIR, 'orchestrator.md'),
         'utf-8'
       );
       
-      expect(content).toContain('Hybrid');
-      expect(content).toContain('Max 2');
-      expect(content).toContain('critical questions');
-      expect(content).toContain('assumptions');
+      expect(content).toContain('/rrce_design');
+      expect(content).toContain('/rrce_develop');
+      expect(content).toContain('@rrce_develop');
+      
+      // Should NOT reference old commands
+      expect(content).not.toContain('/rrce_research');
+      expect(content).not.toContain('/rrce_plan');
+      expect(content).not.toContain('/rrce_execute');
+      expect(content).not.toContain('@rrce_executor');
+    });
+  });
+
+  describe('Base Protocol Validation', () => {
+    test('_base.md should have consolidated patterns', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, '_base.md'),
+        'utf-8'
+      );
+      
+      expect(content).toContain('## Path Resolution');
+      expect(content).toContain('## Completion Signal');
+      expect(content).toContain('## Workspace Constraints');
+      expect(content).toContain('## Error Recovery');
+      expect(content).toContain('## Token Awareness');
+      expect(content).toContain('## Abort Handling');
+      expect(content).toContain('## Phase Transition Pattern');
+    });
+
+    test('_base.md should reference Develop agent (not Executor)', () => {
+      const content = fs.readFileSync(
+        path.join(PROMPTS_DIR, '_base.md'),
+        'utf-8'
+      );
+      
+      expect(content).toContain('Develop');
+      expect(content).not.toContain('Executor');
     });
   });
 
   describe('Prompt Structure Validation', () => {
     test('all prompts should have YAML frontmatter', () => {
-      const prompts = ['research_discussion.md', 'planning_discussion.md', 'executor.md', 'orchestrator.md'];
+      const prompts = ['design.md', 'develop.md', 'orchestrator.md'];
       
       prompts.forEach(promptFile => {
         const content = fs.readFileSync(path.join(PROMPTS_DIR, promptFile), 'utf-8');
@@ -139,13 +193,7 @@ describe('RRCE Token Optimization Tests', () => {
       });
     });
 
-    test('subagent prompts should have required sections (combined with _base.md)', () => {
-      const subagents = [
-        'research_discussion.md',
-        'planning_discussion.md',
-        'executor.md'
-      ];
-      
+    test('agent prompts should have required sections (combined with _base.md)', () => {
       // Read the base protocol that's injected at runtime
       const baseContent = fs.readFileSync(path.join(PROMPTS_DIR, '_base.md'), 'utf-8');
       
@@ -154,13 +202,19 @@ describe('RRCE Token Optimization Tests', () => {
       expect(baseContent).toContain('## Completion Signal');
       expect(baseContent).toContain('## Workspace Constraints');
       
-      subagents.forEach(promptFile => {
-        const content = fs.readFileSync(path.join(PROMPTS_DIR, promptFile), 'utf-8');
-        
-        // Core sections that remain in agent-specific prompts
-        expect(content).toContain('## Workflow');
-        // Note: Rules and Constraints may be in base or agent-specific
-      });
+      // Design uses "## Session Flow" (two-phase merged agent)
+      const designContent = fs.readFileSync(path.join(PROMPTS_DIR, 'design.md'), 'utf-8');
+      expect(designContent).toContain('## Session Flow');
+      
+      // Develop uses "## Workflow" (standard executor pattern)
+      const developContent = fs.readFileSync(path.join(PROMPTS_DIR, 'develop.md'), 'utf-8');
+      expect(developContent).toContain('## Workflow');
+    });
+
+    test('old prompts should no longer exist', () => {
+      expect(fs.existsSync(path.join(PROMPTS_DIR, 'research_discussion.md'))).toBe(false);
+      expect(fs.existsSync(path.join(PROMPTS_DIR, 'planning_discussion.md'))).toBe(false);
+      expect(fs.existsSync(path.join(PROMPTS_DIR, 'executor.md'))).toBe(false);
     });
   });
 
@@ -188,14 +242,6 @@ describe('RRCE Token Optimization Tests', () => {
       
       // Agents should NOT have model set - let user choose
       expect(config.agent.rrce_orchestrator.model).toBeUndefined();
-      expect(config.agent.rrce_executor.model).toBeUndefined();
-    });
-
-    test('executor agent should have task tool disabled', () => {
-      const configPath = path.join(__dirname, '../../opencode.json');
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      
-      expect(config.agent.rrce_executor.tools.task).toBe(false);
     });
   });
 });
@@ -206,18 +252,18 @@ describe('Token Usage Regression Tests', () => {
    * For now, they serve as placeholders for integration testing.
    */
   
-  test.skip('research phase should use <20K tokens total (3 rounds)', async () => {
+  test.skip('design phase should use <25K tokens total (research + planning)', async () => {
     // TODO: Implement integration test with actual API calls
-    // Simulate research with 3 question rounds
+    // Simulate design with clarification rounds
     // Track total token usage via API response
-    // Assert < 20K tokens
+    // Assert < 25K tokens
   });
 
-  test.skip('full workflow should use <80K tokens (research → plan → execute)', async () => {
+  test.skip('full workflow should use <70K tokens (design → develop)', async () => {
     // TODO: Implement full workflow integration test
     // Run complete RRCE workflow
     // Sum token usage from all API responses
-    // Assert < 80K tokens total
+    // Assert < 70K tokens total
   });
 
   test.skip('session reuse should show cache hits on turn 2+', async () => {

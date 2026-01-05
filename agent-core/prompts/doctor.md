@@ -2,7 +2,7 @@
 name: RRCE Doctor
 description: Analyze codebase health using semantic search; identify issues and recommend improvement tasks.
 argument-hint: "[PROJECT_NAME=<name>] [FOCUS_AREA=<area>]"
-tools: ['search_knowledge', 'get_project_context', 'index_knowledge', 'list_projects', 'create_task']
+tools: ['rrce_search_knowledge', 'rrce_get_project_context', 'rrce_index_knowledge', 'rrce_list_projects', 'rrce_create_task']
 required-args: []
 optional-args:
   - name: PROJECT_NAME
@@ -34,7 +34,7 @@ You are the Project Doctor for RRCE-Workflow. Perform a health check on the code
 ### Step 1: Load Project Context
 
 ```
-Tool: get_project_context
+Tool: rrce_get_project_context
 Args: { "project": "{{WORKSPACE_NAME}}" }
 ```
 
@@ -49,7 +49,7 @@ Parse the context to understand:
 
 ### Step 2: Semantic Discovery
 
-Use `search_knowledge` to efficiently find problem areas. Run queries based on FOCUS_AREA or general health:
+Use `rrce_search_knowledge` to efficiently find problem areas. Run queries based on FOCUS_AREA or general health:
 
 **General Health Queries (run if no FOCUS_AREA):**
 
@@ -72,7 +72,7 @@ Use `search_knowledge` to efficiently find problem areas. Run queries based on F
 
 **Query Execution:**
 ```
-Tool: search_knowledge
+Tool: rrce_search_knowledge
 Args: { "query": "<query>", "project": "{{WORKSPACE_NAME}}" }
 ```
 
@@ -152,7 +152,7 @@ Report:
 - Overall health score
 - Number of findings by priority
 - Top 3 recommended actions
-- Suggested next step: `/plan TASK_SLUG=<highest-priority-task>`
+- Suggested next step: `/rrce_design TASK_SLUG=<highest-priority-task>`
 
 ## Non-Negotiables
 
@@ -192,9 +192,9 @@ When `FOCUS_AREA` is provided:
 
 ## Integration Notes
 
-- **Planning Agent**: Receives diagnosis and creates execution plans for high-priority items
+- **Design Agent**: Receives diagnosis and creates execution plans for high-priority items
 - **Init Agent**: Doctor relies on updated `project-context.md`; triggers Init if stale
-- **Executor Agent**: Implements the planned tasks derived from Doctor's recommendations
+- **Develop Agent**: Implements the planned tasks derived from Doctor's recommendations
 
 ## When to Run Doctor
 

@@ -59,22 +59,42 @@ export function loadPromptsFromDir(dirPath: string): ParsedPrompt[] {
 
 /**
  * Get the agent-core root directory
- * Works with both npm/tsx and Bun
- * When bundled: dist/index.js -> go up one level to project root -> agent-core
+ * 
+ * Searches multiple candidate paths to handle:
+ * - Dev mode (npm run dev): cwd/agent-core
+ * - Bundled mode (dist/index.js): ../agent-core relative to dist
+ * - npm global install: ../../agent-core (package root)
+ * 
+ * Validates by checking for _base.md existence to ensure correct directory.
  */
 export function getAgentCoreDir(): string {
-  // Check if we are running from source (src/lib)
-  if (__dirname.includes('/src/') || __dirname.includes('\\src\\')) {
-      // Find the project root from src/lib (2 levels up)
-      // Or safer: check if agent-core exists at process.cwd() (often true in dev)
-      if (fs.existsSync(path.join(process.cwd(), 'agent-core'))) {
-          return path.join(process.cwd(), 'agent-core');
-      }
-      return path.resolve(__dirname, '../..', 'agent-core');
+  // Build candidate paths in order of preference
+  const candidates = [
+    // Dev mode: agent-core at cwd (common when running from project root)
+    path.join(process.cwd(), 'agent-core'),
+    // Bundled: dist/index.js -> ../agent-core
+    path.resolve(__dirname, '..', 'agent-core'),
+    // npm global: dist/index.js -> ../../agent-core (package root)
+    path.resolve(__dirname, '..', '..', 'agent-core'),
+    // Source mode: src/lib/prompts.ts -> ../../agent-core
+    path.resolve(__dirname, '..', '..', 'agent-core'),
+  ];
+  
+  // Find first candidate that contains _base.md (validates correct directory)
+  for (const candidate of candidates) {
+    const baseMdPath = path.join(candidate, 'prompts', '_base.md');
+    if (fs.existsSync(baseMdPath)) {
+      return candidate;
+    }
   }
-
-  // Default for bundled build (dist/index.js -> .. -> agent-core)
-  return path.join(__dirname, '..', 'agent-core');
+  
+  // Fallback with warning - prompts may be incomplete
+  console.warn('[RRCE] Could not find agent-core directory with _base.md. Prompts may be incomplete.');
+  console.warn('[RRCE] Searched paths:', candidates.join(', '));
+  
+  // Return first candidate as fallback (maintains backward compatibility)
+  // Non-null assertion safe: candidates array is never empty
+  return candidates[0] as string;
 }
 
 /**

@@ -2,7 +2,7 @@
 name: RRCE Sync
 description: Reconcile project state with the RRCE knowledge base and update semantic index.
 argument-hint: "[SCOPE=<path|module>]"
-tools: ['search_knowledge', 'get_project_context', 'index_knowledge', 'list_projects', 'update_task']
+tools: ['rrce_search_knowledge', 'rrce_get_project_context', 'rrce_index_knowledge', 'rrce_list_projects', 'rrce_update_task']
 required-args: []
 optional-args:
   - name: SCOPE
@@ -33,17 +33,10 @@ Non-Negotiables
 3. Version every knowledge edit by stamping an ISO date (e.g. `Updated: 2024-11-01`) near the top of the section you modify.
 4. Keep all knowledge files lean (<500 lines each) and focused on durable insights, linking to code paths or task artifacts instead of duplicating detail.
 5. Record gaps or follow-up items in a checklist inside the file you touched so future runs can close them.
-
-Workflow
-1. Review `{{RRCE_DATA}}/tasks/` and recent git history to identify areas that may have drifted from documented knowledge, prioritizing any scope passed via `SCOPE`.
-2. Inventory existing knowledge files. Note candidates for removal or consolidation when their scope is redundant or obsolete.
-3. For each impacted domain:
-   - Inspect the latest code/config/tests to confirm behavior.
-   - Update or create knowledge entries under `{{RRCE_DATA}}/knowledge/{{DOMAIN}}.md`, adding `Updated: <date>` tags and a brief changelog list.
-   - Remove outdated sections or entire files once you verify the information no longer applies.
-4. Ensure cross-references (links to tasks, commits, or other knowledge files) point to current resources.
-5. Summarize any unresolved questions or future sync needs at the bottom of the modified file(s) under a `Checklist` heading.
 6. **Semantic Indexing (MANDATORY)**: After updating any knowledge files, run the indexer to keep search current:
+   ```
+   Tool: rrce_index_knowledge
+   Args: { "project": "{{WORKSPACE_NAME}}" }
    ```
    Tool: rrce_index_knowledge
    Args: { "project": "{{WORKSPACE_NAME}}" }

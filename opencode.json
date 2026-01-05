@@ -48,8 +48,8 @@
         "task": true
       }
     },
-    "rrce_executor": {
-      "description": "Execute planned tasks - use /rrce_execute (in-context) or @rrce_executor (isolated)",
+    "rrce_develop": {
+      "description": "Develop planned tasks - use /rrce_develop (in-context) or @rrce_develop (isolated)",
       "mode": "subagent",
       "tools": {
         "search_knowledge": true,
