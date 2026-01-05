@@ -12,6 +12,7 @@ import { searchTools, handleSearchTool } from './tools/search';
 import { taskTools, handleTaskTool } from './tools/task';
 import { sessionTools, handleSessionTool } from './tools/session';
 import { agentTools, handleAgentTool } from './tools/agent';
+import { cleanupTools, handleCleanupTool } from './tools/cleanup';
 
 /**
  * Register MCP tool handlers
@@ -24,6 +25,7 @@ export function registerToolHandlers(server: Server): void {
       ...taskTools,
       ...sessionTools,
       ...agentTools,
+      ...cleanupTools,
     ];
 
     // Check if any projects are exposed. If not, add a help setup tool.
@@ -63,6 +65,10 @@ export function registerToolHandlers(server: Server): void {
       // Try agent tools
       const agentResult = await handleAgentTool(name, args);
       if (agentResult) return agentResult;
+
+      // Try cleanup tools
+      const cleanupResult = await handleCleanupTool(name, args);
+      if (cleanupResult) return cleanupResult;
 
       throw new Error(`Unknown tool: ${name}`);
     } catch (error) {

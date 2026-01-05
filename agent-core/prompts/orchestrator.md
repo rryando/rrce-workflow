@@ -136,6 +136,7 @@ Use `rrce_search_tasks` to find relevant tasks:
 | `/rrce_design` | task-slug "request" | Research + plan in single session |
 | `/rrce_develop` | task-slug | Execute code changes |
 | `/rrce_docs` | doc-type [task-slug] | Generate documentation |
+| `/rrce_cleanup` | task-slug [--all] | Extract knowledge and delete tasks |
 | `/rrce_sync` | [scope] | Sync knowledge base |
 | `/rrce_doctor` | [focus-area] | Health check |
 
