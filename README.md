@@ -11,8 +11,10 @@ RRCE-Workflow transforms your AI coding assistant (GitHub Copilot, OpenCode, Cla
 - **Global Knowledge Base**: Centralized context management across all your projects (`~/.rrce-workflow/`).
 - **MCP Hub**: A Model Context Protocol server exposing tools, resources, and prompts to any MCP-compatible client.
 - **Semantic Search (RAG)**: Local, privacy-first vector indexing powered by `@xenova/transformers` for deep codebase understanding.
-- **Structured Agent Pipelines**: 5 specialized agents (Init, Design, Develop, Docs, Sync, Doctor) for end-to-end development workflows.
-- **Task Management**: Built-in CRUD operations for tracking high-level tasks via MCP tools.
+- **4-Phase Workflow**: Init → Design (research+planning merged) → Develop → Document for streamlined development.
+- **Slash Commands**: In-context execution (`/rrce_*`) with ~60% token efficiency over subagent delegation.
+- **Task Management**: Built-in CRUD operations for tracking high-level tasks via MCP tools, including knowledge extraction and cleanup.
+- **Agent Session Tracking**: Real-time task progress visualization in MCP TUI with OpenCode Todo sidebar sync.
 
 ---
 
@@ -71,14 +73,19 @@ RRCE-Workflow uses the [Model Context Protocol](https://modelcontextprotocol.io/
 | `search_knowledge` | Semantic search across project knowledge bases |
 | `search_code` | Semantic search across code files (snippets + line numbers + context) |
 | `find_related_files` | Find imports/imported-by relationships for a file |
-| `index_knowledge` | Start (or query) the semantic indexing job for a project |
-| `list_agents` | List available RRCE agents and their arguments |
-| `get_agent_prompt` | Get the system prompt for a specific agent (with context injection) |
-| `list_tasks` | List all tasks for a project |
-| `get_task` | Get details of a task |
-| `create_task` | Create a task |
-| `update_task` | Update a task (`meta.json`) |
+| `index_knowledge` | Start (or query) the semantic indexing job for a project. Supports `force` (re-hash) and `clean` (wipe/rebuild) parameters |
+| `list_tasks` | List all tasks for a project (supports filtering by status, keyword, date) |
+| `get_task` | Get details of a task (including phase status, checklist, metadata) |
+| `create_task` | Create a new task in the project |
+| `update_task` | Update task metadata (`meta.json`) |
 | `delete_task` | Delete a task |
+| `search_tasks` | Search tasks by keyword, status, agent phase, or date |
+| `validate_phase` | Check if a task phase has all prerequisites complete |
+| `cleanup_task` | Extract valuable knowledge from tasks and delete artifacts. Supports single, bulk, or --all mode |
+| `start_session` | Start an agent session for active task tracking (TUI visibility) |
+| `end_session` | End an agent session before completion signal |
+| `update_agent_todos` | Update agent todo list for granular work tracking (TUI display) |
+| `get_agent_prompt` | Get the system prompt for a specific agent or slash command |
 
 ### Connecting Your IDE
 
@@ -103,14 +110,15 @@ RRCE-Workflow integrates with OpenCode both as an MCP server and by providing a 
     ```
 
 2.  **Install Agents**: Run `npx rrce-workflow` and select **OpenCode** as a tool. This generates:
-    - **Primary Agent (`rrce`)**: Orchestrates the complete workflow lifecycle (tab-switchable)
-    - **Subagents** (`@rrce_*`): Specialized agents for each phase (expert mode)
+    - **Primary Agent (`rrce`)**: Phase Coordinator orchestrating the complete workflow (tab-switchable)
+    - **Subagents** (`@rrce_*`): Specialized agents for isolated execution (expert mode)
     - **Auto-configuration**: Hides OpenCode's native plan agent to avoid confusion
 
 3.  **Usage**:
     - Press `Tab` to cycle to the RRCE agent for structured workflows
+    - Use slash commands (`/rrce_init`, `/rrce_design`, `/rrce_develop`) for in-context execution (60% more efficient)
+    - Direct subagent access via `@rrce_init`, `@rrce_design`, etc. for isolated execution
     - Build agent can automatically delegate to RRCE for complex tasks
-    - Direct subagent access via `@rrce_init`, `@rrce_research`, etc.
 
 See [OpenCode Guide](docs/opencode-guide.md) for detailed usage instructions.
 
@@ -179,45 +187,65 @@ Stores everything in a `.rrce-workflow` folder inside your project root.
 
 ---
 
-## The Agent Pipeline
+## 4-Phase Workflow
 
-RRCE provides two ways to work with agents, depending on your workflow needs:
+RRCE uses a streamlined 4-phase pipeline for end-to-end development:
 
-### Primary Orchestrator (Recommended for OpenCode)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. Init     →  2. Design     →  3. Develop    →  4. Document  │
+│  /rrce_init     /rrce_design     /rrce_develop    /rrce_docs   │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-The **RRCE Orchestrator** is a primary agent that manages the complete workflow lifecycle:
+| Phase | Slash Command | Purpose | Prerequisite |
+|-------|---------------|---------|--------------|
+| **Init** | `/rrce_init` | Project setup, context extraction, semantic indexing | None |
+| **Design** | `/rrce_design task-slug "request"` | Research + Planning (merged for efficiency) | Init complete |
+| **Develop** | `/rrce_develop task-slug` | Code implementation based on approved plan | Design complete |
+| **Document** | `/rrce_docs task-slug` | Generate/update documentation | Develop complete |
 
-- **Access**: Press `Tab` in OpenCode to cycle to the RRCE agent
-- **Purpose**: Automatically coordinate research → planning → execution → documentation
-- **Delegation**: Build agent can delegate to RRCE for complex tasks
-- **Benefits**: Results flow back to calling agents, preventing hallucination
+### Slash Commands (In-Context Execution)
 
-### Specialized Subagents
+The primary interaction model is **in-context slash commands** (`/rrce_*`), which achieve a **60% token reduction** compared to subagent delegation.
 
-For expert control, invoke subagents directly via your AI assistant or MCP tools:
+| Command | Arguments | Purpose |
+|---------|-----------|---------|
+| `/rrce_init` | `[project-name]` | Initialize project context and semantic index |
+| `/rrce_design` | `task-slug "request"` | Research and plan in single session |
+| `/rrce_develop` | `task-slug` | Execute code implementation |
+| `/rrce_docs` | `doc-type [task-slug]` | Generate documentation |
+| `/rrce_cleanup` | `task-slug` \| `--all` | Extract knowledge and delete tasks |
+| `/rrce_sync` | `[scope]` | Sync knowledge base with codebase |
+| `/rrce_doctor` | `[focus-area]` | Analyze codebase health |
+
+### Subagents (Isolated Execution)
+
+For fully autonomous, non-interactive execution, use subagents via `@mentions`:
 
 | Agent | Invoke With | Purpose | Key Arguments |
 |-------|-------------|---------|---------------|
-| **Init** | `@rrce_init` | Analyze codebase, establish project context and semantic index | `PROJECT_NAME` (optional) |
-| **Research** | `@rrce_research_discussion` | Interactive requirements clarification through dialogue | `TASK_SLUG`, `REQUEST` |
-| **Planning** | `@rrce_planning_discussion` | Transform research into actionable execution plan | `TASK_SLUG` |
-| **Executor** | `@rrce_executor` | Implement the plan - the ONLY agent authorized to modify code | `TASK_SLUG`, `BRANCH` |
-| **Docs** | `@rrce_documentation` | Generate project documentation (API, architecture, changelog) | `DOC_TYPE`, `TASK_SLUG` |
+| **Init** | `@rrce_init` | Analyze codebase, establish project context | `PROJECT_NAME` (optional) |
+| **Design** | `@rrce_design` | Research + planning for isolated execution | `TASK_SLUG`, `REQUEST` |
+| **Develop** | `@rrce_develop` | Implement the plan - ONLY agent authorized to modify code | `TASK_SLUG` |
+| **Docs** | `@rrce_docs` | Generate project documentation | `DOC_TYPE`, `TASK_SLUG` |
 | **Sync** | `@rrce_sync` | Reconcile knowledge base with current codebase state | `SCOPE` (optional) |
-| **Doctor** | `@rrce_doctor` | Analyze codebase health, identify issues, recommend improvements | `PROJECT_NAME`, `FOCUS_AREA` |
+| **Doctor** | `@rrce_doctor` | Analyze codebase health, recommend improvements | `PROJECT_NAME`, `FOCUS_AREA` |
 
-### Workflow Comparison
+### OpenCode Integration
 
-| Approach | When to Use | Example |
-|----------|-------------|---------|
-| **Orchestrator** | Complex features, want automatic flow | Switch to RRCE agent: "Add user authentication" → Auto-orchestrates all phases |
-| **Subagents** | Expert control, specific phase needed | `@rrce_executor TASK_SLUG=user-auth` → Direct execution |
-| **Build Delegation** | Want build's help but need structure | Stay in build: "Implement caching" → Build delegates to RRCE |
+OpenCode provides specialized UX optimizations:
+
+- **Tool Name Stabilization**: Standard tools (`read`, `write`) use no `rrce_` prefix, aligning with native IDE capabilities
+- **Checklist Sync**: Agents automatically push their task checklist to the OpenCode Todo sidebar
+- **Hybrid Delegation**: Orchestrator uses a mix of `@mention` text and interactive confirmation suggestions
 
 ### Recommended Workflow
-1.  **`@rrce_init`** (or orchestrator): "Analyze this codebase." → Creates `project-context.md` and semantic index.
-2.  **RRCE Orchestrator**: "I need to add user auth." → Runs research, planning, execution phases automatically.
-3.  **`@rrce_sync`**: "Update knowledge." → Refreshes context for the next task.
+1.  **`/rrce_init`**: "Analyze this codebase." → Creates `project-context.md` and semantic index
+2.  **`/rrce_design my-feature "Add user authentication"`**: Research + planning in one session
+3.  **`/rrce_develop my-feature`**: Execute the implementation
+4.  **`/rrce_docs my-feature`**: Generate/update documentation
+5.  **`/rrce_cleanup my-feature`**: (Optional) Extract insights and delete task artifacts
 
 ---
 
@@ -226,23 +254,59 @@ For expert control, invoke subagents directly via your AI assistant or MCP tools
 RRCE-Workflow includes a local, embedding-based search engine powered by `@xenova/transformers`.
 
 -   **Privacy First**: All embeddings are calculated locally. No code leaves your machine.
--   **Full Codebase Indexing**: The `index_knowledge` tool scans your entire source tree (respecting skip lists like `node_modules`, `.git`).
+-   **Full Codebase Indexing**: The `index_knowledge` tool scans your entire source tree (respecting `.gitignore` rules).
+-   **Background Jobs**: Non-blocking indexing with progress tracking via the MCP Dashboard.
+-   **Automatic Cleanup**: DriftService detects and removes embeddings for deleted files during reindexing.
+-   **Dual Index**: Separate indices for knowledge (`embeddings.json`) and code (`code-embeddings.json`).
 -   **Smart Fallback**: If RAG fails or isn't enabled, `search_knowledge` performs line-by-line text matching.
 -   **Model**: Uses `Xenova/all-MiniLM-L6-v2` by default (configurable per-project).
+
+### Reindexing Guidance
+
+| Scenario | Tool Argument | Rationale |
+|----------|---------------|-----------|
+| Routine updates | `{ "project": "name" }` | Incremental (fastest). Only updates changed files |
+| Major refactors | `{ "project": "name", "force": true }` | Forces re-calculation of hashes for all files without wiping |
+| Corrupt index / Stale vectors | `{ "project": "name", "clean": true }` | Wipes index files and rebuilds from scratch. Resolves vector drift |
 
 RAG is enabled by default in Express Setup. You can toggle it per-project in the MCP Dashboard or via `config.yaml`.
 
 ---
 
+## MCP Dashboard (TUI)
+
+The **MCP Dashboard** provides a cockpit-style interface for managing your RRCE workflow:
+
+### Tabs Overview
+1. **Overview (System Cockpit)**: Dashboard snapshot of server health, recent activity, and active task tracking
+2. **Logs**: Real-time tailing of the MCP hub server logs
+3. **Tasks**: Priority view for task management with current project auto-pinned and expanded
+4. **Projects**: Configuration hub for project exposure with real-time indexing progress (indented row)
+
+### Key Features
+- **Unified Cockpit Aesthetic**: White borders, high-density information display
+- **Active Task Tracking**: Real-time progress visualization with phase indicators
+- **Session Management**: Agent todo list display showing granular work items
+- **Project Prioritization**: Current workspace automatically pinned and expanded in Tasks tab
+- **Background Indexing**: Non-blocking indexing with progress reporting in Projects tab
+
 ## 🛠 AI Agent Effectiveness & Code Health
 
-We've optimized the codebase to be **highly navigatable for AI coding agents**:
+The codebase has been optimized for **highly navigatable AI coding agents**:
 
-### Codebase Optimization (v0.3.13)
-- **Deduplication**: Consolidated install/uninstall logic and project sorting.
-- **Function Extraction**: Split monolithic functions (like `index_knowledge`) into manageable helpers.
-- **Improved Type Safety**: Replaced `any` types with structured interfaces (`TaskMeta`, `AgentInfo`).
-- **AI Agent Guide**: Added [AI Agent Architecture Guide](docs/AI_AGENT_GUIDE.md) to help coding assistants navigate the project.
+### Codebase Optimizations
+- **Modular Architecture**: Domain-specific tool handlers split into separate files (`tools/project.ts`, `tools/task.ts`, etc.)
+- **Component Refactoring**: TUI views split into modular sub-components (<200 LOC per file)
+- **Type Safety**: Strict typing with `TaskMeta`, `AgentInfo`, and `DetectedProject` interfaces (no `any` types)
+- **Efficiency**: ~65% token reduction via prompt condensation, session reuse, and hybrid research
+- **Testing**: 207 tests passing across 18 test files using Vitest
+
+### AI Agent Guide (AGENTS.md)
+All AI coding agents MUST consult `AGENTS.md` for technical ground truth, including:
+- Build/test commands (dev mode: `npm run dev`, test: `npm test`)
+- Naming conventions (kebab-case files, camelCase functions, PascalCase classes)
+- Implementation patterns (`WorkflowError` error handling, SSOT principles)
+- MCP & RAG patterns (background jobs, semantic search)
 
 ---
 
