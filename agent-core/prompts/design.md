@@ -333,7 +333,14 @@ After saving plan:
 - If **"y"**: Invoke development using task tool (see below)
 - If **"n"**: Provide completion summary, end session
 
-### 2.8 Development Handoff
+### 2.8 Development Handoff (CRITICAL)
+
+**NEVER call the task tool unless:**
+1. You have completed both research AND planning phases
+2. You have asked "Should I run `/rrce_develop {{TASK_SLUG}}`?"
+3. **The user has explicitly responded with "y"**
+
+The initial `/rrce_design` command invocation is NOT confirmation to proceed. It only starts the design session.
 
 Wait for user to respond with "y" to the prompt above. Only after receiving explicit user confirmation, then use the `task` tool to delegate:
 
