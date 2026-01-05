@@ -3,6 +3,7 @@
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { loadMCPConfig } from '../config';
 import { findProjectConfig } from '../config-utils';
 import { 
@@ -27,6 +28,22 @@ export function resolveProjectPaths(project?: string, pathInput?: string): objec
     const projConfig = findProjectConfig(config, { name: project });
     if (projConfig?.path) {
       workspaceRoot = projConfig.path;
+    }
+  }
+
+  // 1.5. Resolve actual workspace root if we have a data path
+  if (workspaceRoot && workspaceRoot.includes('/workspaces/')) {
+    try {
+      const workspaceConfigPath = path.join(workspaceRoot, 'config.yaml');
+      if (fs.existsSync(workspaceConfigPath)) {
+        const content = fs.readFileSync(workspaceConfigPath, 'utf-8');
+        const sourcePathMatch = content.match(/sourcePath:\s*["']?([^"'\n\r]+)/);
+        if (sourcePathMatch?.[1]) {
+          workspaceRoot = sourcePathMatch[1].trim();
+        }
+      }
+    } catch (err) {
+      // Fallback to the path we have
     }
   }
 
