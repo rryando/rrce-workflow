@@ -16,10 +16,10 @@ import { extractSymbols, searchSymbols as searchSymbolsInResults, type SymbolTyp
 import { getExposedProjects, getCodeIndexPath } from './projects';
 import { estimateTokens } from './utils';
 import { CODE_EXTENSIONS, SKIP_DIRS } from './constants';
+import { getSearchAdvisory, getIndexFreshness, applyTokenBudget } from './search-utils';
 
 /**
  * Search code files using semantic search on the code-specific index
- * Returns code snippets with line numbers and context
  */
 export async function searchCode(query: string, projectFilter?: string, limit: number = 10, options?: {
   max_tokens?: number;
@@ -53,8 +53,6 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
     context?: string;
     language?: string;
     score: number;
-    indexingInProgress?: boolean;
-    advisoryMessage?: string;
   }> = [];
 
   for (const project of projects) {
@@ -64,10 +62,7 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
     const permissions = getProjectPermissions(config, project.name, project.sourcePath || project.path);
     if (!permissions.knowledge || !project.knowledgePath) continue;
 
-    const indexingInProgress = indexingJobs.isRunning(project.name);
-    const advisoryMessage = indexingInProgress
-      ? 'Indexing in progress; results may be stale/incomplete.'
-      : undefined;
+    const { indexingInProgress, advisoryMessage } = getSearchAdvisory(project.name);
 
     // Check for RAG configuration
     const projConfig = findProjectConfig(config, { name: project.name, path: project.sourcePath || project.path });
@@ -90,7 +85,6 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
       const ragResults = await rag.search(query, limit);
 
       for (const r of ragResults) {
-        // CodeChunk fields are preserved even when cast to RAGChunk
         const codeChunk = r as CodeChunk & { score: number };
         
         results.push({
@@ -101,9 +95,7 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
           lineEnd: codeChunk.lineEnd ?? 1,
           context: codeChunk.context,
           language: codeChunk.language,
-          score: codeChunk.score,
-          indexingInProgress: indexingInProgress || undefined,
-          advisoryMessage
+          score: codeChunk.score
         });
       }
     } catch (e) {
@@ -114,67 +106,45 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
   // Sort by score descending
   results.sort((a, b) => b.score - a.score);
   
-  // Apply min_score filter if specified
+  // Apply min_score filter
   let filteredResults = results;
   if (options?.min_score !== undefined && options.min_score > 0) {
     filteredResults = results.filter(r => r.score >= options.min_score!);
   }
   
   // Apply limit
-  let limitedResults = filteredResults.slice(0, limit);
+  const limitedResults = filteredResults.slice(0, limit);
   
-  // Apply max_tokens budget if specified
-  let truncated = false;
-  let tokenCount = 0;
-  
-  if (options?.max_tokens !== undefined && options.max_tokens > 0) {
-    const budgetedResults: typeof limitedResults = [];
-    for (const result of limitedResults) {
-      const resultTokens = estimateTokens(result.snippet + (result.context || ''));
-      if (tokenCount + resultTokens > options.max_tokens) {
-        truncated = true;
-        break;
-      }
-      budgetedResults.push(result);
-      tokenCount += resultTokens;
-    }
-    limitedResults = budgetedResults;
-  } else {
-    // Calculate total tokens without budget
-    tokenCount = limitedResults.reduce((sum, r) => sum + estimateTokens(r.snippet + (r.context || '')), 0);
-  }
+  // Apply token budget
+  const { budgetedResults, truncated, tokenCount } = applyTokenBudget(
+    limitedResults, 
+    options?.max_tokens, 
+    r => r.snippet + (r.context || '')
+  );
 
   // Get index freshness info
   let indexAgeSeconds: number | undefined;
   let lastIndexedAt: string | undefined;
-  let indexingInProgress: boolean | undefined;
-  let advisoryMessage: string | undefined;
+  let indexingInProgressGlobal: boolean | undefined;
+  let advisoryMessageGlobal: string | undefined;
 
   if (projectFilter) {
-    const project = projects.find(p => p.name === projectFilter);
-    if (project) {
-      indexingInProgress = indexingJobs.isRunning(project.name);
-      advisoryMessage = indexingInProgress ? 'Indexing in progress; results may be stale/incomplete.' : undefined;
-      
-      const progress = indexingJobs.getProgress(project.name);
-      if (progress.completedAt) {
-        lastIndexedAt = new Date(progress.completedAt).toISOString();
-        indexAgeSeconds = Math.floor((Date.now() - progress.completedAt) / 1000);
-      }
-    }
+    const { indexingInProgress, advisoryMessage } = getSearchAdvisory(projectFilter);
+    const freshness = getIndexFreshness(projectFilter);
+    indexingInProgressGlobal = indexingInProgress;
+    advisoryMessageGlobal = advisoryMessage;
+    indexAgeSeconds = freshness.indexAgeSeconds;
+    lastIndexedAt = freshness.lastIndexedAt;
   }
 
-  // Strip internal fields from results
-  const cleanResults = limitedResults.map(({ indexingInProgress: _, advisoryMessage: __, ...rest }) => rest);
-
   return {
-    results: cleanResults,
+    results: budgetedResults,
     token_count: tokenCount,
     truncated,
     index_age_seconds: indexAgeSeconds,
     last_indexed_at: lastIndexedAt,
-    indexingInProgress,
-    advisoryMessage
+    indexingInProgress: indexingInProgressGlobal,
+    advisoryMessage: advisoryMessageGlobal
   };
 }
 
@@ -200,29 +170,22 @@ export async function searchKnowledge(query: string, projectFilter?: string, opt
 }> {
   const config = loadMCPConfig();
   const projects = getExposedProjects();
-  const results: Array<{ project: string; file: string; matches: string[]; score?: number; indexingInProgress?: boolean; advisoryMessage?: string }> = [];
+  const results: Array<{ project: string; file: string; matches: string[]; score?: number }> = [];
   
   const queryLower = query.toLowerCase();
 
   for (const project of projects) {
-    // Skip if project filter specified and doesn't match
     if (projectFilter && project.name !== projectFilter) continue;
     
     const permissions = getProjectPermissions(config, project.name, project.sourcePath || project.path);
-    
     if (!permissions.knowledge || !project.knowledgePath) continue;
 
-    const indexingInProgress = indexingJobs.isRunning(project.name);
-    const advisoryMessage = indexingInProgress
-      ? 'Indexing in progress; results may be stale/incomplete.'
-      : undefined;
+    const { indexingInProgress, advisoryMessage } = getSearchAdvisory(project.name);
 
-    // Check for RAG configuration
     const projConfig = findProjectConfig(config, { name: project.name, path: project.sourcePath || project.path });
     const useRAG = projConfig?.semanticSearch?.enabled;
 
     if (useRAG) {
-      logger.info(`[RAG] Using semantic search for project '${project.name}'`);
       try {
         const indexPath = path.join(project.knowledgePath, 'embeddings.json');
         const rag = new RAGService(indexPath, projConfig?.semanticSearch?.model);
@@ -233,28 +196,22 @@ export async function searchKnowledge(query: string, projectFilter?: string, opt
             project: project.name,
             file: path.relative(project.knowledgePath, r.filePath),
             matches: [r.content],
-            score: r.score,
-            indexingInProgress: indexingInProgress || undefined,
-            advisoryMessage
+            score: r.score
           });
         }
-        continue; // Skip text search since RAG succeeded
+        continue;
       } catch (e) {
         logger.error(`[RAG] Semantic search failed for project '${project.name}', falling back to text search`, e);
-        // Fall through to text search
       }
     }
     
     try {
       const files = fs.readdirSync(project.knowledgePath);
-      
       for (const file of files) {
         if (!file.endsWith('.md')) continue;
         
         const filePath = path.join(project.knowledgePath, file);
         const content = fs.readFileSync(filePath, 'utf-8');
-        
-        // Simple line-by-line search
         const lines = content.split('\n');
         const matches: string[] = [];
         
@@ -268,9 +225,7 @@ export async function searchKnowledge(query: string, projectFilter?: string, opt
           results.push({
             project: project.name,
             file,
-            matches: matches.slice(0, 5), // Limit to 5 matches per file
-            indexingInProgress: indexingInProgress || undefined,
-            advisoryMessage,
+            matches: matches.slice(0, 5)
           });
         }
       }
@@ -279,66 +234,45 @@ export async function searchKnowledge(query: string, projectFilter?: string, opt
     }
   }
 
-  // Apply min_score filter if specified
+  // Apply min_score filter
   let filteredResults = results;
   if (options?.min_score !== undefined && options.min_score > 0) {
     filteredResults = results.filter(r => (r.score ?? 1) >= options.min_score!);
   }
 
-  // Sort by score descending (text matches default to score of 1)
+  // Sort by score descending
   filteredResults.sort((a, b) => (b.score ?? 1) - (a.score ?? 1));
 
-  // Apply max_tokens budget if specified
-  let truncated = false;
-  let tokenCount = 0;
-  let budgetedResults = filteredResults;
-
-  if (options?.max_tokens !== undefined && options.max_tokens > 0) {
-    budgetedResults = [];
-    for (const result of filteredResults) {
-      const resultTokens = estimateTokens(result.matches.join('\n'));
-      if (tokenCount + resultTokens > options.max_tokens) {
-        truncated = true;
-        break;
-      }
-      budgetedResults.push(result);
-      tokenCount += resultTokens;
-    }
-  } else {
-    tokenCount = filteredResults.reduce((sum, r) => sum + estimateTokens(r.matches.join('\n')), 0);
-  }
+  // Apply token budget
+  const { budgetedResults, truncated, tokenCount } = applyTokenBudget(
+    filteredResults, 
+    options?.max_tokens, 
+    r => r.matches.join('\n')
+  );
 
   // Get index freshness info
   let indexAgeSeconds: number | undefined;
   let lastIndexedAt: string | undefined;
-  let indexingInProgress: boolean | undefined;
-  let advisoryMessage: string | undefined;
+  let indexingInProgressGlobal: boolean | undefined;
+  let advisoryMessageGlobal: string | undefined;
 
   if (projectFilter) {
-    const project = projects.find(p => p.name === projectFilter);
-    if (project) {
-      indexingInProgress = indexingJobs.isRunning(project.name);
-      advisoryMessage = indexingInProgress ? 'Indexing in progress; results may be stale/incomplete.' : undefined;
-      
-      const progress = indexingJobs.getProgress(project.name);
-      if (progress.completedAt) {
-        lastIndexedAt = new Date(progress.completedAt).toISOString();
-        indexAgeSeconds = Math.floor((Date.now() - progress.completedAt) / 1000);
-      }
-    }
+    const { indexingInProgress, advisoryMessage } = getSearchAdvisory(projectFilter);
+    const freshness = getIndexFreshness(projectFilter);
+    indexingInProgressGlobal = indexingInProgress;
+    advisoryMessageGlobal = advisoryMessage;
+    indexAgeSeconds = freshness.indexAgeSeconds;
+    lastIndexedAt = freshness.lastIndexedAt;
   }
 
-  // Strip internal fields from results
-  const cleanResults = budgetedResults.map(({ indexingInProgress: _, advisoryMessage: __, ...rest }) => rest);
-
   return {
-    results: cleanResults,
+    results: budgetedResults,
     token_count: tokenCount,
     truncated,
     index_age_seconds: indexAgeSeconds,
     last_indexed_at: lastIndexedAt,
-    indexingInProgress,
-    advisoryMessage
+    indexingInProgress: indexingInProgressGlobal,
+    advisoryMessage: advisoryMessageGlobal
   };
 }
 

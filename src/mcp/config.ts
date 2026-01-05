@@ -151,7 +151,7 @@ function parseMCPConfig(content: string): MCPConfig {
           refs: parsed?.defaults?.permissions?.refs ?? DEFAULT_PERMISSIONS.refs,
         },
       },
-      projects: Array.isArray(parsed?.projects) ? parsed.projects.map((p: any) => ({
+      projects: Array.isArray(parsed?.projects) ? parsed.projects.map((p: Partial<MCPProjectConfig>) => ({
         name: p.name || '',
         path: p.path,
         expose: p.expose ?? true,

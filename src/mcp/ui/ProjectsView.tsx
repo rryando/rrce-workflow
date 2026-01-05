@@ -12,49 +12,8 @@ import { indexingJobs } from '../services/indexing-jobs';
 import { findProjectConfig } from '../config-utils';
 import { projectKey, sortProjects, formatProjectLabel } from '../../lib/project-utils';
 import { formatRelativeTime } from './ui-helpers';
-
-interface ProjectsViewProps {
-  config: MCPConfig;
-  projects: DetectedProject[];
-  onConfigChange?: () => void;
-  workspacePath: string;
-}
-
-interface IndexStats {
-  knowledgeCount: number;
-  codeCount: number;
-  lastIndexed: string | null;
-}
-
-function getIndexStats(project: DetectedProject): IndexStats {
-  const stats: IndexStats = { knowledgeCount: 0, codeCount: 0, lastIndexed: null };
-  
-  try {
-    const knowledgePath = project.knowledgePath;
-    if (knowledgePath) {
-      const embPath = path.join(knowledgePath, 'embeddings.json');
-      const codeEmbPath = path.join(knowledgePath, 'code-embeddings.json');
-      
-      if (fs.existsSync(embPath)) {
-        const stat = fs.statSync(embPath);
-        stats.lastIndexed = stat.mtime.toISOString();
-        try {
-          const data = JSON.parse(fs.readFileSync(embPath, 'utf-8'));
-          stats.knowledgeCount = Array.isArray(data) ? data.length : Object.keys(data).length;
-        } catch {}
-      }
-      
-      if (fs.existsSync(codeEmbPath)) {
-        try {
-          const data = JSON.parse(fs.readFileSync(codeEmbPath, 'utf-8'));
-          stats.codeCount = Array.isArray(data) ? data.length : Object.keys(data).length;
-        } catch {}
-      }
-    }
-  } catch {}
-  
-  return stats;
-}
+import { ProjectsHeader, ProjectsFooter } from './components/ProjectViews';
+import { getIndexStats } from './lib/projects';
 
 interface ProjectsViewProps {
   config: MCPConfig;
@@ -192,16 +151,7 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="white" flexGrow={1}>
-      <Box paddingX={1} justifyContent="space-between" borderBottom>
-        <Box>
-          <Text bold color="cyan">Projects</Text>
-          <Text color="dim"> │ </Text>
-          <Text color={config.defaults.includeNew ? 'green' : 'red'}>
-            Auto-expose: {config.defaults.includeNew ? 'ON' : 'OFF'}
-          </Text>
-        </Box>
-        <Text color="dim">v0.3.14</Text>
-      </Box>
+      <ProjectsHeader autoExpose={config.defaults.includeNew} />
 
       <Box marginTop={1} paddingX={1}>
         <Text color="dim">Manage which projects are exposed to the MCP server.</Text>
@@ -220,10 +170,7 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
         />
       </Box>
       
-      <Box paddingX={1} justifyContent="space-between" borderTop>
-        <Text color="dim">Space:Select  Enter:Save  a:Toggle Auto  u:Refresh Drift</Text>
-        <Text color="dim">Use 'rrce-workflow wizard' for advanced config</Text>
-      </Box>
+      <ProjectsFooter />
     </Box>
   );
 };
