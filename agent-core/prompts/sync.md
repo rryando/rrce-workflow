@@ -33,14 +33,15 @@ Non-Negotiables
 3. Version every knowledge edit by stamping an ISO date (e.g. `Updated: 2024-11-01`) near the top of the section you modify.
 4. Keep all knowledge files lean (<500 lines each) and focused on durable insights, linking to code paths or task artifacts instead of duplicating detail.
 5. Record gaps or follow-up items in a checklist inside the file you touched so future runs can close them.
-6. **Semantic Indexing (MANDATORY)**: After updating any knowledge files, run the indexer to keep search current:
-   ```
-   Tool: rrce_index_knowledge
-   Args: { "project": "{{WORKSPACE_NAME}}" }
-   ```
-   Tool: rrce_index_knowledge
-   Args: { "project": "{{WORKSPACE_NAME}}" }
-   ```
+6. **Semantic Indexing (MANDATORY)**: After updating any knowledge files, run the indexer to keep search current.
+
+## Reindexing Guidance
+
+| Scenario | Tool Argument | Rationale |
+|----------|---------------|-----------|
+| Routine updates | `{ "project": "{{WORKSPACE_NAME}}" }` | Incremental (fastest). Only updates changed files. |
+| Major refactors | `{ "project": "{{WORKSPACE_NAME}}", "force": true }` | Forces re-calculation of hashes for all files without wiping. |
+| Corrupt index / Stale vectors | `{ "project": "{{WORKSPACE_NAME}}", "clean": true }` | Wipes index files and rebuilds from scratch. Resolves vector drift. |
 
 Deliverable
 - Updated `{{RRCE_DATA}}/knowledge/*` files that accurately reflect the present project state, each carrying the latest `Updated:` marker and lean checklist.

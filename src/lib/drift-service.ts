@@ -6,10 +6,16 @@ export interface DriftReport {
   hasDrift: boolean;
   type: 'version' | 'modified' | 'none';
   modifiedFiles: string[];
+  deletedFiles?: string[];
   version: {
     current: string;
     running: string;
   };
+}
+
+export interface FileChanges {
+  modified: string[];
+  deleted: string[];
 }
 
 export interface ChecksumEntry {
@@ -69,16 +75,18 @@ export class DriftService {
   }
 
   /**
-   * Compares current files against the manifest to detect modifications
+   * Compares current files against the manifest to detect modifications and deletions
    */
-  static detectModifiedFiles(projectPath: string): string[] {
+  static detectModifiedFiles(projectPath: string): FileChanges {
     const manifest = this.loadManifest(projectPath);
-    const modifiedFiles: string[] = [];
+    const modified: string[] = [];
+    const deleted: string[] = [];
 
     for (const [relPath, entry] of Object.entries(manifest)) {
       const fullPath = path.join(projectPath, relPath);
       if (!fs.existsSync(fullPath)) {
-        continue; // Or should we mark it as modified? Plan says "modified", maybe deleted is drift too.
+        deleted.push(relPath);
+        continue;
       }
 
       const stats = fs.statSync(fullPath);
@@ -90,11 +98,28 @@ export class DriftService {
       // Slow check: verify hash
       const currentHash = this.calculateHash(fullPath);
       if (currentHash !== entry.hash) {
-        modifiedFiles.push(relPath);
+        modified.push(relPath);
       }
     }
 
-    return modifiedFiles;
+    return { modified, deleted };
+  }
+
+  /**
+   * Returns array of deleted file paths from manifest
+   */
+  static detectDeletedFiles(projectPath: string): string[] {
+    const manifest = this.loadManifest(projectPath);
+    const deleted: string[] = [];
+
+    for (const relPath of Object.keys(manifest)) {
+      const fullPath = path.join(projectPath, relPath);
+      if (!fs.existsSync(fullPath)) {
+        deleted.push(relPath);
+      }
+    }
+
+    return deleted;
   }
 
   /**
@@ -105,7 +130,7 @@ export class DriftService {
     currentVersion: string | undefined,
     runningVersion: string
   ): DriftReport {
-    const modifiedFiles = this.detectModifiedFiles(projectPath);
+    const { modified, deleted } = this.detectModifiedFiles(projectPath);
     
     let type: 'version' | 'modified' | 'none' = 'none';
     let hasDrift = false;
@@ -113,7 +138,7 @@ export class DriftService {
     if (currentVersion !== runningVersion) {
       hasDrift = true;
       type = 'version';
-    } else if (modifiedFiles.length > 0) {
+    } else if (modified.length > 0 || deleted.length > 0) {
       hasDrift = true;
       type = 'modified';
     }
@@ -121,7 +146,8 @@ export class DriftService {
     return {
       hasDrift,
       type,
-      modifiedFiles,
+      modifiedFiles: modified,
+      deletedFiles: deleted,
       version: {
         current: currentVersion || '0.0.0',
         running: runningVersion,

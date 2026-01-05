@@ -56,23 +56,23 @@ function buildCommandFrontmatter(prompt: ParsedPrompt, baseName: string): Record
   const fm: Record<string, any> = {
     description: prompt.frontmatter.description,
   };
-  
+
   // For develop, reference the subagent but run in-context by default
   // Users can use @rrce_develop for isolated execution
   if (baseName === 'develop') {
     fm.agent = 'rrce_develop';
     fm.subtask = false;  // Run in-context by default
   }
-  
+
   return fm;
 }
 
 /**
  * Generate OpenCode slash command files for RRCE prompts
- * 
+ *
  * Slash commands run in-context (no separate session) for token efficiency.
  * This is a major optimization over subagents which create separate sessions.
- * 
+ *
  * Commands created:
  * - /rrce_init - Project initialization
  * - /rrce_design - Research + Planning combined (single session)
@@ -80,7 +80,7 @@ function buildCommandFrontmatter(prompt: ParsedPrompt, baseName: string): Record
  * - /rrce_docs - Documentation
  * - /rrce_sync - Knowledge sync
  * - /rrce_doctor - Health check
- * 
+ *
  * @param prompts - All parsed prompts
  * @param mode - Storage mode ('global' or 'workspace')
  * @param dataPath - The primary data path for the project
@@ -92,7 +92,7 @@ export function generateOpenCodeCommands(
 ): void {
   const commandDir = getOpenCodeCommandDir(mode, dataPath);
   ensureDir(commandDir);
-  
+
   // Clear old rrce_* commands
   if (fs.existsSync(commandDir)) {
     const entries = fs.readdirSync(commandDir, { withFileTypes: true });
@@ -103,30 +103,30 @@ export function generateOpenCodeCommands(
       }
     }
   }
-  
+
   // Load base protocol for injection
   const baseProtocol = loadBaseProtocol();
-  
+
   // Generate command files for each prompt (except orchestrator which stays as primary agent)
   for (const prompt of prompts) {
     const baseName = path.basename(prompt.filePath, '.md');
-    
+
     // Skip orchestrator - it stays as a primary agent, not a command
     if (baseName === 'orchestrator') continue;
-    
+
     // Skip files starting with _ (like _base.md)
     if (baseName.startsWith('_')) continue;
-    
+
     const commandName = mapPromptToCommandName(baseName);
     const commandFile = `rrce_${commandName}.md`;
-    
+
     // Build command frontmatter
     const frontmatter = buildCommandFrontmatter(prompt, baseName);
-    
+
     // Combine base protocol + prompt content
     // Base protocol provides shared behaviors (path resolution, tool preferences, etc.)
     const fullContent = baseProtocol ? `${baseProtocol}\n${prompt.content}` : prompt.content;
-    
+
     // Write command file
     const content = `---\n${stringify(frontmatter)}---\n${fullContent}`;
     fs.writeFileSync(path.join(commandDir, commandFile), content);
@@ -137,17 +137,17 @@ export function generateOpenCodeCommands(
  * Enable provider caching for all supported providers in OpenCode config.
  * This sets `setCacheKey: true` for each provider, which enables prompt caching
  * for multi-turn conversations and session reuse.
- * 
+ *
  * IMPORTANT: This function is model-agnostic - it only enables caching without
  * overwriting any existing provider settings (models, API keys, etc.)
- * 
+ *
  * Supported providers: anthropic, openai, openrouter, google
  */
 export function enableProviderCaching(): void {
   const opencodePath = getOpenCodeConfigPath();
-  
+
   let config: Record<string, any> = {};
-  
+
   // Load existing config if it exists
   if (fs.existsSync(opencodePath)) {
     try {
@@ -160,12 +160,12 @@ export function enableProviderCaching(): void {
     // Ensure the directory exists
     ensureDir(path.dirname(opencodePath));
   }
-  
+
   // Ensure provider section exists
   if (!config.provider) {
     config.provider = {};
   }
-  
+
   // Enable caching for each provider WITHOUT overwriting other settings
   const providers = ['anthropic', 'openai', 'openrouter', 'google'];
   for (const provider of providers) {
@@ -178,7 +178,7 @@ export function enableProviderCaching(): void {
     // Set caching key - this is the critical optimization flag
     config.provider[provider].options.setCacheKey = true;
   }
-  
+
   // Write back with pretty formatting
   fs.writeFileSync(opencodePath, JSON.stringify(config, null, 2));
 }
@@ -191,7 +191,7 @@ export function copyPromptsToDir(prompts: ParsedPrompt[], targetDir: string, ext
     const baseName = path.basename(prompt.filePath, '.md');
     const targetName = baseName + extension;
     const targetPath = path.join(targetDir, targetName);
-    
+
     // Read the full content including frontmatter
     const content = fs.readFileSync(prompt.filePath, 'utf-8');
     fs.writeFileSync(targetPath, content);
@@ -241,25 +241,25 @@ export function updateOpenCodeConfig(newAgents: Record<string, any>) {
 
 /**
  * Convert a ParsedPrompt to OpenCode agent config
- * 
+ *
  * IMPORTANT: This respects the tool restrictions defined in each prompt's frontmatter.
  * Different agents have different tool access based on their role in the pipeline:
  * - orchestrator: primary agent, full tool access for coordination
  * - design/design: read-only for workspace, can write to RRCE_DATA (subagents)
  * - develop: full access including edit/bash for code changes (subagent)
  * - doctor/init: read-only, no code modifications (subagents)
- * 
+ *
  * @param prompt - The parsed prompt
  * @param useFileReference - If true, returns a file reference instead of inline content
  * @param promptFilePath - The path to reference (used when useFileReference is true)
  */
 export function convertToOpenCodeAgent(
-  prompt: ParsedPrompt, 
+  prompt: ParsedPrompt,
   useFileReference: boolean = false,
   promptFilePath?: string
 ): any {
   const { frontmatter, content } = prompt;
-  
+
   // Build tools map based on frontmatter.tools
   // DO NOT enable all tools by default - respect the prompt's tool restrictions
   const tools: Record<string, boolean> = {};
@@ -268,7 +268,7 @@ export function convertToOpenCodeAgent(
   // Some tools are host tools (read, write, edit, bash, grep, glob)
   // Some are MCP tools (search_knowledge, get_project_context, etc.)
   const hostTools = ['read', 'write', 'edit', 'bash', 'grep', 'glob', 'webfetch', 'terminalLastCommand', 'task'];
-  
+
   if (frontmatter.tools) {
     for (const tool of frontmatter.tools) {
       // Use tool name as-is from prompt metadata
@@ -301,11 +301,11 @@ export function convertToOpenCodeAgent(
  */
 export function copyDirRecursive(src: string, dest: string) {
   const entries = fs.readdirSync(src, { withFileTypes: true });
-  
+
   for (const entry of entries) {
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
-    
+
     if (entry.isDirectory()) {
       ensureDir(destPath);
       copyDirRecursive(srcPath, destPath);
@@ -321,7 +321,7 @@ export function copyDirRecursive(src: string, dest: string) {
  */
 export function clearDirectory(dirPath: string): void {
   if (!fs.existsSync(dirPath)) return;
-  
+
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.isFile()) {
@@ -332,20 +332,20 @@ export function clearDirectory(dirPath: string): void {
 
 /**
  * Surgically update OpenCode agents and commands
- * 
+ *
  * NEW ARCHITECTURE (Token Optimized):
  * - Only orchestrator (primary) and develop (subagent) are created as agents
  * - All other prompts become slash commands (run in-context, no session overhead)
- * 
+ *
  * This provides ~50-60% token savings for interactive workflows.
- * 
+ *
  * @param prompts - The parsed prompts to install
  * @param mode - Storage mode ('global' or 'workspace')
  * @param dataPath - The primary data path for the project
  */
 export function surgicalUpdateOpenCodeAgents(
-  prompts: ParsedPrompt[], 
-  mode: StorageMode, 
+  prompts: ParsedPrompt[],
+  mode: StorageMode,
   dataPath: string
 ): void {
   // Filter to only orchestrator and develop for agents
@@ -361,12 +361,12 @@ export function surgicalUpdateOpenCodeAgents(
       const openCodeConfig = getOpenCodeConfigPath();
       const promptsDir = path.join(path.dirname(openCodeConfig), 'prompts');
       ensureDir(promptsDir);
-      
+
       // Load base protocol for injection into agent prompts
       const baseProtocol = loadBaseProtocol();
-      
+
       const newAgents: Record<string, any> = {};
-      
+
       // Write prompt files and build agent configs (only orchestrator + develop)
       for (const prompt of agentPrompts) {
         const baseName = path.basename(prompt.filePath, '.md');
@@ -376,30 +376,31 @@ export function surgicalUpdateOpenCodeAgents(
 
         // Combine base protocol + prompt content
         const fullContent = baseProtocol ? `${baseProtocol}\n${prompt.content}` : prompt.content;
-        
+
         // Write the prompt content to a separate file
         fs.writeFileSync(promptFilePath, fullContent);
 
         // Create agent config with file reference
         const agentConfig = convertToOpenCodeAgent(prompt, true, `./prompts/${promptFileName}`);
-        
+
         // Update description for develop to mention both invocation methods
         if (baseName === 'develop') {
           agentConfig.description = 'Develop planned tasks - use /rrce_develop (in-context) or @rrce_develop (isolated)';
         }
-        
+
         newAgents[agentId] = agentConfig;
       }
 
       // Use surgical update utility (removes old rrce_* agents, upserts new ones)
       updateOpenCodeConfig(newAgents);
-      
-      // Hide OpenCode's native plan agent to avoid confusion with RRCE orchestrator
+
+
+
       if (fs.existsSync(openCodeConfig)) {
         const config = JSON.parse(fs.readFileSync(openCodeConfig, 'utf8'));
         if (!config.agent) config.agent = {};
-        if (!config.agent.plan) config.agent.plan = {};
-        config.agent.plan.disable = true;
+        // if (!config.agent.plan) config.agent.plan = {};
+        //  config.agent.plan.disable = true;
         fs.writeFileSync(openCodeConfig, JSON.stringify(config, null, 2));
       }
 
@@ -423,15 +424,15 @@ export function surgicalUpdateOpenCodeAgents(
       const baseName = path.basename(prompt.filePath, '.md');
       const agentId = `rrce_${baseName}`;
       const agentConfig = convertToOpenCodeAgent(prompt);
-      
+
       // Update description for develop
       if (baseName === 'develop') {
         agentConfig.description = 'Develop planned tasks - use /rrce_develop (in-context) or @rrce_develop (isolated)';
       }
-      
+
       // Combine base protocol + prompt content
       const fullContent = baseProtocol ? `${baseProtocol}\n${agentConfig.prompt}` : agentConfig.prompt;
-      
+
       const content = `---\n${stringify({
         description: agentConfig.description,
         mode: agentConfig.mode,
@@ -440,7 +441,7 @@ export function surgicalUpdateOpenCodeAgents(
       fs.writeFileSync(path.join(opencodeBaseDir, `${agentId}.md`), content);
     }
   }
-  
+
   // Generate slash commands for all prompts (except orchestrator)
   // This is the new token-optimized approach
   generateOpenCodeCommands(prompts, mode, dataPath);

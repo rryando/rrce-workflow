@@ -194,7 +194,8 @@ export function registerToolHandlers(server: Server): void {
             type: 'object',
             properties: { 
                 project: { type: 'string', description: 'Name of the project to index' },
-                force: { type: 'boolean', description: 'Force re-indexing of all files' }
+                force: { type: 'boolean', description: 'Force re-indexing of all files' },
+                clean: { type: 'boolean', description: 'Wipe existing index and rebuild from scratch' }
             },
             required: ['project']
         }
@@ -464,8 +465,8 @@ export function registerToolHandlers(server: Server): void {
         }
 
         case 'index_knowledge': {
-            const params = args as { project: string; force?: boolean };
-            const result = await indexKnowledge(params.project, params.force);
+            const params = args as { project: string; force?: boolean; clean?: boolean };
+            const result = await indexKnowledge(params.project, params.force, params.clean);
             return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
 

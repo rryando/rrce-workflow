@@ -84,5 +84,32 @@ describe('DriftService', () => {
       expect(report.hasDrift).toBe(false);
       expect(report.type).toBe('none');
     });
+
+    it('should detect deleted files', () => {
+      const manifest = {
+        'exists.txt': { hash: 'h1', mtime: 100 },
+        'deleted.txt': { hash: 'h2', mtime: 100 }
+      };
+      (fs.existsSync as any).mockImplementation((p: string) => {
+        if (p.endsWith('.rrce-checksums.json')) return true;
+        if (p.endsWith('exists.txt')) return true;
+        if (p.endsWith('deleted.txt')) return false;
+        return false;
+      });
+      (fs.readFileSync as any).mockImplementation((p: string) => {
+        if (p.endsWith('.rrce-checksums.json')) return JSON.stringify(manifest);
+        return 'content';
+      });
+      (fs.statSync as any).mockReturnValue({ mtimeMs: 100 });
+
+      const deleted = DriftService.detectDeletedFiles('/path');
+      expect(deleted).toContain('deleted.txt');
+      expect(deleted).not.toContain('exists.txt');
+
+      const report = DriftService.checkDrift('/path', '1.0.0', '1.0.0');
+      expect(report.hasDrift).toBe(true);
+      expect(report.type).toBe('modified');
+      expect(report.deletedFiles).toContain('deleted.txt');
+    });
   });
 });

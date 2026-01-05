@@ -44,7 +44,7 @@
         "read": true,
         "write": true,
         "bash": false,
-        "edit": false,
+        "edit": true,
         "task": true
       }
     },

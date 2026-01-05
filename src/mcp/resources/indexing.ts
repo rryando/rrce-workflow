@@ -14,10 +14,12 @@ import { getExposedProjects } from './projects';
 import { getScanContext } from './utils';
 import { INDEXABLE_EXTENSIONS, CODE_EXTENSIONS } from './constants';
 
+import { DriftService } from '../../lib/drift-service';
+
 /**
  * Trigger knowledge indexing for a project (scans entire codebase)
  */
-export async function indexKnowledge(projectName: string, force: boolean = false): Promise<{
+export async function indexKnowledge(projectName: string, force: boolean = false, clean: boolean = false): Promise<{
   state: IndexJobState;
   status: 'started' | 'already_running' | 'failed';
   success: boolean;
@@ -86,8 +88,16 @@ export async function indexKnowledge(projectName: string, force: boolean = false
   const runIndexing = async (): Promise<void> => {
     const { shouldSkipEntryDir, shouldSkipEntryFile } = getScanContext(project, scanRoot);
     
-    const indexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'embeddings.json');
-    const codeIndexPath = path.join(project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge'), 'code-embeddings.json');
+    const knowledgeDir = project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge');
+    const indexPath = path.join(knowledgeDir, 'embeddings.json');
+    const codeIndexPath = path.join(knowledgeDir, 'code-embeddings.json');
+
+    // Full wipe if clean=true
+    if (clean) {
+      logger.info(`[RAG] Cleaning knowledge index for ${project.name}`);
+      if (fs.existsSync(indexPath)) fs.unlinkSync(indexPath);
+      if (fs.existsSync(codeIndexPath)) fs.unlinkSync(codeIndexPath);
+    }
     
     const model = projConfig?.semanticSearch?.model || 'Xenova/all-MiniLM-L6-v2';
     const rag = new RAGService(indexPath, model);
@@ -121,6 +131,13 @@ export async function indexKnowledge(projectName: string, force: boolean = false
     const cleanupIgnoredFiles = async (): Promise<void> => {
       const indexedFiles = [...rag.getIndexedFiles(), ...codeRag.getIndexedFiles()];
       const unique = Array.from(new Set(indexedFiles));
+      
+      // Also detect deleted files via DriftService if in workspace
+      const deletedFiles = project.dataPath ? DriftService.detectDeletedFiles(project.dataPath) : [];
+      if (deletedFiles.length > 0) {
+        logger.info(`[RAG] ${project.name}: Detected ${deletedFiles.length} deleted files from manifest`);
+      }
+
       for (const filePath of unique) {
         if (!path.isAbsolute(filePath)) continue;
 
@@ -129,7 +146,10 @@ export async function indexKnowledge(projectName: string, force: boolean = false
         const isInScanRoot = relFilePath === relScanRoot || relFilePath.startsWith(`${relScanRoot}/`);
         if (!isInScanRoot) continue;
 
-        if (shouldSkipEntryFile(filePath)) {
+        // Remove if ignored OR if explicitly deleted from manifest
+        const isDeleted = deletedFiles.some(df => filePath.endsWith(df));
+        
+        if (shouldSkipEntryFile(filePath) || isDeleted || !fs.existsSync(filePath)) {
           await rag.removeFile(filePath);
           await codeRag.removeFile(filePath);
         }
