@@ -12,6 +12,14 @@ export const AutoIdentitySchema = z.object({
   model: z.string(),
 });
 
+export const PermissionSchema = z.object({
+  read: z.union([z.literal('allow'), z.literal('ask'), z.literal('deny')]).optional(),
+  write: z.union([z.literal('allow'), z.literal('ask'), z.literal('deny')]).optional(),
+  edit: z.union([z.literal('allow'), z.literal('ask'), z.literal('deny')]).optional(),
+  bash: z.union([z.literal('allow'), z.literal('ask'), z.literal('deny')]).optional(),
+  webfetch: z.union([z.literal('allow'), z.literal('ask'), z.literal('deny')]).optional(),
+}).passthrough();
+
 export const PromptFrontmatterSchema = z.object({
   name: z.string(),
   description: z.string(),
@@ -21,10 +29,12 @@ export const PromptFrontmatterSchema = z.object({
   'required-args': z.array(PromptArgSchema).optional(),
   'optional-args': z.array(PromptArgSchema).optional(),
   'auto-identity': AutoIdentitySchema.optional(),
+  permission: PermissionSchema.optional(),
 });
 
 export type PromptArg = z.infer<typeof PromptArgSchema>;
 export type AutoIdentity = z.infer<typeof AutoIdentitySchema>;
+export type Permission = z.infer<typeof PermissionSchema>;
 export type PromptFrontmatter = z.infer<typeof PromptFrontmatterSchema>;
 
 // Parsed prompt with content

@@ -13,6 +13,11 @@ optional-args:
 auto-identity:
   user: "$GIT_USER"
   model: "$AGENT_MODEL"
+permission:
+  read: allow
+  write: allow
+  edit: allow
+  bash: allow
 ---
 
 You are the RRCE Phase Coordinator. Guide users through workflow phases with minimal token overhead.

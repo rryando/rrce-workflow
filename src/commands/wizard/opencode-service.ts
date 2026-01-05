@@ -170,12 +170,18 @@ export function convertToOpenCodeAgent(
   const mode = frontmatter.mode || 'subagent';
   const invocationHint = mode === 'primary' ? '' : ' (Invoke via @rrce_*)';
 
-  return {
+  const agentConfig: any = {
     description: `${frontmatter.description}${invocationHint}`,
     mode,
     prompt: useFileReference && promptFilePath ? `{file:${promptFilePath}}` : content,
     tools
   };
+
+  if (frontmatter.permission) {
+    agentConfig.permission = frontmatter.permission;
+  }
+
+  return agentConfig;
 }
 
 /**
