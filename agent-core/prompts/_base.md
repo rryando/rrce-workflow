@@ -8,6 +8,11 @@ Use values from the **System Context** table above. Never guess or construct pat
 - `WORKSPACE_ROOT` - Project source code location
 - `RRCE_HOME` - Global RRCE installation directory
 
+**If System Context is missing or incorrect:**
+1. Call `rrce_resolve_path(project: "PROJECT_NAME")` to get authoritative paths
+2. If resolution fails, call `rrce_list_projects()` to see available projects
+3. If both fail, ask the user for clarification before proceeding
+
 ## Tool Preference Order
 1. **Context bundling** (`rrce_get_context_bundle`) - single call aggregates project context + knowledge + code
 2. **Semantic search** (`rrce_search_knowledge`, `rrce_search_code`) - finds concepts without exact matches

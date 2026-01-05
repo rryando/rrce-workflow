@@ -2,7 +2,7 @@
 name: RRCE Develop
 description: Execute the planned tasks to deliver working code and tests. The ONLY agent authorized to modify source code.
 argument-hint: "TASK_SLUG=<slug> [BRANCH=<git ref>]"
-tools: ['rrce_prefetch_task_context', 'rrce_get_context_bundle', 'rrce_search_knowledge', 'rrce_search_code', 'rrce_search_symbols', 'rrce_get_file_summary', 'rrce_find_related_files', 'rrce_get_project_context', 'rrce_validate_phase', 'rrce_index_knowledge', 'rrce_update_task', 'rrce_start_session', 'rrce_end_session', 'rrce_update_agent_todos', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
+tools: ['rrce_resolve_path', 'rrce_prefetch_task_context', 'rrce_get_context_bundle', 'rrce_search_knowledge', 'rrce_search_code', 'rrce_search_symbols', 'rrce_get_file_summary', 'rrce_find_related_files', 'rrce_get_project_context', 'rrce_validate_phase', 'rrce_index_knowledge', 'rrce_update_task', 'rrce_start_session', 'rrce_end_session', 'rrce_update_agent_todos', 'read', 'write', 'edit', 'bash', 'glob', 'grep']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter the task slug to execute"

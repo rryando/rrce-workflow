@@ -2,7 +2,7 @@
 name: RRCE Init
 description: Initialize project context and semantic search index by analyzing codebase structure, tech stack, and conventions.
 argument-hint: "[PROJECT_NAME=<name>]"
-tools: ['rrce_search_knowledge', 'rrce_index_knowledge', 'rrce_get_project_context', 'rrce_list_projects', 'read', 'write', 'glob', 'grep']
+tools: ['rrce_resolve_path', 'rrce_search_knowledge', 'rrce_search_code', 'rrce_search_symbols', 'rrce_get_file_summary', 'rrce_index_knowledge', 'rrce_get_project_context', 'rrce_list_projects', 'rrce_start_session', 'rrce_end_session', 'read', 'write', 'glob', 'grep']
 required-args: []
 optional-args:
   - name: PROJECT_NAME

@@ -27,16 +27,17 @@ describe('RRCE Orchestrator', () => {
       const prompts = loadPromptsFromDir(promptsDir);
       const orchestrator = prompts.find(p => path.basename(p.filePath) === 'orchestrator.md');
       
+      // Tools use rrce_ prefix for MCP tools
       const requiredTools = [
-        'search_knowledge',
-        'search_code',
-        'get_project_context',
-        'list_agents',
-        'get_agent_prompt',
-        'list_tasks',
-        'get_task',
-        'create_task',
-        'update_task'
+        'rrce_search_knowledge',
+        'rrce_search_code',
+        'rrce_get_project_context',
+        'rrce_list_agents',
+        'rrce_get_agent_prompt',
+        'rrce_list_tasks',
+        'rrce_get_task',
+        'rrce_create_task',
+        'rrce_update_task'
       ];
 
       for (const tool of requiredTools) {
@@ -78,10 +79,11 @@ describe('RRCE Orchestrator', () => {
       
       const agentConfig = convertToOpenCodeAgent(orchestrator);
       
-      expect(agentConfig.tools.search_knowledge).toBe(true);
+      // Tools use rrce_ prefix - check they are converted to the tools map
+      expect(agentConfig.tools.rrce_search_knowledge).toBe(true);
     });
 
-    it('should NOT prefix MCP tools (direct match with server)', () => {
+    it('should NOT prefix host tools (direct match with server)', () => {
       const prompts = loadPromptsFromDir(promptsDir);
       const orchestrator = prompts.find(p => path.basename(p.filePath) === 'orchestrator.md');
       
@@ -89,13 +91,13 @@ describe('RRCE Orchestrator', () => {
       
       const agentConfig = convertToOpenCodeAgent(orchestrator);
       
-      // MCP tools should NOT be prefixed (this matches current server implementation)
-      expect(agentConfig.tools.search_knowledge).toBe(true);
-      expect(agentConfig.tools.get_project_context).toBe(true);
-      expect(agentConfig.tools.list_agents).toBe(true);
-      expect(agentConfig.tools.get_task).toBe(true);
+      // RRCE MCP tools have rrce_ prefix
+      expect(agentConfig.tools.rrce_search_knowledge).toBe(true);
+      expect(agentConfig.tools.rrce_get_project_context).toBe(true);
+      expect(agentConfig.tools.rrce_list_agents).toBe(true);
+      expect(agentConfig.tools.rrce_get_task).toBe(true);
       
-      // Host tools should not be prefixed either
+      // Host tools should NOT be prefixed
       expect(agentConfig.tools.task).toBe(true);
       expect(agentConfig.tools.read).toBe(true);
       expect(agentConfig.tools.write).toBe(true);
@@ -163,8 +165,8 @@ describe('RRCE Orchestrator', () => {
       const tools = orchestrator.frontmatter.tools || [];
       
       expect(tools.length).toBeGreaterThan(5); 
-      expect(tools).toContain('search_knowledge');
-      expect(tools).toContain('update_task');
+      expect(tools).toContain('rrce_search_knowledge');
+      expect(tools).toContain('rrce_update_task');
     });
 
     it('should restrict subagent tool access appropriately', () => {
@@ -215,20 +217,18 @@ describe('OpenCode Setup Integration', () => {
 describe('Orchestrator Behavior Simulation', () => {
   describe('State Management', () => {
     it('should track completion via meta.json status fields', () => {
-      // Simulated meta.json structure (updated for new phases)
+      // Simulated meta.json structure (new merged design phase)
       const mockMeta = {
         task_slug: 'test-feature',
         agents: {
-          research: { status: 'complete', artifact: 'research/test-feature-research.md' },
-          planning: { status: 'complete', artifact: 'planning/test-feature-plan.md' },
+          design: { status: 'complete', artifact: 'planning/test-feature-plan.md' },
           executor: { status: 'in_progress', started_at: '2025-01-03T10:00:00Z' }
         }
       };
 
       // Orchestrator should check these status fields
       expect(mockMeta.agents.design.status).toBe('complete');
-      expect(mockMeta.).toBe('complete');
-      expect(mockMeta.agents.develop.status).toBe('in_progress');
+      expect(mockMeta.agents.executor.status).toBe('in_progress');
     });
   });
 

@@ -2,7 +2,7 @@
 name: RRCE Doctor
 description: Analyze codebase health using semantic search; identify issues and recommend improvement tasks.
 argument-hint: "[PROJECT_NAME=<name>] [FOCUS_AREA=<area>]"
-tools: ['rrce_search_knowledge', 'rrce_get_project_context', 'rrce_index_knowledge', 'rrce_list_projects', 'rrce_create_task', 'read', 'write', 'glob', 'grep']
+tools: ['rrce_resolve_path', 'rrce_get_context_bundle', 'rrce_search_knowledge', 'rrce_search_code', 'rrce_search_symbols', 'rrce_get_file_summary', 'rrce_get_project_context', 'rrce_index_knowledge', 'rrce_list_projects', 'rrce_create_task', 'read', 'write', 'glob', 'grep']
 required-args: []
 optional-args:
   - name: PROJECT_NAME
