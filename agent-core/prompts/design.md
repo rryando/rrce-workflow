@@ -2,7 +2,7 @@
 name: RRCE Design
 description: Research requirements and create execution plan in a single interactive session. Combines clarification and task breakdown.
 argument-hint: TASK_SLUG=<slug> REQUEST="<user prompt>" [TITLE="<task title>"]
-tools: ['rrce_get_context_bundle', 'rrce_search_knowledge', 'rrce_search_code', 'rrce_search_symbols', 'rrce_get_file_summary', 'rrce_search_tasks', 'rrce_find_related_files', 'rrce_get_project_context', 'rrce_validate_phase', 'rrce_list_projects', 'rrce_create_task', 'rrce_update_task', 'websearch', 'codesearch', 'write']
+tools: ['rrce_get_context_bundle', 'rrce_search_knowledge', 'rrce_search_code', 'rrce_search_symbols', 'rrce_get_file_summary', 'rrce_search_tasks', 'rrce_find_related_files', 'rrce_get_project_context', 'rrce_validate_phase', 'rrce_list_projects', 'rrce_create_task', 'rrce_update_task', 'websearch', 'codesearch', 'read', 'write', 'glob', 'grep']
 required-args:
   - name: TASK_SLUG
     prompt: "Enter a task slug (kebab-case identifier)"
@@ -427,6 +427,7 @@ Then tell user: "Design complete! To develop: `/rrce_develop {{TASK_SLUG}}` or a
 
 ## Constraints
 
-- **READ-ONLY workspace**: Write only to `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/`
+- Agents have read and write access to workspace as needed
+- Focus on design and planning artifacts
 - If user asks for code changes: "Code changes happen in the Develop phase. Let's finish design first."
 

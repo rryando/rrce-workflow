@@ -103,18 +103,80 @@ The primary interaction model is via **in-context slash commands** (`/rrce_*`). 
 - **Tool Names**: Standard tools (read, write, grep) are used without the `rrce_` prefix to align with native IDE capabilities.
 
 ### Phase Pipeline
+/1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
 1. **Init** (`/rrce_init`): Set up project context.
-2. **Research** (`/rrce_research`): Clarify requirements and create research brief.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
+3. **Develop** (`/rrce_develop`) — code implementation
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation./g; 112,113,114d
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 3. **Planning** (`/rrce_plan`): Create task breakdown in `meta.json` and a plan artifact.
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 4. **Execution** (`/rrce_execute`): Make code changes (Executor agent).
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 5. **Documentation** (`/rrce_docs`): Auto-generate or update documentation.
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 ## 6. Agent Checklist
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 - [ ] Prerequisites verified (research + planning complete before execution).
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 - [ ] Metadata updated (`meta.json`) via `rrce_update_task()`.
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 - [ ] No hardcoded absolute paths (use `paths.ts`).
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 - [ ] Code changes validated with Vitest.
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 - [ ] Completion signal (`<rrce_completion>`) emitted after phase finish.
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 ---
+1. **Init** (`/rrce_init`): Set up project context.
+2. **Design** (`/rrce_design`) — merged Research + Planning
+3. **Develop** (`/rrce_develop`) — code implementation
+4. **Document** (`/rrce_docs`) — auto-generate or update documentation.
 *Last Updated: 2026-01-04*

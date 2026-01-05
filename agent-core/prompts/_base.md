@@ -95,9 +95,10 @@ For active task visibility in the MCP TUI:
 This enables real-time progress display in the Overview tab.
 
 ## Workspace Constraints
-- Most agents are **read-only** on `WORKSPACE_ROOT`
-- Only **Develop** agent may modify source code
+- All agents have read and write access to files as needed
+- Agents should respect task scope and avoid unnecessary modifications
 - All agents may write to their designated `RRCE_DATA` paths
+- Develop agent focuses on execution of planned changes in source code
 
 ---
 

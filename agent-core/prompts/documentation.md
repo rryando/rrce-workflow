@@ -2,7 +2,7 @@
 name: RRCE Documentation
 description: Produce project documentation aligned with the latest delivery.
 argument-hint: "DOC_TYPE=<type> [TASK_SLUG=<slug> | TARGET_PATH=<relative>] [RELEASE_REF=<tag/sha>]"
-tools: ['rrce_search_knowledge', 'rrce_get_project_context', 'rrce_list_projects', 'rrce_update_task']
+tools: ['rrce_search_knowledge', 'rrce_get_project_context', 'rrce_list_projects', 'rrce_update_task', 'read', 'write', 'glob', 'grep']
 required-args:
   - name: DOC_TYPE
     prompt: "Enter the documentation type (e.g., api, architecture, runbook, changelog)"

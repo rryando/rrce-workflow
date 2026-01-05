@@ -115,6 +115,7 @@ async function performUpdate(
             if (driftReport.modifiedFiles.includes(entryRel)) {
               backupFile(entryDest);
             }
+            ensureDir(path.dirname(entryDest));
             fs.copyFileSync(entrySrc, entryDest);
             updatedFiles.push(entryRel);
           }
@@ -326,17 +327,18 @@ export async function runUpdateFlow(
             const entryRel = path.join(rel, entry.name);
             const entryDest = path.join(dataPath, entryRel);
 
-            if (entry.isDirectory()) {
-              ensureDir(entryDest);
-              syncFiles(entrySrc, entryRel);
-            } else {
-              // Check for drift on this specific file
-              if (driftReport.modifiedFiles.includes(entryRel)) {
-                backupFile(entryDest);
-              }
-              fs.copyFileSync(entrySrc, entryDest);
-              updatedFiles.push(entryRel);
+          if (entry.isDirectory()) {
+            ensureDir(entryDest);
+            syncFiles(entrySrc, entryRel);
+          } else {
+            // Check for drift on this specific file
+            if (driftReport.modifiedFiles.includes(entryRel)) {
+              backupFile(entryDest);
             }
+            ensureDir(path.dirname(entryDest));
+            fs.copyFileSync(entrySrc, entryDest);
+            updatedFiles.push(entryRel);
+          }
           }
         };
 

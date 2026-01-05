@@ -245,8 +245,8 @@ export function updateOpenCodeConfig(newAgents: Record<string, any>) {
  * IMPORTANT: This respects the tool restrictions defined in each prompt's frontmatter.
  * Different agents have different tool access based on their role in the pipeline:
  * - orchestrator: primary agent, full tool access for coordination
- * - research/planning: read-only for workspace, can write to RRCE_DATA (subagents)
- * - executor: full access including edit/bash for code changes (subagent)
+ * - design/design: read-only for workspace, can write to RRCE_DATA (subagents)
+ * - develop: full access including edit/bash for code changes (subagent)
  * - doctor/init: read-only, no code modifications (subagents)
  * 
  * @param prompt - The parsed prompt
@@ -367,7 +367,7 @@ export function surgicalUpdateOpenCodeAgents(
       
       const newAgents: Record<string, any> = {};
       
-      // Write prompt files and build agent configs (only orchestrator + executor)
+      // Write prompt files and build agent configs (only orchestrator + develop)
       for (const prompt of agentPrompts) {
         const baseName = path.basename(prompt.filePath, '.md');
         const agentId = `rrce_${baseName}`;
@@ -418,7 +418,7 @@ export function surgicalUpdateOpenCodeAgents(
     // Load base protocol for injection
     const baseProtocol = loadBaseProtocol();
 
-    // Write new agents (only orchestrator + executor)
+    // Write new agents (only orchestrator + develop)
     for (const prompt of agentPrompts) {
       const baseName = path.basename(prompt.filePath, '.md');
       const agentId = `rrce_${baseName}`;

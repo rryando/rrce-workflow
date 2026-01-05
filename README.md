@@ -11,7 +11,7 @@ RRCE-Workflow transforms your AI coding assistant (GitHub Copilot, OpenCode, Cla
 - **Global Knowledge Base**: Centralized context management across all your projects (`~/.rrce-workflow/`).
 - **MCP Hub**: A Model Context Protocol server exposing tools, resources, and prompts to any MCP-compatible client.
 - **Semantic Search (RAG)**: Local, privacy-first vector indexing powered by `@xenova/transformers` for deep codebase understanding.
-- **Structured Agent Pipelines**: 7 specialized agents (Init, Research, Planning, Executor, Docs, Sync, Doctor) for end-to-end development workflows.
+- **Structured Agent Pipelines**: 5 specialized agents (Init, Design, Develop, Docs, Sync, Doctor) for end-to-end development workflows.
 - **Task Management**: Built-in CRUD operations for tracking high-level tasks via MCP tools.
 
 ---

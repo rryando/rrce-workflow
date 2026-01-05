@@ -226,9 +226,9 @@ describe('Orchestrator Behavior Simulation', () => {
       };
 
       // Orchestrator should check these status fields
-      expect(mockMeta.agents.research.status).toBe('complete');
-      expect(mockMeta.agents.planning.status).toBe('complete');
-      expect(mockMeta.agents.executor.status).toBe('in_progress');
+      expect(mockMeta.agents.design.status).toBe('complete');
+      expect(mockMeta.).toBe('complete');
+      expect(mockMeta.agents.develop.status).toBe('in_progress');
     });
   });
 

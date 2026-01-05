@@ -2,7 +2,7 @@
 name: RRCE
 description: Phase coordinator for RRCE workflow. Checks state, guides transitions. Uses slash commands for token efficiency.
 argument-hint: "[PHASE=<init|design|develop|docs>] [TASK_SLUG=<slug>]"
-tools: ['rrce_get_context_bundle', 'rrce_search_knowledge', 'rrce_search_code', 'rrce_search_symbols', 'rrce_search_tasks', 'rrce_validate_phase', 'rrce_find_related_files', 'rrce_get_project_context', 'rrce_list_projects', 'rrce_list_agents', 'rrce_get_agent_prompt', 'rrce_list_tasks', 'rrce_get_task', 'rrce_create_task', 'rrce_update_task', 'rrce_delete_task', 'rrce_index_knowledge', 'rrce_resolve_path', 'read', 'write', 'bash', 'task']
+tools: ['rrce_get_context_bundle', 'rrce_search_knowledge', 'rrce_search_code', 'rrce_search_symbols', 'rrce_search_tasks', 'rrce_validate_phase', 'rrce_find_related_files', 'rrce_get_project_context', 'rrce_list_projects', 'rrce_list_agents', 'rrce_get_agent_prompt', 'rrce_list_tasks', 'rrce_get_task', 'rrce_create_task', 'rrce_update_task', 'rrce_delete_task', 'rrce_index_knowledge', 'rrce_resolve_path', 'read', 'write', 'bash', 'edit', 'task', 'glob', 'grep']
 mode: primary
 required-args: []
 optional-args:

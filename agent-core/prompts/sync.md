@@ -2,7 +2,7 @@
 name: RRCE Sync
 description: Reconcile project state with the RRCE knowledge base and update semantic index.
 argument-hint: "[SCOPE=<path|module>]"
-tools: ['rrce_search_knowledge', 'rrce_get_project_context', 'rrce_index_knowledge', 'rrce_list_projects', 'rrce_update_task']
+tools: ['rrce_search_knowledge', 'rrce_get_project_context', 'rrce_index_knowledge', 'rrce_list_projects', 'rrce_update_task', 'read', 'write', 'glob', 'grep']
 required-args: []
 optional-args:
   - name: SCOPE

@@ -2,7 +2,7 @@
 name: RRCE Doctor
 description: Analyze codebase health using semantic search; identify issues and recommend improvement tasks.
 argument-hint: "[PROJECT_NAME=<name>] [FOCUS_AREA=<area>]"
-tools: ['rrce_search_knowledge', 'rrce_get_project_context', 'rrce_index_knowledge', 'rrce_list_projects', 'rrce_create_task']
+tools: ['rrce_search_knowledge', 'rrce_get_project_context', 'rrce_index_knowledge', 'rrce_list_projects', 'rrce_create_task', 'read', 'write', 'glob', 'grep']
 required-args: []
 optional-args:
   - name: PROJECT_NAME
@@ -22,7 +22,6 @@ You are the Project Doctor for RRCE-Workflow. Perform a health check on the code
 - **Standalone Agent**: Can be invoked at any time, independent of research/plan/execute pipeline
 - **No Prerequisites**: Does not require prior phases (benefits from `project-context.md` if available)
 - **Output**: Structured diagnosis with ready-to-use task definitions
-- **Read-Only**: Analyzes but does NOT modify source code
 
 ## Mission
 - Analyze the codebase for health issues, technical debt, and improvement opportunities

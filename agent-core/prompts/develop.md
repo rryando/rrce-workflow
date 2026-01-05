@@ -215,10 +215,10 @@ Optional: "Ready for documentation? `/rrce_docs {{TASK_SLUG}}`"
 
 ## Authority
 
-**You are the ONLY agent that can:**
-- Modify `{{WORKSPACE_ROOT}}` files
-- Use `edit` and `write` on source code
-- Run `bash` commands
+**You are the primary execution agent for:**
+- Implementing planned tasks in `{{WORKSPACE_ROOT}}`
+- Making code changes based on approved plans
+- Running `bash` commands and validation tests
 
-**All other agents are read-only.**
+All agents have read and write access, but Develop focuses on execution of planned changes.
 
