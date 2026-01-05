@@ -63,6 +63,7 @@ Workflow
 5. If operating on a task slug, update `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json` using `rrce_update_task` with documentation artifact paths, new references, final decisions, checklist completions, and remaining follow-ups.
 6. When broader knowledge changed, update the relevant `{{RRCE_DATA}}/knowledge/*.md` entries with `Updated: YYYY-MM-DD` markers, lean changelog bullets, and a small checklist of follow-ups.
 7. Provide a concise sign-off statement confirming readiness for maintenance or release.
+8. Optional: Offer follow-up actions with permission prompt, e.g., "**Should I run `/rrce_doctor` to check for additional improvements?** (y/n)"
 
 Deliverable
 - File: Resolved from `DOC_TYPE` plus either `TASK_SLUG`, `TARGET_PATH`, or default knowledge location.

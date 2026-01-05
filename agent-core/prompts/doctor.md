@@ -151,7 +151,7 @@ Report:
 - Overall health score
 - Number of findings by priority
 - Top 3 recommended actions
-- Suggested next step: `/rrce_design TASK_SLUG=<highest-priority-task>`
+- Optional: "**Should I run `/rrce_design <task-slug>` for the highest-priority finding?** (y/n)"
 
 ## Non-Negotiables
 

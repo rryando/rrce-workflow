@@ -159,28 +159,15 @@ rrce_update_task({
 })
 ```
 
-### 7. Completion Signal
+### 7. Completion Summary
 
-```
-<rrce_completion>
-{
-  "phase": "develop",
-  "status": "complete",
-  "artifact": "execution/{{TASK_SLUG}}-execution.md",
-  "next_phase": "documentation",
-  "message": "Development complete. X tasks implemented, Y tests passing.",
-  "files_changed": ["file1.ts", "file2.ts"]
-}
-</rrce_completion>
-```
+Report:
+- Tasks completed: [X of Y]
+- Files changed: [list]
+- Tests passing: [yes/no]
+- Any follow-ups: [list]
 
-Then report:
-- Tasks completed
-- Files changed
-- Tests passing
-- Any follow-ups
-
-Optional: "Ready for documentation? `/rrce_docs {{TASK_SLUG}}`"
+Optional suggestion: "Development complete. **Should I run `/rrce_docs {{TASK_SLUG}}`?** (y/n)"
 
 ---
 
@@ -191,7 +178,8 @@ Optional: "Ready for documentation? `/rrce_docs {{TASK_SLUG}}`"
 - [ ] Tasks executed in order + validated
 - [ ] Execution log saved
 - [ ] `meta.json` updated (`agents.executor.status = complete`)
-- [ ] `<rrce_completion>` emitted
+- [ ] Completion summary provided
+- [ ] Permission prompt for documentation offered (if applicable)
 
 ---
 
@@ -202,7 +190,7 @@ Optional: "Ready for documentation? `/rrce_docs {{TASK_SLUG}}`"
 3. **Follow plan exactly**
 4. **Verify after each task**
 5. **Document deviations**
-6. **Return completion signal**
+6. **Provide completion summary**
 
 ---
 

@@ -32,9 +32,10 @@ This agent operates in **two phases within the same session**:
 │  - Save research brief                                          │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              ▼
-                "Confidence: [high/medium/low]. Requirements: [clear/ambiguous]. Ready to plan? (y/n)"
-                              │
+                               ▼
+                "Confidence: [high/medium/low]. Requirements: [clear/ambiguous].
+> **Should I proceed to planning?** (y/n)"
+                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  PLANNING MODE                                                  │
@@ -199,7 +200,7 @@ If <4 boxes checked → **Low Confidence** (continue exploration)
 > "My confidence in these requirements: [high/medium/low].
 >
 > [If medium/low: Gaps remain: [list specific gaps]. Let's continue exploring...]
-> [If high: Ready to proceed to planning?] (y/n)"
+> [If high: **Should I proceed to planning?**] (y/n)"
 ```
 
 **If user wants to plan but confidence is low/medium:**
@@ -246,25 +247,6 @@ After saving research brief, ask:
 
 **If user says "n" or wants to stop:**
 Update metadata, emit completion signal, end session
-
-#### Blocking Early Pushes
-
-If user tries to skip to planning prematurely (e.g., "let's plan", "ready for development") **before confidence is high**:
-
-```
-> "I need more clarity before planning. Let me address these gaps:
->
-> † [ambiguity detected from user input]
->
-> [Specific questions to clarify gaps]
->
-> Let's explore these first. Ready to continue? (y/n)"
-```
-
-**Only proceed to planning when:**
-- Confidence is **high** (all checklist boxes checked)
-- User explicitly confirms **"Ready to plan"** after seeing full exploration
-- No blocking ambiguities remain
 
 ---
 
@@ -346,10 +328,10 @@ After saving plan:
 
 > "Plan complete. X tasks defined with acceptance criteria.
 >
-> **Ready to start development?** (y/n)"
+> **Should I run `/rrce_develop {{TASK_SLUG}}`?** (y/n)"
 
 - If **"y"**: Invoke development using task tool (see below)
-- If **"n"**: Emit completion signal, end session
+- If **"n"**: Provide completion summary, end session
 
 ### 2.8 Development Handoff
 
@@ -371,26 +353,17 @@ This triggers OpenCode's confirmation dialog for the user.
 
 ---
 
-## Completion Signal
+## Completion Summary
 
 When ending session (either after research-only or full design):
 
-```
-<rrce_completion>
-{
-  "phase": "design",
-  "status": "complete",
-  "artifacts": {
-    "research": "research/{{TASK_SLUG}}-research.md",
-    "planning": "planning/{{TASK_SLUG}}-plan.md"
-  },
-  "next_phase": "develop",
-  "message": "Design complete. X requirements documented, Y tasks planned."
-}
-</rrce_completion>
-```
+Report:
+- Research saved: `research/{{TASK_SLUG}}-research.md`
+- Planning saved: `planning/{{TASK_SLUG}}-plan.md`
+- Requirements documented: [X]
+- Tasks planned: [Y]
 
-Then tell user: "Design complete! To develop: `/rrce_develop {{TASK_SLUG}}` or accept the handoff above."
+Optional suggestion: "Design complete! **Should I run `/rrce_develop {{TASK_SLUG}}`?** (y/n)"
 
 ---
 
@@ -407,21 +380,20 @@ Then tell user: "Design complete! To develop: `/rrce_develop {{TASK_SLUG}}` or a
 - [ ] Task breakdown proposed based on chosen approach
 - [ ] Plan saved
 - [ ] `meta.json` updated (both research + planning)
-- [ ] `<rrce_completion>` emitted
-- [ ] Handoff offered (if user wants to continue)
+- [ ] Completion summary provided
+- [ ] Permission prompt for next phase offered (if user wants to continue)
 
 ---
 
 ## Rules
 
 1. **Single session for both phases** — don't ask user to run separate commands
-2. **Always confirm before transitions** — explicit "y/n" prompts
+2. **Always ask permission before transitions** — explicit "Should I run /rrce_X?" prompts
 3. **Save artifacts at each phase** — don't lose work if user stops early
 4. **Confidence-driven progression** — No fixed round limits; continue until high confidence reached
 5. **Educational approach** — Propose 2-3 alternatives with trade-offs, explain best practices
-6. **Block early pushes** — If user says "let's plan" but confidence is low/medium, refuse and clarify gaps
-7. **Strategic research** — Use RAG for project context, web search for frameworks/libraries
-8. **Use task tool for development handoff** — triggers confirmation dialog
+6. **Strategic research** — Use RAG for project context, web search for frameworks/libraries
+7. **Use task tool for development handoff** — triggers OpenCode's confirmation dialog
 
 ---
 

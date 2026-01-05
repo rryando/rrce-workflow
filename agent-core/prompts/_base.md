@@ -45,10 +45,25 @@ Use `rrce_validate_phase` to check prerequisites before starting a phase:
 
 ## Checklist Sync (OpenCode)
 When working on a task with a checklist:
-1. Always read the current checklist from `meta.json`.
-2. Sync the checklist to OpenCode's Todo sidebar using `todowrite`.
-3. Format the checklist for `todowrite` as a structured list of sub-tasks relevant to your current phase.
+1. Always read the current checklist from `meta.json` via `rrce_get_task()`.
+2. Convert meta.json checklist to OpenCode format for `todowrite`:
+   - `id` → `id` (same)
+   - `label` → `content` (rename)
+   - `status` → `status` (same: pending/in_progress/completed)
+   - Derive `priority` from owner field:
+     * If `owner` is present → `"high"`
+     * If `owner` is empty → `"medium"`
+3. Use `todowrite` to sync to OpenCode's sidebar.
 4. Update the sidebar whenever a sub-task status changes.
+
+**Example conversion:**
+```json
+// meta.json format
+{"id": "1", "label": "Implement auth", "status": "pending", "owner": "research"}
+
+// OpenCode format
+{"id": "1", "content": "Implement auth", "status": "pending", "priority": "high"}
+```
 
 ## Error Recovery
 If a tool call fails:
@@ -69,27 +84,6 @@ If user says "stop", "pause", "cancel", or "nevermind":
 2. **Save work in progress** — write any partial artifacts
 3. **Provide summary** — brief note of what was completed
 4. **Do NOT continue** — end the workflow gracefully
-
-## Phase Transition Pattern
-For in-session phase transitions, use interactive prompts:
-- Ask: `"Proceed to [next phase]? (y/n)"`
-- Wait for explicit user confirmation before continuing
-- If user says "n" or declines: save current artifact, emit completion signal, end session
-- If user says "y" or affirms: continue to next phase in same session
-
-## Completion Signal
-When your phase completes, emit:
-```
-<rrce_completion>
-{
-  "phase": "<your-phase>",
-  "status": "complete",
-  "artifact": "<path-to-output>",
-  "next_phase": "<suggested-next>",
-  "message": "<brief summary>"
-}
-</rrce_completion>
-```
 
 ## Session Tracking (Optional)
 For active task visibility in the MCP TUI:

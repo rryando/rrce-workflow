@@ -41,31 +41,32 @@ Check for these conditions in order:
 
 ### Step 2A: Bootstrap Mode (Empty Workspace)
 
-Engage in interactive dialogue to define the project. Ask questions in this order:
+**If workspace is empty, use these reasonable defaults:**
 
-**Core Questions (ask all):**
-1. "What type of project is this?" (web app, CLI, library, API, mobile, etc.)
-2. "What's your primary language and runtime?" (TypeScript/Node, Python 3.x, Go, Rust, etc.)
-3. "What's the project name and a one-line description?"
+**Core Questions (ask with defaults):**
+1. "What type of project is this? (default: web-app)"
+2. "What's your primary language and runtime? (default: TypeScript/Node)"
+3. "What's the project name? (default: inferred from directory name)"
+4. "One-line description? (default: 'A TypeScript web application')"
 
-**Follow-up Questions (based on project type):**
-- Web app: "Frontend framework? Backend? Database? Auth approach?"
-- API: "REST or GraphQL? What entities/resources? Auth mechanism?"
-- CLI: "What commands/subcommands? Config file format? Output format?"
-- Library: "What's the public API? Target consumers? Versioning strategy?"
+**Follow-up Questions (use sensible defaults):**
+- Web app: "Frontend framework? (default: React), Backend? (default: Express/Node), Database? (default: PostgreSQL), Auth approach? (default: JWT)"
+- API: "REST or GraphQL? (default: REST), What entities/resources? (default: none, will be inferred from code), Auth mechanism? (default: JWT)"
+- CLI: "What commands/subcommands? (default: none, will be inferred from code), Config file format? (default: JSON), Output format? (default: JSON)"
+- Library: "What's the public API? (default: none, will be inferred from code), Target consumers? (default: TypeScript projects), Versioning strategy? (default: semantic versioning)"
 
-**Architecture Questions:**
-- "What's your preferred code organization?" (monorepo, layered, feature-based)
-- "Any external services or APIs you'll integrate with?"
-- "Testing approach?" (unit, integration, e2e frameworks)
-- "Deployment target?" (Vercel, AWS, Docker, etc.)
+**Architecture Questions (use defaults):**
+- "Preferred code organization? (default: feature-based)"
+- "External services or APIs? (default: none)"
+- "Testing approach? (default: Vitest for unit, Playwright for e2e)"
+- "Deployment target? (default: Vercel for frontend, Railway for backend)"
 
-**Exit Criteria** - Stop asking when you can answer:
-- [ ] What is the project and what problem does it solve?
-- [ ] What technologies will be used (language, frameworks, databases)?
-- [ ] How will the code be organized?
-- [ ] What are the key features or components?
-- [ ] What conventions should the Executor follow?
+**Exit Criteria** - Proceed when:
+- [x] Project type identified (use default if unknown)
+- [x] Primary language determined (use default: TypeScript/Node)
+- [x] Project name set (infer from directory if not provided)
+- [x] Frameworks selected (use defaults)
+- [x] Architecture pattern chosen (use default: feature-based)
 
 After gathering information, proceed to Step 3.
 
