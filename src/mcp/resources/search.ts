@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../logger';
-import { loadMCPConfig, getProjectPermissions } from '../config';
+import { configService, getProjectPermissions } from '../config';
 import { findProjectConfig } from '../config-utils';
 import { projectService } from '../../lib/detection-service';
 import { RAGService } from '../services/rag';
@@ -42,7 +42,7 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
   indexingInProgress?: boolean;
   advisoryMessage?: string;
 }> {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = getExposedProjects();
   const results: Array<{
     project: string;
@@ -168,7 +168,7 @@ export async function searchKnowledge(query: string, projectFilter?: string, opt
   indexingInProgress?: boolean;
   advisoryMessage?: string;
 }> {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = getExposedProjects();
   const results: Array<{ project: string; file: string; matches: string[]; score?: number }> = [];
   
@@ -298,7 +298,7 @@ export async function findRelatedFiles(
   }>;
   message?: string;
 }> {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = getExposedProjects();
   const project = projects.find(p => p.name === projectName);
 
@@ -391,7 +391,7 @@ export async function searchSymbols(
   }>;
   message?: string;
 }> {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = getExposedProjects();
   const project = projects.find(p => p.name === projectName);
 
@@ -502,7 +502,7 @@ export async function getFileSummary(
   };
   message?: string;
 }> {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = getExposedProjects();
   const project = projects.find(p => p.name === projectName);
 

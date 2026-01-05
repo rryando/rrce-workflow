@@ -1,5 +1,5 @@
 import { confirm, isCancel, text } from '@clack/prompts';
-import { loadMCPConfig, saveMCPConfig } from '../config';
+import { configService, saveMCPConfig } from '../config';
 import { scanForProjects } from '../../lib/detection';
 import { getMCPServerStatus } from '../server';
 import { detectWorkspaceRoot } from '../../lib/paths';
@@ -16,7 +16,7 @@ export async function handleStartServer(): Promise<void> {
   const { ConfigProvider } = await import('../ui/ConfigContext');
 
   // Check if projects are configured
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = scanForProjects();
   const exposedProjects = projects.filter(p => {
     const cfg = config.projects.find(c => 

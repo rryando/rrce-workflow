@@ -4,7 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadMCPConfig } from '../config';
+import { configService } from '../config';
 import { findProjectConfig } from '../config-utils';
 import { 
   getConfigPath, 
@@ -19,7 +19,7 @@ import {
  * Returns RRCE_HOME, RRCE_DATA, WORKSPACE_ROOT, WORKSPACE_NAME, storage_mode, and config_path
  */
 export function resolveProjectPaths(project?: string, pathInput?: string): object {
-  const config = loadMCPConfig();
+  const config = configService.load();
   let workspaceRoot = pathInput;
   let workspaceName = project;
 

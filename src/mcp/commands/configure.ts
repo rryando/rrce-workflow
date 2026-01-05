@@ -1,6 +1,6 @@
 import { spinner, note, multiselect, isCancel, confirm } from '@clack/prompts';
 import pc from 'picocolors';
-import { loadMCPConfig, saveMCPConfig, setProjectConfig } from '../config';
+import { configService, saveMCPConfig, setProjectConfig } from '../config';
 import { scanForProjects } from '../../lib/detection';
 import { logger } from '../logger';
 
@@ -11,7 +11,7 @@ export async function handleConfigure(): Promise<void> {
   const s = spinner();
   s.start('Scanning for projects...');
 
-  const config = loadMCPConfig();
+  const config = configService.load();
   
   // Ensure we include projects already in config
   const knownPaths = config.projects.map(p => p.path).filter((p): p is string => !!p);
@@ -148,13 +148,13 @@ locally in each project. MCP needs a central location.`,
     return false;
   }
 
-  try {
-    if (!fs.existsSync(resolvedPath)) {
-      fs.mkdirSync(resolvedPath, { recursive: true });
-    }
-    
-    const config = loadMCPConfig();
-    saveMCPConfig(config);
+    try {
+      if (!fs.existsSync(resolvedPath)) {
+        fs.mkdirSync(resolvedPath, { recursive: true });
+      }
+      
+      const config = configService.load();
+      saveMCPConfig(config);
     
     note(
       `${pc.green('✓')} Global path configured: ${pc.cyan(resolvedPath)}\n\n` +

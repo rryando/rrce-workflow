@@ -4,7 +4,7 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../logger';
-import { loadMCPConfig, getProjectPermissions } from '../config';
+import { configService, getProjectPermissions } from '../config';
 import { getExposedProjects, getProjectContext, getProjectTasks } from '../resources';
 
 /**
@@ -24,7 +24,7 @@ export function registerResourceHandlers(server: Server): void {
     });
 
     for (const project of projects) {
-      const config = loadMCPConfig();
+      const config = configService.load();
       const permissions = getProjectPermissions(config, project.name, project.dataPath);
 
       if (permissions.knowledge) {

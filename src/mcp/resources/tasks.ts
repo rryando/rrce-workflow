@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { logger } from '../logger';
-import { loadMCPConfig, isProjectExposed, getProjectPermissions } from '../config';
+import { configService, isProjectExposed, getProjectPermissions } from '../config';
 import { projectService } from '../../lib/detection-service';
 import type { TaskMeta } from './types';
 
@@ -15,7 +15,7 @@ import type { TaskMeta } from './types';
  * Get project tasks from meta.json files
  */
 export function getProjectTasks(projectName: string): object[] {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
@@ -63,7 +63,7 @@ export function getProjectTasks(projectName: string): object[] {
  * Get a specific task by slug
  */
 export function getTask(projectName: string, taskSlug: string): TaskMeta | null {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   
@@ -84,7 +84,7 @@ export function getTask(projectName: string, taskSlug: string): TaskMeta | null 
  * Create a new task
  */
 export async function createTask(projectName: string, taskSlug: string, taskData: Partial<TaskMeta>): Promise<TaskMeta | null> {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   
@@ -158,7 +158,7 @@ export async function updateTask(projectName: string, taskSlug: string, taskData
     workspace: (meta as any).workspace // Protect workspace metadata
   };
 
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   
@@ -174,7 +174,7 @@ export async function updateTask(projectName: string, taskSlug: string, taskData
  * Delete a task
  */
 export function deleteTask(projectName: string, taskSlug: string): boolean {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   

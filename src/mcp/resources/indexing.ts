@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../logger';
-import { loadMCPConfig } from '../config';
+import { configService } from '../config';
 import { findProjectConfig } from '../config-utils';
 import { RAGService } from '../services/rag';
 import { indexingJobs, type IndexJobState } from '../services/indexing-jobs';
@@ -35,7 +35,7 @@ export async function indexKnowledge(projectName: string, force: boolean = false
     lastError?: string;
   };
 }> {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = getExposedProjects();
   const project = projects.find(p => p.name === projectName || (p.path && p.path === projectName));
 

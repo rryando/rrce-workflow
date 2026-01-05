@@ -23,7 +23,7 @@ import { runUpdateFlow, runSilentUpdate } from './update-flow';
 import { runDeleteGlobalProjectFlow } from './delete-flow';
 import { runMCP } from '../../mcp/index';
 // Dynamic import for config to avoid cyclic load if possible, but static here is fine as long as we catch errors
-import { loadMCPConfig, saveMCPConfig, cleanStaleProjects } from '../../mcp/config';
+import { configService, saveMCPConfig, cleanStaleProjects } from '../../mcp/config';
 
 /**
  * Get the current package version from package.json
@@ -138,7 +138,7 @@ export async function runWizard() {
 
   // Perform stale config cleanup silently or with notification
   try {
-      const mcpConfig = loadMCPConfig();
+      const mcpConfig = configService.load();
       const { config: cleanConfig, removed } = cleanStaleProjects(mcpConfig);
       if (removed.length > 0) {
           saveMCPConfig(cleanConfig);
@@ -183,7 +183,7 @@ Workspace: ${pc.bold(workspaceName)}`,
       // Not configured via local file. Check if registered in MCP as global project
       // We need to check if there is an MCP project pointing to this workspace path
       try {
-          const mcpConfig = loadMCPConfig(); // Imported dynamically above or statically
+          const mcpConfig = configService.load(); // Imported dynamically above or statically
           // Check for project where path === workspacePath AND it exists (we are in it, so it exists)
           const mcpProject = mcpConfig.projects.find(p => p.path === workspacePath);
           

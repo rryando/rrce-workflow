@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../logger';
-import { loadMCPConfig, isProjectExposed, getProjectPermissions } from '../config';
+import { configService, isProjectExposed, getProjectPermissions } from '../config';
 import { type DetectedProject, findClosestProject } from '../../lib/detection';
 import { projectService } from '../../lib/detection-service';
 
@@ -13,7 +13,7 @@ import { projectService } from '../../lib/detection-service';
  * Get list of projects exposed via MCP
  */
 export function getExposedProjects(): DetectedProject[] {
-  const config = loadMCPConfig();
+  const config = configService.load();
   
   // Extract known projects from config to ensure we find workspace-mode and global projects
   const knownProjects = config.projects
@@ -80,7 +80,7 @@ export function detectActiveProject(knownProjects?: DetectedProject[]): Detected
   // If no projects provided, scan mostly-global ones (avoid recursion loop by NOT calling getExposedProjects)
   let scanList = knownProjects;
   if (!scanList) {
-    const config = loadMCPConfig();
+    const config = configService.load();
     // Use known projects for detection to ensure we find the active project even if not in standard scan
     const knownProjectsMap = config.projects
       .filter(p => !!p.path)
@@ -98,7 +98,7 @@ export function detectActiveProject(knownProjects?: DetectedProject[]): Detected
  * Get project context (project-context.md)
  */
 export function getProjectContext(projectName: string): string | null {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   
   // Find the SPECIFIC project that is exposed (disambiguate by path if need be)

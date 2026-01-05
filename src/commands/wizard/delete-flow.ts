@@ -4,7 +4,7 @@ import pc from 'picocolors';
 import * as fs from 'fs';
 import * as path from 'path';
 import { type DetectedProject } from '../../lib/detection';
-import { loadMCPConfig, saveMCPConfig, removeProjectConfig } from '../../mcp/config';
+import { configService, saveMCPConfig, removeProjectConfig } from '../../mcp/config';
 
 export async function runDeleteGlobalProjectFlow(
   availableProjects: DetectedProject[]
@@ -56,7 +56,7 @@ export async function runDeleteGlobalProjectFlow(
   s.start('Deleting projects...');
 
   try {
-    const mcpConfig = loadMCPConfig();
+    const mcpConfig = configService.load();
     let configChanged = false;
 
     for (const projectName of projectsToDelete) {

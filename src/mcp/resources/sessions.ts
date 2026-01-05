@@ -4,7 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadMCPConfig, isProjectExposed } from '../config';
+import { configService, isProjectExposed } from '../config';
 import { projectService } from '../../lib/detection-service';
 import type { AgentType, AgentSession, AgentTodoItem, AgentTodos } from './types';
 
@@ -17,7 +17,7 @@ export function startSession(
   agent: AgentType, 
   phase: string
 ): { success: boolean; message: string } {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   
@@ -48,7 +48,7 @@ export function startSession(
  * End an agent session for a task
  */
 export function endSession(projectName: string, taskSlug: string): { success: boolean; message: string } {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   
@@ -75,7 +75,7 @@ export function updateAgentTodos(
   agent: string,
   items: AgentTodoItem[]
 ): { success: boolean; message: string; count?: number } {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   
@@ -105,7 +105,7 @@ export function updateAgentTodos(
  * Get agent todos for a task
  */
 export function getAgentTodos(projectName: string, taskSlug: string): AgentTodos | null {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   
@@ -125,7 +125,7 @@ export function getAgentTodos(projectName: string, taskSlug: string): AgentTodos
  * Get active session for a task
  */
 export function getSession(projectName: string, taskSlug: string): AgentSession | null {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
   

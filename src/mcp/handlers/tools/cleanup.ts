@@ -1,5 +1,5 @@
 import { getTask, deleteTask, getProjectTasks } from '../../resources';
-import { loadMCPConfig, isProjectExposed } from '../../config';
+import { configService, isProjectExposed } from '../../config';
 import { projectService } from '../../../lib/detection-service';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -87,7 +87,7 @@ async function cleanupSingleTask(
  * Get project data path
  */
 function getProjectDataPath(projectName: string): string | null {
-  const config = loadMCPConfig();
+  const config = configService.load();
   const projects = projectService.scan();
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
 

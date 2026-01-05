@@ -8,7 +8,6 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import * as fs from 'fs';
 
 import { logger } from './logger';
-import { loadMCPConfig } from './config';
 import { configService } from './config-service';
 import { getExposedProjects } from './resources';
 
@@ -45,10 +44,9 @@ export async function startMCPServer(options: { interactive?: boolean } = {}): P
     
     process.on('unhandledRejection', (reason) => {
       logger.error('Unhandled Rejection', reason);
-      console.error('Unhandled Rejection:', reason);
     });
 
-    const config = loadMCPConfig();
+    const config = configService.load();
     
     mcpServer = new Server(
       { name: 'rrce-mcp-hub', version: '1.0.0' },
