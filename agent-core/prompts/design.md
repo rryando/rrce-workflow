@@ -335,7 +335,7 @@ After saving plan:
 
 ### 2.8 Development Handoff
 
-If user confirms development, use the `task` tool to delegate:
+Wait for user to respond with "y" to the prompt above. Only after receiving explicit user confirmation, then use the `task` tool to delegate:
 
 ```javascript
 task({
