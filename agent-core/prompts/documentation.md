@@ -53,19 +53,19 @@ Non-Negotiables
 6. Close the loop in `meta.json` when working within a task by using `rrce_update_task` to set `agents.documentation.status`, refresh `checklist`, and update overall `status`.
 
 Workflow
-1. Confirm `DOC_TYPE`; prompt for it if missing. Normalize to kebab-case for filenames.
-2. Choose destination:
-   - If `TASK_SLUG` is provided, ensure `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/docs` exists and target `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/docs/{{TASK_SLUG}}-{{DOC_TYPE}}.md`.
-   - Else if `TARGET_PATH` is provided, ensure its parent directory exists (must remain under `{{RRCE_DATA}}/`) and target `{{RRCE_DATA}}/{{TARGET_PATH}}`.
-   - Otherwise, default to `{{RRCE_DATA}}/knowledge/{{DOC_TYPE}}.md` and ensure `{{RRCE_DATA}}/knowledge` exists.
-3. Select a template: prefer `{{RRCE_DATA}}/templates/docs/{{DOC_TYPE}}.md`; fallback to `{{RRCE_DATA}}/templates/documentation_output.md`.
-4. Populate contextual metadata (`AUTHOR`, `RELEASE_REF`, task references, dates) and render the document using the chosen template.
-5. If operating on a task slug, update `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json` using `rrce_update_task` with documentation artifact paths, new references, final decisions, checklist completions, and remaining follow-ups.
-6. When broader knowledge changed, update the relevant `{{RRCE_DATA}}/knowledge/*.md` entries with `Updated: YYYY-MM-DD` markers, lean changelog bullets, and a small checklist of follow-ups.
-7. Provide a concise sign-off statement confirming readiness for maintenance or release.
-8. Optional: Offer follow-up actions with permission prompt, e.g., "**Should I run `/rrce_doctor` to check for additional improvements?** (y/n)"
+ 1. Confirm `DOC_TYPE`; prompt for it if missing. Normalize to kebab-case for filenames.
+ 2. Choose destination:
+    - If `TASK_SLUG` is provided, ensure `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/docs` exists and target `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/docs/{{TASK_SLUG}}-{{DOC_TYPE}}.md`.
+    - Else if `TARGET_PATH` is provided, ensure its parent directory exists (must remain under `{{RRCE_DATA}}/`) and target `{{RRCE_DATA}}/{{TARGET_PATH}}`.
+    - Otherwise, default to `{{RRCE_DATA}}/knowledge/{{DOC_TYPE}}.md` and ensure `{{RRCE_DATA}}/knowledge` exists.
+ 3. Select a template: use `{{RRCE_HOME}}/templates/documentation_output.md` as base template (adapt structure based on DOC_TYPE).
+ 4. Populate contextual metadata (`AUTHOR`, `RELEASE_REF`, task references, dates) and render the document using the chosen template.
+ 5. If operating on a task slug, update `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json` using `rrce_update_task` with documentation artifact paths, new references, final decisions, checklist completions, and remaining follow-ups.
+ 6. When broader knowledge changed, update the relevant `{{RRCE_DATA}}/knowledge/*.md` entries with `Updated: YYYY-MM-DD` markers, lean changelog bullets, and a small checklist of follow-ups.
+ 7. Provide a concise sign-off statement confirming readiness for maintenance or release.
+ 8. Optional: Offer follow-up actions with permission prompt, e.g., "**Should I run `/rrce_doctor` to check for additional improvements?** (y/n)"
 
 Deliverable
 - File: Resolved from `DOC_TYPE` plus either `TASK_SLUG`, `TARGET_PATH`, or default knowledge location.
-- Format: `{{RRCE_DATA}}/templates/docs/{{DOC_TYPE}}.md` when available; otherwise `{{RRCE_DATA}}/templates/documentation_output.md`.
+- Format: `{{RRCE_HOME}}/templates/documentation_output.md` (adapt structure based on DOC_TYPE).
 - Outcome: Documentation tailored to the requested type, summarizing scope, implementation, validations, decisions, references, and leftover work while keeping project knowledge synchronized.
