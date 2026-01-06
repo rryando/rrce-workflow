@@ -30,6 +30,7 @@ export interface MCPServerConfig {
 export interface MCPDefaultsConfig {
   includeNew: boolean;
   permissions: MCPPermissions;
+  semanticSearch: MCPSemanticSearchConfig;
 }
 
 export interface MCPConfig {
@@ -54,6 +55,10 @@ export const DEFAULT_MCP_CONFIG: MCPConfig = {
       knowledge: true,
       tasks: true,
       refs: true,
+    },
+    semanticSearch: {
+      enabled: true,
+      model: 'Xenova/all-MiniLM-L6-v2',
     },
   },
 };

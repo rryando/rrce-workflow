@@ -115,6 +115,7 @@ function scanKnownProjects(projects: { name: string; path: string }[], excludeWo
             // 1. Local Mode Check
             const localConfigPath = path.join(p.path, '.rrce-workflow', 'config.yaml');
             if (fs.existsSync(localConfigPath)) {
+                migrateSemanticSearch(localConfigPath);
                 const config = parseWorkspaceConfig(localConfigPath);
                 
                 const fullPath = path.join(p.path, '.rrce-workflow');
@@ -181,6 +182,7 @@ function scanKnownPaths(paths: string[], excludeWorkspace?: string): DetectedPro
             // Check for .rrce-workflow (Workspace Mode)
             const localConfigPath = path.join(p, '.rrce-workflow', 'config.yaml');
             if (fs.existsSync(localConfigPath)) {
+                migrateSemanticSearch(localConfigPath);
                 const config = parseWorkspaceConfig(localConfigPath);
                 
                 if (config?.name === excludeWorkspace) continue;
@@ -236,6 +238,7 @@ function scanGlobalStorage(excludeWorkspace?: string): DetectedProject[] {
       const tasksPath = path.join(projectDataPath, 'tasks');
       
       const configPath = path.join(projectDataPath, 'config.yaml');
+      migrateSemanticSearch(configPath);
       const config = parseWorkspaceConfig(configPath);
       
       projects.push({
@@ -357,9 +360,9 @@ export function parseWorkspaceConfig(configPath: string): {
       }
     }
 
-    // Parse semantic search setting
+    // Parse semantic search setting (defaults to true)
     const semanticSearchMatch = content.match(/semantic_search:\s*\n\s*enabled:\s*(true|false)/);
-    const semanticSearchEnabled = semanticSearchMatch ? semanticSearchMatch[1] === 'true' : false;
+    const semanticSearchEnabled = semanticSearchMatch ? semanticSearchMatch[1] === 'true' : true;
 
     return {
       name: nameMatch?.[1]?.trim() || path.basename(path.dirname(path.dirname(configPath))),
@@ -370,6 +373,30 @@ export function parseWorkspaceConfig(configPath: string): {
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Migrate project config to enable semantic search by default
+ * Updates config.yaml files that don't have semantic_search section
+ */
+export function migrateSemanticSearch(configPath: string): boolean {
+  try {
+    const content = fs.readFileSync(configPath, 'utf-8');
+    
+    // Check if semantic_search already exists
+    const semanticSearchMatch = content.match(/semantic_search:\s*\n\s*enabled:\s*(true|false)/);
+    if (semanticSearchMatch) {
+      // Already configured, skip migration
+      return false;
+    }
+    
+    // Add semantic_search section before the end of file
+    const updatedContent = content.trimEnd() + '\n\nsemantic_search:\n  enabled: true\n';
+    fs.writeFileSync(configPath, updatedContent, 'utf-8');
+    return true;
+  } catch {
+    return false;
   }
 }
 

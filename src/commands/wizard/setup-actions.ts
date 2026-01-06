@@ -217,14 +217,10 @@ tools:
   opencode: ${config.tools.includes('opencode')}
   copilot: ${config.tools.includes('copilot')}
   antigravity: ${config.tools.includes('antigravity')}
-`;
 
-  if (config.enableRAG) {
-    content += `
 semantic_search:
   enabled: true
 `;
-  }
 
   if (config.linkedProjects.length > 0) {
     content += `\nlinked_projects:\n`;
@@ -260,7 +256,7 @@ export async function registerWithMCP(
         true, 
         undefined,
         workspacePath,
-        config.enableRAG ? { enabled: true } : undefined
+        { enabled: true, model: 'Xenova/all-MiniLM-L6-v2' }
       );
     
     saveMCPConfig(mcpConfig);

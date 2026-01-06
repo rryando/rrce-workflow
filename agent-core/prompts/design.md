@@ -360,9 +360,41 @@ After saving plan:
 
 **Wait for user response** before taking any action.
 
-### 2.9 Handoff Execution (After Confirmation)
+### 2.9 Handoff Execution (ONLY AFTER EXPLICIT USER CONFIRMATION)
 
-Only after receiving explicit user confirmation to proceed, use the `task` tool to delegate:
+**STOP: Do NOT proceed with the code below unless:**
+1. User explicitly answered "y"/"yes"/"yeah"/"sure"/"go ahead" to "Ready to develop?"
+2. You have verified their response is affirmative
+
+**If user said "n", "no", or any ambiguous response:**
+- Update task metadata
+- Emit completion signal
+- END SESSION immediately
+
+The following code block is provided **for reference only**. Do NOT execute unless user explicitly confirmed:
+
+```javascript
+// REFERENCE CODE - EXECUTE ONLY AFTER USER CONFIRMATION
+task({
+  description: "Develop {{TASK_SLUG}}",
+  prompt: `TASK_SLUG={{TASK_SLUG}}
+WORKSPACE_NAME={{WORKSPACE_NAME}}
+RRCE_DATA={{RRCE_DATA}}
+WORKSPACE_ROOT={{WORKSPACE_ROOT}}
+RRCE_HOME={{RRCE_HOME}}
+
+## CONTEXT (DO NOT RE-SEARCH)
+- Design complete: research + planning saved
+- Task count: <X> tasks planned
+- Artifacts: research/{{TASK_SLUG}}-research.md, planning/{{TASK_SLUG}}-plan.md
+
+Execute the planned tasks. Return completion signal when done.`,
+  subagent_type: "rrce_develop",
+  session_id: `develop-{{TASK_SLUG}}`
+})
+```
+
+**IMPORTANT:** Use resolved path values (RRCE_DATA, etc.) from orchestrator. Do not use placeholder variables in delegation prompt.
 
 ```javascript
 task({

@@ -67,11 +67,11 @@ export async function handleConfigure(): Promise<void> {
   logger.info('Configure: User selected projects by path', selectedPaths);
 
   // Ask for Semantic Search opt-in if any projects selected
-  let enableSemanticSearch = false;
+  let enableSemanticSearch = true;
   if (selectedPaths.length > 0) {
       const shouldEnable = await confirm({
           message: 'Enable Semantic Search (Local Mini RAG)?',
-          initialValue: false,
+          initialValue: true,
       });
 
       if (isCancel(shouldEnable)) return;
