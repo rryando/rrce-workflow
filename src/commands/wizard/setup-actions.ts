@@ -19,7 +19,7 @@ import {
 import { loadPromptsFromDir, getAgentCorePromptsDir, getAgentCoreDir } from '../../lib/prompts';
 import { copyPromptsToDir, copyDirRecursive, surgicalUpdateOpenCodeAgents, enableProviderCaching } from './utils';
 import { generateVSCodeWorkspace } from './vscode';
-import { installToConfig, getTargetLabel, type InstallTarget, OPENCODE_CONFIG } from '../../mcp/install';
+import { installToConfig, getTargetLabel, type InstallTarget } from '../../mcp/install';
 
 /**
  * Detection result for existing project
@@ -45,10 +45,11 @@ export function detectExistingProject(
   
   // Check for workspace config
   const workspaceConfigPath = path.join(workspacePath, '.rrce-workflow', 'config.yaml');
-  
-  // Check OpenCode config for rrce_ agents
-  const hasOpenCodeAgents = checkForRRCEAgents();
-  
+
+  // Check for workspace-local OpenCode config
+  const workspaceOpenCodeConfig = path.join(workspacePath, '.opencode', 'opencode.json');
+  const hasOpenCodeAgents = checkForWorkspaceOpenCodeAgents(workspaceOpenCodeConfig);
+
   // Determine which config exists
   if (fs.existsSync(globalConfigPath)) {
     return {
@@ -63,7 +64,7 @@ export function detectExistingProject(
       configPath: workspaceConfigPath
     };
   } else if (hasOpenCodeAgents) {
-    // Agents exist but no config - likely incomplete setup
+    // Workspace-local OpenCode agents exist but no config - likely incomplete setup
     return {
       isExisting: true,
       currentMode: null,
@@ -79,12 +80,12 @@ export function detectExistingProject(
 }
 
 /**
- * Check if OpenCode config has RRCE agents
+ * Check if workspace-local OpenCode config has RRCE agents
  */
-function checkForRRCEAgents(): boolean {
-  if (!fs.existsSync(OPENCODE_CONFIG)) return false;
+function checkForWorkspaceOpenCodeAgents(configPath: string): boolean {
+  if (!fs.existsSync(configPath)) return false;
   try {
-    const config = JSON.parse(fs.readFileSync(OPENCODE_CONFIG, 'utf8'));
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const agentKeys = Object.keys(config.agent || config.agents || {});
     return agentKeys.some(key => key.startsWith('rrce_'));
   } catch {
