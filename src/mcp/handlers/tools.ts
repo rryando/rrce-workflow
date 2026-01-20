@@ -3,8 +3,12 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import * as path from 'path';
 import { logger } from '../logger';
 import { getExposedProjects } from '../resources';
+import { configService, isProjectExposed } from '../config';
+import { projectService } from '../../lib/detection-service';
+import { findClosestProject } from '../../lib/detection';
 
 // Domain-specific tool handlers
 import { projectTools, handleProjectTool } from './tools/project';
@@ -43,31 +47,32 @@ export function registerToolHandlers(server: Server): void {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-    logger.info(`Calling tool: ${name}`, args);
+    const argsWithCaller = applyCallerContext(name, args, request);
+    logger.info(`Calling tool: ${name}`, argsWithCaller);
 
     try {
       // Try project tools
-      const projectResult = await handleProjectTool(name, args);
+      const projectResult = await handleProjectTool(name, argsWithCaller);
       if (projectResult) return projectResult;
 
       // Try search tools
-      const searchResult = await handleSearchTool(name, args);
+      const searchResult = await handleSearchTool(name, argsWithCaller);
       if (searchResult) return searchResult;
 
       // Try task tools
-      const taskResult = await handleTaskTool(name, args);
+      const taskResult = await handleTaskTool(name, argsWithCaller);
       if (taskResult) return taskResult;
 
       // Try session tools
-      const sessionResult = await handleSessionTool(name, args);
+      const sessionResult = await handleSessionTool(name, argsWithCaller);
       if (sessionResult) return sessionResult;
 
       // Try agent tools
-      const agentResult = await handleAgentTool(name, args);
+      const agentResult = await handleAgentTool(name, argsWithCaller);
       if (agentResult) return agentResult;
 
       // Try cleanup tools
-      const cleanupResult = await handleCleanupTool(name, args);
+      const cleanupResult = await handleCleanupTool(name, argsWithCaller);
       if (cleanupResult) return cleanupResult;
 
       throw new Error(`Unknown tool: ${name}`);
@@ -76,4 +81,93 @@ export function registerToolHandlers(server: Server): void {
       throw error;
     }
   });
+}
+
+interface CallerContext {
+  project?: string;
+  path?: string;
+}
+
+function applyCallerContext(
+  toolName: string,
+  args: Record<string, any> | undefined,
+  request: { params: { _meta?: Record<string, unknown> } }
+): Record<string, any> | undefined {
+  const callerPath = getCallerPath(request);
+  if (!callerPath) return args;
+
+  const callerProject = resolveCallerProject(callerPath);
+  if (!callerProject) return args;
+
+  const nextArgs = { ...(args || {}) } as Record<string, any>;
+  if (!nextArgs.project && callerProject.project) {
+    nextArgs.project = callerProject.project;
+  }
+  if (!nextArgs.path && toolName === 'resolve_path' && callerProject.path) {
+    nextArgs.path = callerProject.path;
+  }
+
+  return nextArgs;
+}
+
+function getCallerPath(request: { params: { _meta?: Record<string, unknown> } }): string | undefined {
+  const params = request.params as Record<string, unknown>;
+  const meta = (params?._meta as Record<string, unknown> | undefined) ||
+    ((request as Record<string, unknown>)._meta as Record<string, unknown> | undefined) ||
+    ((request as Record<string, unknown>).meta as Record<string, unknown> | undefined);
+
+  const caller = (meta?.caller as Record<string, unknown> | undefined) ||
+    (meta?.client as Record<string, unknown> | undefined) ||
+    (meta?.source as Record<string, unknown> | undefined) ||
+    (meta?.requester as Record<string, unknown> | undefined) ||
+    meta;
+
+  const candidates = [
+    caller?.workspaceRoot,
+    caller?.workspace_root,
+    caller?.projectPath,
+    caller?.project_path,
+    caller?.cwd,
+    caller?.root,
+    caller?.path,
+    meta?.workspaceRoot,
+    meta?.workspace_root,
+    meta?.projectPath,
+    meta?.project_path,
+    meta?.cwd,
+    meta?.root,
+    meta?.path
+  ];
+
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return undefined;
+}
+
+function resolveCallerProject(callerPath: string): CallerContext | undefined {
+  const config = configService.load();
+  const knownProjects = config.projects
+    .filter(p => !!p.path)
+    .map(p => ({ name: p.name, path: p.path! }));
+
+  const projects = projectService.scan({ knownProjects });
+  const exposed = projects.filter(p => isProjectExposed(config, p.name, p.sourcePath || p.path));
+  const closest = findClosestProject(exposed, callerPath);
+
+  if (closest) {
+    return { project: closest.name, path: closest.sourcePath || closest.path };
+  }
+
+  if (callerPath) {
+    const fallbackName = path.basename(callerPath);
+    if (fallbackName) {
+      return { project: fallbackName, path: callerPath };
+    }
+  }
+
+  return undefined;
 }

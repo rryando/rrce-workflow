@@ -85,29 +85,52 @@ export const App = ({ onExit, initialPort }: AppProps) => {
   // Log Tailing Effect
   useEffect(() => {
     const logPath = getLogFilePath();
+    const maxLines = 100;
+    const tailBytes = 64 * 1024;
     let lastSize = 0;
-    if (fs.existsSync(logPath)) {
+
+    const loadTail = () => {
+      if (!fs.existsSync(logPath)) {
+        setLogs([]);
+        lastSize = 0;
+        return;
+      }
       const stats = fs.statSync(logPath);
+      const start = Math.max(0, stats.size - tailBytes);
+      const buffer = Buffer.alloc(stats.size - start);
+      const fd = fs.openSync(logPath, 'r');
+      fs.readSync(fd, buffer, 0, buffer.length, start);
+      fs.closeSync(fd);
+      const content = buffer.toString('utf-8');
+      const lines = content.split('\n').filter(l => l.trim());
+      setLogs(lines.slice(-maxLines));
       lastSize = stats.size;
-    }
+    };
+
+    loadTail();
+
     const interval = setInterval(() => {
-      if (fs.existsSync(logPath)) {
-        const stats = fs.statSync(logPath);
-        if (stats.size > lastSize) {
-          const buffer = Buffer.alloc(stats.size - lastSize);
-          const fd = fs.openSync(logPath, 'r');
-          fs.readSync(fd, buffer, 0, buffer.length, lastSize);
-          fs.closeSync(fd);
-          const newContent = buffer.toString('utf-8');
-          const newLines = newContent.split('\n').filter(l => l.trim());
-          setLogs(prev => {
-            const next = [...prev, ...newLines];
-            return next.slice(-100); 
-          });
-          lastSize = stats.size;
-        }
+      if (!fs.existsSync(logPath)) return;
+      const stats = fs.statSync(logPath);
+      if (stats.size < lastSize) {
+        loadTail();
+        return;
+      }
+      if (stats.size > lastSize) {
+        const buffer = Buffer.alloc(stats.size - lastSize);
+        const fd = fs.openSync(logPath, 'r');
+        fs.readSync(fd, buffer, 0, buffer.length, lastSize);
+        fs.closeSync(fd);
+        const newContent = buffer.toString('utf-8');
+        const newLines = newContent.split('\n').filter(l => l.trim());
+        setLogs(prev => {
+          const next = [...prev, ...newLines];
+          return next.slice(-maxLines);
+        });
+        lastSize = stats.size;
       }
     }, 500);
+
     return () => clearInterval(interval);
   }, []);
 

@@ -6,6 +6,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { configService } from '../config';
 import { findProjectConfig } from '../config-utils';
+import { projectService } from '../../lib/detection-service';
+import { findClosestProject } from '../../lib/detection';
 import { 
   getConfigPath, 
   resolveDataPath, 
@@ -28,6 +30,15 @@ export function resolveProjectPaths(project?: string, pathInput?: string): objec
     const projConfig = findProjectConfig(config, { name: project });
     if (projConfig?.path) {
       workspaceRoot = projConfig.path;
+    } else {
+      const knownProjects = config.projects
+        .filter(p => !!p.path)
+        .map(p => ({ name: p.name, path: p.path! }));
+      const projects = projectService.scan({ knownProjects });
+      const match = projects.find(p => p.name === project);
+      if (match) {
+        workspaceRoot = match.sourcePath || match.path;
+      }
     }
   }
 
@@ -50,7 +61,16 @@ export function resolveProjectPaths(project?: string, pathInput?: string): objec
   // 2. Resolve project name if only path is given
   if (!workspaceName && workspaceRoot) {
     const projConfig = findProjectConfig(config, { path: workspaceRoot });
-    workspaceName = projConfig?.name || getWorkspaceNameFromPath(workspaceRoot);
+    if (projConfig?.name) {
+      workspaceName = projConfig.name;
+    } else {
+      const knownProjects = config.projects
+        .filter(p => !!p.path)
+        .map(p => ({ name: p.name, path: p.path! }));
+      const projects = projectService.scan({ knownProjects });
+      const closest = findClosestProject(projects, workspaceRoot);
+      workspaceName = closest?.name || getWorkspaceNameFromPath(workspaceRoot);
+    }
   }
 
   if (!workspaceName) {

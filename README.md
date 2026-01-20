@@ -29,6 +29,11 @@ cd your-project
 npx rrce-workflow
 ```
 
+Alias:
+```bash
+npx rrce-workflow install
+```
+
 This launches the setup wizard and can:
 - Create the `.rrce-workflow/` structure (workspace mode) or initialize global storage (global mode)
 - Install IDE integrations (VSCode / Claude Desktop / OpenCode / Antigravity)

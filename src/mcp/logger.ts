@@ -16,6 +16,8 @@ export function getLogFilePath(): string {
  */
 class Logger {
   private logPath: string;
+  private readonly maxBytes = 2 * 1024 * 1024;
+  private readonly trimToBytes = 512 * 1024;
 
   constructor() {
     this.logPath = getLogFilePath();
@@ -45,11 +47,31 @@ class Logger {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
+      this.trimIfNeeded();
       fs.appendFileSync(this.logPath, logMessage);
     } catch (e) {
       // Fallback to console if file write fails to avoid crashing
       console.error(`[Logger Failure] Could not write to ${this.logPath}`, e);
       console.error(logMessage);
+    }
+  }
+
+  private trimIfNeeded(): void {
+    try {
+      if (!fs.existsSync(this.logPath)) return;
+      const stats = fs.statSync(this.logPath);
+      if (stats.size <= this.maxBytes) return;
+
+      const start = Math.max(0, stats.size - this.trimToBytes);
+      const fd = fs.openSync(this.logPath, 'r');
+      const buffer = Buffer.alloc(stats.size - start);
+      fs.readSync(fd, buffer, 0, buffer.length, start);
+      fs.closeSync(fd);
+
+      const header = `[${new Date().toISOString()}] [INFO] Log truncated to last ${this.trimToBytes} bytes\n`;
+      fs.writeFileSync(this.logPath, header + buffer.toString('utf-8'));
+    } catch (e) {
+      console.error(`[Logger Failure] Could not trim ${this.logPath}`, e);
     }
   }
 

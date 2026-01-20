@@ -18,6 +18,48 @@ import { copyPromptsToDir, copyDirRecursive, clearDirectory, surgicalUpdateOpenC
 import { DriftService } from '../../lib/drift-service';
 
 /**
+ * Ensure project sourcePath is stored in config and MCP path is registered.
+ * This backfills legacy installs so WORKSPACE_ROOT resolves correctly.
+ */
+async function ensureWorkspaceRootRegistration(
+  workspacePath: string,
+  workspaceName: string,
+  configFilePath: string
+): Promise<void> {
+  if (!fs.existsSync(configFilePath)) {
+    return;
+  }
+
+  let updatedConfig = false;
+  try {
+    const content = fs.readFileSync(configFilePath, 'utf-8');
+    const yaml = parse(content) as any;
+    if (!yaml.project) {
+      yaml.project = { name: workspaceName, sourcePath: workspacePath };
+      updatedConfig = true;
+    } else if (!yaml.project.sourcePath) {
+      yaml.project.sourcePath = workspacePath;
+      updatedConfig = true;
+    }
+
+    if (updatedConfig) {
+      fs.writeFileSync(configFilePath, stringify(yaml));
+    }
+  } catch (e) {
+    console.error('Failed to update config.yaml sourcePath:', e);
+  }
+
+  try {
+    const { loadMCPConfig, saveMCPConfig, setProjectConfig } = await import('../../mcp/config');
+    const mcpConfig = loadMCPConfig();
+    setProjectConfig(mcpConfig, workspaceName, true, undefined, workspacePath);
+    saveMCPConfig(mcpConfig);
+  } catch (e) {
+    console.error('Failed to update MCP config project path:', e);
+  }
+}
+
+/**
  * Backup a file by copying it with a timestamp
  */
 function backupFile(filePath: string): string | null {
@@ -176,6 +218,8 @@ async function performUpdate(
       console.error('Failed to update config.yaml version:', e);
     }
   }
+
+  await ensureWorkspaceRootRegistration(workspacePath, workspaceName, configFilePath);
 
   // Update mcp.yaml version if it exists
   const mcpPath = path.join(rrceHome, 'mcp.yaml');
@@ -396,6 +440,8 @@ export async function runUpdateFlow(
         console.error('Failed to update config.yaml version:', e);
       }
     }
+
+    await ensureWorkspaceRootRegistration(workspacePath, workspaceName, configFilePath);
 
     // Update mcp.yaml version if it exists
     const mcpPath = path.join(rrceHome, 'mcp.yaml');
