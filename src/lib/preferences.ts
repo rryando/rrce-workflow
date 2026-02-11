@@ -2,6 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getDefaultRRCEHome, ensureDir } from './paths';
+import { writeJsonAtomic } from './fs-safe';
 
 export interface UserPreferences {
   defaultGlobalPath?: string;
@@ -34,5 +35,5 @@ export function saveUserPreferences(prefs: UserPreferences): void {
   const current = loadUserPreferences();
   const refined = { ...current, ...prefs };
   
-  fs.writeFileSync(prefPath, JSON.stringify(refined, null, 2));
+  writeJsonAtomic(prefPath, refined);
 }

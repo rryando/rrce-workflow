@@ -19,6 +19,24 @@ import { agentTools, handleAgentTool } from './tools/agent';
 import { cleanupTools, handleCleanupTool } from './tools/cleanup';
 
 /**
+ * Normalize a tool name by stripping common prefixes.
+ * Prompts reference tools as `rrce_search_knowledge` but they're registered as `search_knowledge`.
+ * Some MCP clients may also add their own prefixes (e.g., `rrce-mcp-hub_search_knowledge`).
+ * This ensures both prefixed and bare names resolve correctly.
+ */
+function normalizeToolName(name: string): string {
+  // Strip `rrce_` prefix (used in agent prompts)
+  if (name.startsWith('rrce_')) {
+    return name.slice(5);
+  }
+  // Strip `rrce-mcp-hub_` prefix (used by some MCP clients)
+  if (name.startsWith('rrce-mcp-hub_')) {
+    return name.slice(13);
+  }
+  return name;
+}
+
+/**
  * Register MCP tool handlers
  */
 export function registerToolHandlers(server: Server): void {
@@ -46,9 +64,14 @@ export function registerToolHandlers(server: Server): void {
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
+    const { name: rawName, arguments: args } = request.params;
+    const name = normalizeToolName(rawName);
     const argsWithCaller = applyCallerContext(name, args, request);
-    logger.info(`Calling tool: ${name}`, argsWithCaller);
+    if (name !== rawName) {
+      logger.info(`Calling tool: ${rawName} → ${name}`, argsWithCaller);
+    } else {
+      logger.info(`Calling tool: ${name}`, argsWithCaller);
+    }
 
     try {
       // Try project tools
@@ -75,9 +98,9 @@ export function registerToolHandlers(server: Server): void {
       const cleanupResult = await handleCleanupTool(name, argsWithCaller);
       if (cleanupResult) return cleanupResult;
 
-      throw new Error(`Unknown tool: ${name}`);
+      throw new Error(`Unknown tool: ${rawName}`);
     } catch (error) {
-      logger.error(`Tool execution failed: ${name}`, error);
+      logger.error(`Tool execution failed: ${rawName}`, error);
       throw error;
     }
   });

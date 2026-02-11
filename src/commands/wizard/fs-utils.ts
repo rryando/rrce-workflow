@@ -32,7 +32,11 @@ export function clearDirectory(dirPath: string): void {
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.isFile()) {
-      fs.unlinkSync(path.join(dirPath, entry.name));
+      try {
+        fs.unlinkSync(path.join(dirPath, entry.name));
+      } catch (err) {
+        console.error(`[clearDirectory] Failed to delete ${path.join(dirPath, entry.name)}:`, err);
+      }
     }
   }
 }

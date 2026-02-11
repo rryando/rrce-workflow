@@ -45,7 +45,7 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
     };
 
     updateStats();
-    const interval = setInterval(updateStats, 2000);
+    const interval = setInterval(updateStats, 5000);
     return () => clearInterval(interval);
   }, [allProjects, config]);
 
@@ -69,14 +69,12 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
     }
   });
 
+  // Structural project items — only recomputes when config/projects/drift change
   const projectItems = useMemo(() => {
     return sortedProjects.map(p => {
       const projectConfig = findProjectConfig(config, { name: p.name, path: p.path });
-
       const isExposed = projectConfig ? projectConfig.expose : config.defaults.includeNew;
       const drift = driftReports[p.path];
-      const idx = indexingStats[p.name];
-      const stats = getIndexStats(p);
       const isCurrentProject = p.path === workspacePath;
 
       let label = formatProjectLabel(p);
@@ -87,7 +85,25 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
         label += ' ⚠';
       }
 
-      // Build stats row
+      return {
+        label,
+        value: p.path,
+        key: p.path,
+        exposed: isExposed,
+        isCurrentProject,
+      };
+    });
+  }, [sortedProjects, config, driftReports, workspacePath]);
+
+  // Stats display — recomputes on indexingStats changes, merged at render time
+  const statsMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of sortedProjects) {
+      const idx = indexingStats[p.name];
+      const stats = getIndexStats(p);
+      const projectConfig = findProjectConfig(config, { name: p.name, path: p.path });
+      const isExposed = projectConfig ? projectConfig.expose : config.defaults.includeNew;
+
       let statsRow = '';
       if (idx?.state === 'running') {
         statsRow = `  ⟳ Indexing... ${idx.itemsDone}/${idx.itemsTotal ?? '?'}`;
@@ -103,19 +119,18 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
         statsRow = '  📊 Not indexed';
       }
 
-      // Combine label with stats
-      const fullLabel = statsRow ? `${label}\n${statsRow}` : label;
+      map[p.path] = statsRow;
+    }
+    return map;
+  }, [sortedProjects, indexingStats, config]);
 
-      return {
-        label: fullLabel,
-        value: p.path,
-        key: p.path,
-        exposed: isExposed,
-        indexing: idx,
-        isCurrentProject,
-      };
-    });
-  }, [sortedProjects, config, driftReports, indexingStats, workspacePath]);
+  // Merge labels with stats for display
+  const displayItems = useMemo(() => {
+    return projectItems.map(item => ({
+      ...item,
+      label: statsMap[item.value] ? `${item.label}\n${statsMap[item.value]}` : item.label,
+    }));
+  }, [projectItems, statsMap]);
 
   const initialSelected = useMemo(() => {
     return projectItems.filter(p => p.exposed).map(p => p.value);
@@ -159,9 +174,9 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
 
       <Box marginTop={1} paddingX={1} flexDirection="column" flexGrow={1}>
         <SimpleSelect
-          key={JSON.stringify(initialSelected) + config.defaults.includeNew + JSON.stringify(indexingStats)}
+          key={initialSelected.join(',') + config.defaults.includeNew}
           message=""
-          items={projectItems}
+          items={displayItems}
           isMulti={true}
           initialSelected={initialSelected}
           onSelect={() => { }}
@@ -169,7 +184,7 @@ export const ProjectsView = ({ config: initialConfig, projects: allProjects, onC
           onCancel={() => { }}
         />
       </Box>
-      
+
       <ProjectsFooter />
     </Box>
   );

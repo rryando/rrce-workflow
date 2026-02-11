@@ -15,14 +15,38 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+// Cache for parsed .gitignore instances per scan root
+const GITIGNORE_CACHE_TTL_MS = 60_000;
+const gitignoreCache = new Map<string, { ig: ReturnType<typeof ignore> | null; cachedAt: number; fileMtime: number }>();
+
+export function clearGitignoreCache(): void {
+  gitignoreCache.clear();
+}
+
+function getCachedGitignore(scanRoot: string): ReturnType<typeof ignore> | null {
+  const gitignorePath = path.join(scanRoot, '.gitignore');
+  if (!fs.existsSync(gitignorePath)) return null;
+
+  try {
+    const stat = fs.statSync(gitignorePath);
+    const now = Date.now();
+    const cached = gitignoreCache.get(scanRoot);
+    if (cached && cached.fileMtime === stat.mtimeMs && (now - cached.cachedAt) < GITIGNORE_CACHE_TTL_MS) {
+      return cached.ig;
+    }
+    const ig = ignore().add(fs.readFileSync(gitignorePath, 'utf-8'));
+    gitignoreCache.set(scanRoot, { ig, cachedAt: now, fileMtime: stat.mtimeMs });
+    return ig;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Helper to get project scan root and gitignore configuration
  */
 export function getScanContext(project: DetectedProject, scanRoot: string) {
-  const gitignorePath = path.join(scanRoot, '.gitignore');
-  const ig = fs.existsSync(gitignorePath)
-    ? ignore().add(fs.readFileSync(gitignorePath, 'utf-8'))
-    : null;
+  const ig = getCachedGitignore(scanRoot);
 
   const toPosixRelativePath = (absolutePath: string): string => {
     const rel = path.relative(scanRoot, absolutePath);

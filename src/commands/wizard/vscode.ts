@@ -34,8 +34,8 @@ export function generateVSCodeWorkspace(
     try {
       const content = fs.readFileSync(workspaceFilePath, 'utf-8');
       workspace = JSON.parse(content);
-    } catch {
-      // If parse fails, create new
+    } catch (err) {
+      console.error(`[generateVSCodeWorkspace] Failed to parse ${workspaceFilePath}:`, err);
       workspace = { folders: [], settings: {} };
     }
   } else {

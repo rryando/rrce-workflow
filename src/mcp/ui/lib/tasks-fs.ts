@@ -132,6 +132,29 @@ export interface ChecklistItem {
   notes?: string;
 }
 
+export interface Reference {
+  id: string;
+  source: string;
+  relevance: string;
+  snippet?: string;
+  phase?: 'research' | 'planning' | 'execution';
+}
+
+export interface OpenQuestion {
+  id: string;
+  question: string;
+  status: 'open' | 'resolved';
+  resolution?: string;
+  raised_in?: 'research' | 'planning' | 'execution';
+}
+
+export interface Decision {
+  id: string;
+  decision: string;
+  rationale: string;
+  made_in?: 'research' | 'planning' | 'execution';
+}
+
 export interface TaskMeta {
   task_slug: string;
   title?: string;
@@ -141,6 +164,9 @@ export interface TaskMeta {
   created_at?: string;
   tags?: string[];
   checklist?: ChecklistItem[];
+  references?: Reference[];
+  open_questions?: OpenQuestion[];
+  decisions?: Decision[];
   agents?: Record<string, AgentInfo>;
 }
 

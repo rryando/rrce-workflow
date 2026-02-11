@@ -118,9 +118,9 @@ describe('RRCE Token Optimization Tests', () => {
         'utf-8'
       );
 
-      // Should mention reading research and plan files
-      expect(content).toContain('research/{{TASK_SLUG}}-research.md');
-      expect(content).toContain('planning/{{TASK_SLUG}}-plan.md');
+      // Should mention reading research and plan files (uses ${} interpolation syntax)
+      expect(content).toContain('research/${TASK_SLUG}-research.md');
+      expect(content).toContain('planning/${TASK_SLUG}-plan.md');
       expect(content).toContain('CRITICAL: Read artifacts explicitly');
 
       // Should mention focusing on research brief sections
@@ -201,12 +201,12 @@ describe('RRCE Token Optimization Tests', () => {
       );
       
       expect(content).toContain('## Path Resolution');
-      expect(content).toContain('## Completion Signal');
       expect(content).toContain('## Workspace Constraints');
       expect(content).toContain('## Error Recovery');
       expect(content).toContain('## Token Awareness');
       expect(content).toContain('## Abort Handling');
-      expect(content).toContain('## Phase Transition Pattern');
+      expect(content).toContain('## Phase Validation');
+      expect(content).toContain('## Metadata Updates');
     });
 
     test('_base.md should reference Develop agent (not Executor)', () => {
@@ -239,8 +239,8 @@ describe('RRCE Token Optimization Tests', () => {
       
       // Base protocol should contain shared sections
       expect(baseContent).toContain('## Path Resolution');
-      expect(baseContent).toContain('## Completion Signal');
       expect(baseContent).toContain('## Workspace Constraints');
+      expect(baseContent).toContain('## Error Recovery');
       
       // Design uses "## Session Flow" (two-phase merged agent)
       const designContent = fs.readFileSync(path.join(PROMPTS_DIR, 'design.md'), 'utf-8');

@@ -15,6 +15,7 @@ import type { MCPConfig, MCPProjectConfig, MCPPermissions, MCPSemanticSearchConf
 import { DEFAULT_MCP_CONFIG, DEFAULT_PERMISSIONS } from './types';
 import { findProjectConfig, normalizeProjectPath } from './config-utils';
 import { configService } from './config-service';
+import { writeFileAtomic } from '../lib/fs-safe';
 
 // Re-export for convenience - single source of truth with caching and pub/sub
 export { configService, configEmitter, onConfigChange, offConfigChange } from './config-service';
@@ -22,10 +23,11 @@ export { configService, configEmitter, onConfigChange, offConfigChange } from '.
 /**
  * Migrate configuration to latest format
  * - Converts data paths (.rrce-workflow) to project root paths
+ * Returns { config, changed } so callers can persist if needed
  */
-function migrateConfig(config: MCPConfig): MCPConfig {
+function migrateConfig(config: MCPConfig): { config: MCPConfig; changed: boolean } {
   let changed = false;
-  
+
   config.projects = config.projects.map(p => {
     if (p.path) {
       const normalized = normalizeProjectPath(p.path);
@@ -37,7 +39,7 @@ function migrateConfig(config: MCPConfig): MCPConfig {
     return p;
   });
 
-  return config;
+  return { config, changed };
 }
 
 /**
@@ -62,13 +64,21 @@ export function loadMCPConfig(): MCPConfig {
 
   try {
     const content = fs.readFileSync(configPath, 'utf-8');
-    let config = parseMCPConfig(content);
-    
-    // Apply migration
-    config = migrateConfig(config);
-    
+    const parsed = parseMCPConfig(content);
+
+    // Apply migration and persist if changed
+    const { config, changed } = migrateConfig(parsed);
+    if (changed) {
+      try {
+        saveMCPConfig(config);
+      } catch {
+        // Non-fatal: migration will re-run next time
+      }
+    }
+
     return config;
-  } catch {
+  } catch (err) {
+    console.error(`[loadMCPConfig] Failed to read/parse ${configPath}:`, err);
     return { ...DEFAULT_MCP_CONFIG };
   }
 }
@@ -133,7 +143,7 @@ export function saveMCPConfig(config: MCPConfig): void {
   }
 
   const content = serializeMCPConfig(config);
-  fs.writeFileSync(configPath, content);
+  writeFileAtomic(configPath, content);
 }
 
 /**
@@ -175,7 +185,7 @@ function parseMCPConfig(content: string): MCPConfig {
     
     return config;
   } catch (err) {
-    // On parse error, return default config
+    console.error('[parseMCPConfig] Failed to parse YAML config:', err);
     return { ...DEFAULT_MCP_CONFIG };
   }
 }

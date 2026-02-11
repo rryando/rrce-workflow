@@ -52,8 +52,8 @@ class MCPConfigService {
     this.cache = config;
     this.cacheTime = Date.now();
 
-    // Emit change event for subscribers
-    configEmitter.emit('change', oldConfig || loadFromDisk(), config);
+    // Emit change event for subscribers (use new config as old if cache was empty)
+    configEmitter.emit('change', oldConfig ?? config, config);
   }
 
   /**

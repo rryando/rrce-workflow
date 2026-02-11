@@ -1,6 +1,7 @@
 ---
 name: RRCE Doctor
 description: Analyze codebase health using semantic search; identify issues and recommend improvement tasks.
+version: "1.0.0"
 argument-hint: "[PROJECT_NAME=<name>] [FOCUS_AREA=<area>]"
 tools: ['rrce_resolve_path', 'rrce_get_context_bundle', 'rrce_search_knowledge', 'rrce_search_code', 'rrce_search_symbols', 'rrce_get_file_summary', 'rrce_get_project_context', 'rrce_index_knowledge', 'rrce_list_projects', 'rrce_create_task', 'read', 'write', 'glob', 'grep']
 required-args: []
@@ -38,7 +39,7 @@ Args: { "project": "{{WORKSPACE_NAME}}" }
 ```
 
 If not found, **STOP** and prompt:
-> "Project context not found. Please run `/init` first to establish project context."
+> "Project context not found. Please run `/rrce_init` first to establish project context."
 
 Parse the context to understand:
 - Tech stack (determines which checks are relevant)
@@ -151,7 +152,14 @@ Report:
 - Overall health score
 - Number of findings by priority
 - Top 3 recommended actions
-- Optional: "**Should I run `/rrce_design <task-slug>` for the highest-priority finding?** (y/n)"
+
+**If findings exist:**
+- Optional: "**Should I run `/rrce_design {highest-priority-slug}` to plan a fix for the top finding?** (y/n)"
+
+**If no findings (clean bill of health):**
+> "No critical issues found. Codebase health: [score]/5.
+> Minor observations: [list any low-priority notes, or 'None'].
+> Next recommended check: [timeframe based on project activity]."
 
 ## Non-Negotiables
 

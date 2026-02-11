@@ -3,6 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../logger';
+import { writeFileAtomic } from '../../lib/fs-safe';
 
 // Configure cache to be in a consistent location if needed, 
 // but default ~/.cache/xenova is usually fine.
@@ -63,12 +64,24 @@ export interface CodeRAGIndex {
 
 const INDEX_VERSION = '1.0.0';
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2';
+const INDEX_CACHE_TTL_MS = 30_000; // 30 seconds
+
+interface CachedIndex {
+  index: RAGIndex;
+  loadedAt: number;
+  fileMtime: number;
+}
 
 export class RAGService {
   // Static cache for the pipeline to prevent reloading model for every instance
   private static pipelineInstance: any = null;
   private static activeModelName: string | null = null;
   private static loadPromise: Promise<any> | null = null;
+
+  // Static cache for parsed index files to avoid re-reading JSON per instance
+  private static indexCache: Map<string, CachedIndex> = new Map();
+  // Paths currently being written — skip cache reads during writes
+  private static writingPaths: Set<string> = new Set();
 
   private modelName: string;
   private indexPath: string;
@@ -77,6 +90,13 @@ export class RAGService {
   constructor(indexPath: string, modelName: string = DEFAULT_MODEL) {
     this.indexPath = indexPath;
     this.modelName = modelName;
+  }
+
+  /**
+   * Clear all static caches (for server shutdown / testing)
+   */
+  static clearCaches(): void {
+    RAGService.indexCache.clear();
   }
 
   /**
@@ -121,19 +141,35 @@ export class RAGService {
   }
 
   /**
-   * Load index from disk
+   * Load index from disk, using static cache when possible
    */
   private loadIndex() {
     if (this.index) return;
-    
+
     if (fs.existsSync(this.indexPath)) {
       try {
+        const stat = fs.statSync(this.indexPath);
+        const fileMtime = stat.mtimeMs;
+        const now = Date.now();
+
+        // Check static cache: reuse if file hasn't changed, cache is fresh, and not being written
+        const cached = RAGService.indexCache.get(this.indexPath);
+        if (cached && cached.fileMtime === fileMtime && (now - cached.loadedAt) < INDEX_CACHE_TTL_MS
+            && !RAGService.writingPaths.has(this.indexPath)) {
+          this.index = cached.index;
+          return;
+        }
+
         const data = fs.readFileSync(this.indexPath, 'utf-8');
         this.index = JSON.parse(data);
         logger.info(`[RAG] Loaded index from ${this.indexPath} with ${this.index?.chunks.length} chunks.`);
+
+        // Update static cache
+        if (this.index) {
+          RAGService.indexCache.set(this.indexPath, { index: this.index, loadedAt: now, fileMtime });
+        }
       } catch (error) {
         logger.error(`[RAG] Failed to load index from ${this.indexPath}`, error);
-        // Start fresh on error
         this.index = {
           version: INDEX_VERSION,
           baseModel: this.modelName,
@@ -151,36 +187,29 @@ export class RAGService {
   }
 
   /**
-   * Save index to disk
+   * Save index to disk atomically (tmp+rename)
    */
   private saveIndex() {
     if (!this.index) return;
     try {
-      const dir = path.dirname(this.indexPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      fs.writeFileSync(this.indexPath, JSON.stringify(this.index, null, 2));
+      RAGService.writingPaths.add(this.indexPath);
+      writeFileAtomic(this.indexPath, JSON.stringify(this.index, null, 2));
       logger.info(`[RAG] Saved index to ${this.indexPath} with ${this.index.chunks.length} chunks.`);
+
+      // Refresh static cache after write
+      try {
+        const stat = fs.statSync(this.indexPath);
+        RAGService.indexCache.set(this.indexPath, {
+          index: this.index,
+          loadedAt: Date.now(),
+          fileMtime: stat.mtimeMs,
+        });
+      } catch {}
     } catch (error) {
       logger.error(`[RAG] Failed to save index to ${this.indexPath}`, error);
+    } finally {
+      RAGService.writingPaths.delete(this.indexPath);
     }
-  }
-
-  /**
-   * Save index to a temp file and atomically replace
-   */
-  private saveIndexAtomic(): void {
-    if (!this.index) return;
-
-    const dir = path.dirname(this.indexPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
-    const tmpPath = `${this.indexPath}.tmp`;
-    fs.writeFileSync(tmpPath, JSON.stringify(this.index, null, 2));
-    fs.renameSync(tmpPath, this.indexPath);
   }
 
   /**
@@ -195,8 +224,7 @@ export class RAGService {
 
     if (force || last === undefined || now - last >= intervalMs) {
       this.index.metadata = { ...(this.index.metadata ?? {}), lastSaveAt: now };
-      this.saveIndexAtomic();
-      logger.info(`[RAG] Saved index (atomic) to ${this.indexPath} with ${this.index.chunks.length} chunks.`);
+      this.saveIndex();
     }
   }
 

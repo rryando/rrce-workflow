@@ -10,6 +10,7 @@ import { logger } from '../logger';
 import { configService, isProjectExposed, getProjectPermissions } from '../config';
 import { projectService } from '../../lib/detection-service';
 import type { TaskMeta } from './types';
+import { writeJsonAtomic } from '../../lib/fs-safe';
 
 /**
  * Get project tasks from meta.json files
@@ -136,7 +137,7 @@ export async function createTask(projectName: string, taskSlug: string, taskData
   Object.assign(meta, taskData);
 
   const metaPath = path.join(taskDir, 'meta.json');
-  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+  writeJsonAtomic(metaPath, meta);
 
   return meta as TaskMeta;
 }
@@ -165,7 +166,7 @@ export async function updateTask(projectName: string, taskSlug: string, taskData
   if (!project || !project.tasksPath) return null;
 
   const metaPath = path.join(project.tasksPath, taskSlug, 'meta.json');
-  fs.writeFileSync(metaPath, JSON.stringify(updatedMeta, null, 2));
+  writeJsonAtomic(metaPath, updatedMeta);
 
   return updatedMeta as TaskMeta;
 }

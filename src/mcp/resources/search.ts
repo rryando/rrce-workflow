@@ -14,9 +14,22 @@ import { indexingJobs } from '../services/indexing-jobs';
 import { scanProjectDependencies, findRelatedFiles as findRelatedInGraph } from '../services/dependency-graph';
 import { extractSymbols, searchSymbols as searchSymbolsInResults, type SymbolType, type SymbolExtractionResult } from '../services/symbol-extractor';
 import { getExposedProjects, getCodeIndexPath } from './projects';
+import type { DetectedProject } from '../../lib/detection';
 import { estimateTokens } from './utils';
 import { CODE_EXTENSIONS, SKIP_DIRS } from './constants';
 import { getSearchAdvisory, getIndexFreshness, applyTokenBudget } from './search-utils';
+import { getScanContext } from './utils';
+
+// Cache for symbol extraction results per project
+const SYMBOL_CACHE_TTL_MS = 60_000; // 60 seconds
+const symbolCache = new Map<string, { results: SymbolExtractionResult[]; cachedAt: number }>();
+
+/**
+ * Clear symbol extraction cache
+ */
+export function clearSymbolCache(): void {
+  symbolCache.clear();
+}
 
 /**
  * Search code files using semantic search on the code-specific index
@@ -24,6 +37,7 @@ import { getSearchAdvisory, getIndexFreshness, applyTokenBudget } from './search
 export async function searchCode(query: string, projectFilter?: string, limit: number = 10, options?: {
   max_tokens?: number;
   min_score?: number;
+  _resolvedProjects?: DetectedProject[];
 }): Promise<{
   results: Array<{
     project: string;
@@ -43,7 +57,7 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
   advisoryMessage?: string;
 }> {
   const config = configService.load();
-  const projects = getExposedProjects();
+  const projects = options?._resolvedProjects ?? getExposedProjects();
   const results: Array<{
     project: string;
     file: string;
@@ -56,7 +70,6 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
   }> = [];
 
   for (const project of projects) {
-    // Skip if project filter specified and doesn't match
     if (projectFilter && project.name !== projectFilter) continue;
 
     const permissions = getProjectPermissions(config, project.name, project.sourcePath || project.path);
@@ -64,42 +77,93 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
 
     const { indexingInProgress, advisoryMessage } = getSearchAdvisory(project.name);
 
-    // Check for RAG configuration
     const projConfig = findProjectConfig(config, { name: project.name, path: project.sourcePath || project.path });
     const useRAG = projConfig?.semanticSearch?.enabled;
 
-    if (!useRAG) {
-      logger.debug(`[searchCode] Semantic search not enabled for project '${project.name}'`);
-      continue;
+    let ragSucceeded = false;
+
+    if (useRAG) {
+      try {
+        const codeIndexPath = getCodeIndexPath(project);
+
+        if (fs.existsSync(codeIndexPath)) {
+          const rag = new RAGService(codeIndexPath, projConfig?.semanticSearch?.model);
+          const ragResults = await rag.search(query, limit);
+
+          for (const r of ragResults) {
+            const codeChunk = r as CodeChunk & { score: number };
+
+            results.push({
+              project: project.name,
+              file: path.relative(project.sourcePath || project.path || '', codeChunk.filePath),
+              snippet: codeChunk.content,
+              lineStart: codeChunk.lineStart ?? 1,
+              lineEnd: codeChunk.lineEnd ?? 1,
+              context: codeChunk.context,
+              language: codeChunk.language,
+              score: codeChunk.score
+            });
+          }
+          ragSucceeded = true;
+        }
+      } catch (e) {
+        logger.error(`[searchCode] Semantic search failed for project '${project.name}', falling back to text search`, e);
+      }
     }
 
-    try {
-      const codeIndexPath = getCodeIndexPath(project);
-      
-      if (!fs.existsSync(codeIndexPath)) {
-        logger.debug(`[searchCode] Code index not found for project '${project.name}'`);
-        continue;
-      }
+    // Text search fallback: grep through code files when RAG is unavailable or failed
+    if (!ragSucceeded) {
+      try {
+        const projectRoot = project.sourcePath || project.path || '';
+        const queryLower = query.toLowerCase();
+        const { shouldSkipEntryDir, shouldSkipEntryFile } = getScanContext(project, projectRoot);
+        const matchFiles: string[] = [];
 
-      const rag = new RAGService(codeIndexPath, projConfig?.semanticSearch?.model);
-      const ragResults = await rag.search(query, limit);
+        const scanDir = (dir: string) => {
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              if (shouldSkipEntryDir(fullPath)) continue;
+              scanDir(fullPath);
+            } else if (entry.isFile()) {
+              if (shouldSkipEntryFile(fullPath)) continue;
+              const ext = path.extname(entry.name).toLowerCase();
+              if (CODE_EXTENSIONS.includes(ext)) {
+                matchFiles.push(fullPath);
+              }
+            }
+          }
+        };
+        scanDir(projectRoot);
 
-      for (const r of ragResults) {
-        const codeChunk = r as CodeChunk & { score: number };
-        
-        results.push({
-          project: project.name,
-          file: path.relative(project.sourcePath || project.path || '', codeChunk.filePath),
-          snippet: codeChunk.content,
-          lineStart: codeChunk.lineStart ?? 1,
-          lineEnd: codeChunk.lineEnd ?? 1,
-          context: codeChunk.context,
-          language: codeChunk.language,
-          score: codeChunk.score
-        });
+        for (const file of matchFiles.slice(0, 200)) {
+          try {
+            const content = fs.readFileSync(file, 'utf-8');
+            const lines = content.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+              if (lines[i]!.toLowerCase().includes(queryLower)) {
+                const start = Math.max(0, i - 2);
+                const end = Math.min(lines.length - 1, i + 2);
+                const snippet = lines.slice(start, end + 1).join('\n');
+                results.push({
+                  project: project.name,
+                  file: path.relative(projectRoot, file),
+                  snippet,
+                  lineStart: start + 1,
+                  lineEnd: end + 1,
+                  score: 0.5 // Fixed score for text matches
+                });
+                break; // One match per file for text fallback
+              }
+            }
+          } catch {
+            // Skip unreadable files
+          }
+        }
+      } catch (e) {
+        logger.error(`[searchCode] Text fallback failed for project '${project.name}'`, e);
       }
-    } catch (e) {
-      logger.error(`[searchCode] Search failed for project '${project.name}'`, e);
     }
   }
 
@@ -154,6 +218,7 @@ export async function searchCode(query: string, projectFilter?: string, limit: n
 export async function searchKnowledge(query: string, projectFilter?: string, options?: {
   max_tokens?: number;
   min_score?: number;
+  _resolvedProjects?: DetectedProject[];
 }): Promise<{
   results: Array<{
     project: string;
@@ -169,9 +234,9 @@ export async function searchKnowledge(query: string, projectFilter?: string, opt
   advisoryMessage?: string;
 }> {
   const config = configService.load();
-  const projects = getExposedProjects();
+  const projects = options?._resolvedProjects ?? getExposedProjects();
   const results: Array<{ project: string; file: string; matches: string[]; score?: number }> = [];
-  
+
   const queryLower = query.toLowerCase();
 
   for (const project of projects) {
@@ -416,35 +481,49 @@ export async function searchSymbols(
   }
 
   try {
-    // Collect all code files
-    const codeFiles: string[] = [];
-    const scanDir = (dir: string) => {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          if (SKIP_DIRS.includes(entry.name)) continue;
-          scanDir(fullPath);
-        } else if (entry.isFile()) {
-          const ext = path.extname(entry.name).toLowerCase();
-          if (CODE_EXTENSIONS.includes(ext)) {
-            codeFiles.push(fullPath);
+    // Check symbol cache
+    const now = Date.now();
+    const cached = symbolCache.get(projectRoot);
+    let symbolResults: SymbolExtractionResult[];
+
+    if (cached && (now - cached.cachedAt) < SYMBOL_CACHE_TTL_MS) {
+      symbolResults = cached.results;
+    } else {
+      // Collect all code files with gitignore awareness
+      const codeFiles: string[] = [];
+      const { shouldSkipEntryDir, shouldSkipEntryFile } = getScanContext(project, projectRoot);
+      const scanDir = (dir: string) => {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            if (shouldSkipEntryDir(fullPath)) continue;
+            scanDir(fullPath);
+          } else if (entry.isFile()) {
+            if (shouldSkipEntryFile(fullPath)) continue;
+            const ext = path.extname(entry.name).toLowerCase();
+            if (CODE_EXTENSIONS.includes(ext)) {
+              codeFiles.push(fullPath);
+            }
           }
         }
-      }
-    };
-    scanDir(projectRoot);
+      };
+      scanDir(projectRoot);
 
-    // Extract symbols from each file
-    const symbolResults: SymbolExtractionResult[] = [];
-    for (const file of codeFiles.slice(0, 500)) { // Limit to 500 files for performance
-      try {
-        const content = fs.readFileSync(file, 'utf-8');
-        const result = extractSymbols(content, file);
-        symbolResults.push(result);
-      } catch (e) {
-        // Skip files that can't be read
+      // Extract symbols from each file
+      symbolResults = [];
+      for (const file of codeFiles.slice(0, 500)) { // Limit to 500 files for performance
+        try {
+          const content = fs.readFileSync(file, 'utf-8');
+          const result = extractSymbols(content, file);
+          symbolResults.push(result);
+        } catch (e) {
+          // Skip files that can't be read
+        }
       }
+
+      // Store in cache
+      symbolCache.set(projectRoot, { results: symbolResults, cachedAt: now });
     }
 
     // Search across all extracted symbols

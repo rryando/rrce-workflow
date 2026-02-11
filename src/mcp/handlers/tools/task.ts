@@ -1,4 +1,4 @@
-import { 
+import {
   getProjectTasks,
   getTask,
   createTask,
@@ -7,6 +7,7 @@ import {
   searchTasks,
   validatePhase
 } from '../../resources';
+import { isValidSlug } from '../../../lib/fs-safe';
 
 export const taskTools = [
   {
@@ -101,7 +102,9 @@ export const taskTools = [
 ];
 
 export async function handleTaskTool(name: string, args: Record<string, any> | undefined) {
-  if (!args) return null;
+  if (!args) {
+    return { content: [{ type: 'text', text: `Tool '${name}' requires arguments.` }], isError: true };
+  }
 
   switch (name) {
     case 'list_tasks': {
@@ -112,6 +115,9 @@ export async function handleTaskTool(name: string, args: Record<string, any> | u
 
     case 'get_task': {
       const params = args as { project: string; task_slug: string };
+      if (!isValidSlug(params.task_slug)) {
+        return { content: [{ type: 'text', text: `Invalid task slug: '${params.task_slug}'` }], isError: true };
+      }
       const task = getTask(params.project, params.task_slug);
       if (!task) {
         return { content: [{ type: 'text', text: `Task '${params.task_slug}' not found in project '${params.project}'.` }], isError: true };
@@ -121,22 +127,39 @@ export async function handleTaskTool(name: string, args: Record<string, any> | u
 
     case 'create_task': {
       const params = args as { project: string; task_slug: string; title?: string; summary?: string };
-      const taskData = {
-          title: params.title || params.task_slug,
-          summary: params.summary || ""
-      };
-      const task = await createTask(params.project, params.task_slug, taskData);
-      return { content: [{ type: 'text', text: `✓ Task '${params.task_slug}' created. meta.json saved.\n${JSON.stringify(task, null, 2)}` }] };
+      if (!isValidSlug(params.task_slug)) {
+        return { content: [{ type: 'text', text: `Invalid task slug: '${params.task_slug}'` }], isError: true };
+      }
+      try {
+        const taskData = {
+            title: params.title || params.task_slug,
+            summary: params.summary || ""
+        };
+        const task = await createTask(params.project, params.task_slug, taskData);
+        return { content: [{ type: 'text', text: `✓ Task '${params.task_slug}' created. meta.json saved.\n${JSON.stringify(task, null, 2)}` }] };
+      } catch (error: any) {
+        return { content: [{ type: 'text', text: `Failed to create task '${params.task_slug}': ${error.message}` }], isError: true };
+      }
     }
 
     case 'update_task': {
       const params = args as { project: string; task_slug: string; updates: any };
-      const task = await updateTask(params.project, params.task_slug, params.updates);
-      return { content: [{ type: 'text', text: `✓ Task '${params.task_slug}' updated. meta.json saved.\n${JSON.stringify(task, null, 2)}` }] };
+      if (!isValidSlug(params.task_slug)) {
+        return { content: [{ type: 'text', text: `Invalid task slug: '${params.task_slug}'` }], isError: true };
+      }
+      try {
+        const task = await updateTask(params.project, params.task_slug, params.updates);
+        return { content: [{ type: 'text', text: `✓ Task '${params.task_slug}' updated. meta.json saved.\n${JSON.stringify(task, null, 2)}` }] };
+      } catch (error: any) {
+        return { content: [{ type: 'text', text: `Failed to update task '${params.task_slug}': ${error.message}` }], isError: true };
+      }
     }
 
     case 'delete_task': {
       const params = args as { project: string; task_slug: string };
+      if (!isValidSlug(params.task_slug)) {
+        return { content: [{ type: 'text', text: `Invalid task slug: '${params.task_slug}'` }], isError: true };
+      }
       const success = deleteTask(params.project, params.task_slug);
       return { content: [{ type: 'text', text: success ? `✓ Task '${params.task_slug}' deleted.` : `✗ Failed to delete '${params.task_slug}'.` }] };
     }
@@ -161,11 +184,14 @@ export async function handleTaskTool(name: string, args: Record<string, any> | u
     }
 
     case 'validate_phase': {
-      const params = args as { 
-        project: string; 
-        task_slug: string; 
-        phase: 'research' | 'planning' | 'execution' | 'documentation' 
+      const params = args as {
+        project: string;
+        task_slug: string;
+        phase: 'research' | 'planning' | 'execution' | 'documentation'
       };
+      if (!isValidSlug(params.task_slug)) {
+        return { content: [{ type: 'text', text: `Invalid task slug: '${params.task_slug}'` }], isError: true };
+      }
       const result = validatePhase(params.project, params.task_slug, params.phase);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }

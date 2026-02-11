@@ -265,8 +265,13 @@ export function getAgentPromptPath(workspaceRoot: string, tool: 'copilot' | 'ant
  * @param dataPaths - Array of data paths from resolveAllDataPaths()
  */
 export function copyToAllStoragePaths(sourceFile: string, relativePath: string, dataPaths: string[]): void {
+  const normalized = path.normalize(relativePath);
+  if (normalized.startsWith('..') || path.isAbsolute(normalized)) {
+    throw new Error(`Invalid relative path: ${relativePath}`);
+  }
+
   const content = fs.readFileSync(sourceFile);
-  
+
   for (const dataPath of dataPaths) {
     const targetPath = path.join(dataPath, relativePath);
     ensureDir(path.dirname(targetPath));
@@ -281,6 +286,11 @@ export function copyToAllStoragePaths(sourceFile: string, relativePath: string, 
  * @param dataPaths - Array of data paths from resolveAllDataPaths()
  */
 export function writeToAllStoragePaths(content: string | Buffer, relativePath: string, dataPaths: string[]): void {
+  const normalized = path.normalize(relativePath);
+  if (normalized.startsWith('..') || path.isAbsolute(normalized)) {
+    throw new Error(`Invalid relative path: ${relativePath}`);
+  }
+
   for (const dataPath of dataPaths) {
     const targetPath = path.join(dataPath, relativePath);
     ensureDir(path.dirname(targetPath));

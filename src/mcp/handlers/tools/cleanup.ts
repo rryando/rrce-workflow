@@ -99,7 +99,9 @@ function getProjectDataPath(projectName: string): string | null {
 }
 
 export async function handleCleanupTool(name: string, args: Record<string, any> | undefined) {
-  if (!args) return null;
+  if (!args) {
+    return { content: [{ type: 'text', text: `Tool '${name}' requires arguments.` }], isError: true };
+  }
 
   if (name === 'cleanup_task') {
     const params = args as {

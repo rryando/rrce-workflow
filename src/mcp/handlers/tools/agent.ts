@@ -24,7 +24,9 @@ export const agentTools = [
 ];
 
 export async function handleAgentTool(name: string, args: Record<string, any> | undefined) {
-  if (!args && name !== 'list_agents') return null;
+  if (!args && name !== 'list_agents') {
+    return { content: [{ type: 'text', text: `Tool '${name}' requires arguments.` }], isError: true };
+  }
 
   switch (name) {
     case 'list_agents': {
@@ -50,7 +52,7 @@ export async function handleAgentTool(name: string, args: Record<string, any> | 
       
       if (!promptDef) {
         const available = getAllPrompts().map(p => `${p.name} (id: ${p.id})`).join(', ');
-        throw new Error(`Agent not found: ${agentName}. Available agents: ${available}`);
+        return { content: [{ type: 'text', text: `Agent not found: ${agentName}. Available agents: ${available}` }], isError: true };
       }
       
       // Render content

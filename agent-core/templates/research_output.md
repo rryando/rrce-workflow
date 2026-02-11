@@ -1,28 +1,4 @@
-<!--
-  TEMPLATE: Research Brief
-  
-  HOW TO USE:
-  1. Copy to: {{RRCE_DATA}}/tasks/{{TASK_SLUG}}/research/{{TASK_SLUG}}-research.md
-  2. Replace {{variable}} placeholders with actual values
-  3. Delete sections that are empty after population
-  
-  SYSTEM PATH VARIABLES (Must be replaced by agent using System Resolved Paths):
-  - {{RRCE_DATA}}: Storage path for knowledge/tasks (Use value from system context!)
-  - {{WORKSPACE_NAME}}: Project name
-  
-  AGENT-FILLED VARIABLES:
-  - {{task_id}}: UUID for the task
-  - {{task_slug}}: kebab-case task identifier
-  - {{task_title}}: Human-readable task title
-  - {{author}}: Git user or agent name
-  - {{date}}: ISO date (YYYY-MM-DD)
-  - {{source}}: URL or reference to original request
-  - {{workspace_name}}: Project name
-  
-  NOTE: This document is the output of an interactive research session.
-  The Research agent engaged in constructive dialogue with the user to
-  achieve 100% understanding before this brief was generated.
--->
+<!-- TEMPLATE: Research Brief — save to {{RRCE_DATA}}/tasks/{{TASK_SLUG}}/research/{{TASK_SLUG}}-research.md -->
 # Research Brief – {{task_title}}
 
 | Field | Value |
@@ -36,7 +12,7 @@
 
 ---
 
-## 1. Request Summary
+## 1. Request & Clarification Summary
 
 > **Original Request**: [Quote the user's initial request]
 
@@ -44,11 +20,7 @@
 - [Clear, specific statement of what needs to be built]
 - [Why it needs to be built - problem/opportunity]
 
----
-
-## 2. Clarification Summary
-
-The following was clarified through interactive dialogue:
+**Key Decisions Made** (through interactive dialogue):
 
 | Topic | Question Asked | User Response | Impact on Scope |
 |-------|----------------|---------------|-----------------|
@@ -57,37 +29,43 @@ The following was clarified through interactive dialogue:
 | Success Criteria | | | |
 | Edge Cases | | | |
 
-**Key Decisions Made**:
-- [Decision 1 and rationale]
-- [Decision 2 and rationale]
+---
+
+## 2. References Collected
+
+Sources discovered during research. Each gets a unique ID for cross-referencing in the plan.
+
+| ID | Source | Relevance | Snippet |
+|----|--------|-----------|---------|
+| R1 | `src/example.ts:10-25` | [Why this source matters] | `relevant code excerpt` |
+| R2 | `{{RRCE_DATA}}/knowledge/...` | [How it applies] | N/A |
+| R3 | websearch: "[search query]" | [What was learned] | N/A |
+
+> **Note**: These references are saved to `meta.json` via `rrce_update_task` for use in planning and execution.
+
+### Key Patterns Identified
+
+Patterns from the codebase that the implementation should follow:
+
+- **R1**: [Pattern description and how to apply it]
+- **R2**: [Pattern description and how to apply it]
 
 ---
 
-## 3. Current Knowledge Snapshot
-
-Relevant prior work and context from project knowledge:
-
-| Source | Relevance |
-|--------|-----------|
-| `{{RRCE_DATA}}/knowledge/...` | [How it applies] |
-| [Search result] | [How it applies] |
-
-**Patterns to Follow**:
-- [Existing pattern 1 from codebase]
-- [Existing pattern 2 from codebase]
-
----
-
-## 4. Requirements
+## 3. Requirements
 
 ### Functional Requirements
-- [ ] [FR-1]: [Requirement description]
-- [ ] [FR-2]: [Requirement description]
-- [ ] [FR-3]: [Requirement description]
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| FR-1 | [Requirement description] | Must-have |
+| FR-2 | [Requirement description] | Should-have |
+| FR-3 | [Requirement description] | Nice-to-have |
 
 ### Non-Functional Requirements
-- [ ] [NFR-1]: [Performance/Security/etc. requirement]
-- [ ] [NFR-2]: [Requirement description]
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| NFR-1 | [Performance/Security/etc.] | Must-have |
+| NFR-2 | [Requirement description] | Should-have |
 
 ### Success Criteria
 How we'll know this is done:
@@ -97,7 +75,7 @@ How we'll know this is done:
 
 ---
 
-## 5. Scope Boundaries
+## 4. Scope Boundaries
 
 ### In Scope
 - [Explicit inclusion 1]
@@ -113,7 +91,7 @@ How we'll know this is done:
 
 ---
 
-## 6. Assumptions & Risks
+## 5. Assumptions & Risks
 
 ### Assumptions
 | ID | Assumption | Confidence | Validation Needed |
@@ -129,7 +107,7 @@ How we'll know this is done:
 
 ---
 
-## 7. Opportunity & Alternative Approaches
+## 6. Opportunity & Alternative Approaches
 
 Approaches considered during research:
 
@@ -142,7 +120,7 @@ Approaches considered during research:
 
 ---
 
-## 8. Hand-off Notes for Planning
+## 7. Hand-off Notes for Planning
 
 ### Ready for Planning
 - [ ] Core requirements are clear and specific
@@ -150,18 +128,18 @@ Approaches considered during research:
 - [ ] Scope boundaries are explicit
 - [ ] No blocking open questions remain
 
-### Context for Planning Agent
+### Context for Design Agent (Planning Phase)
 - [Important context the planner needs to know]
 - [Technical considerations for task breakdown]
 
 ### Open Questions (Non-Blocking)
 - [Question that can be resolved during planning or execution]
 
-### References Added to meta.json
-- [List of knowledge files referenced]
+### References Saved to meta.json
+- [R1, R2, R3... — all references from Section 2 are persisted via `rrce_update_task`]
 
 ---
 
-> **Next Step**: `/plan TASK_SLUG={{task_slug}}`
-> 
+> **Next Step**: Proceed to Planning phase (Phase 2 of this design session).
+>
 > Keep this document under 500 lines. Replace placeholders with concise entries and trim empty sections.

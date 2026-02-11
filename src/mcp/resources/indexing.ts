@@ -85,7 +85,7 @@ export async function indexKnowledge(projectName: string, force: boolean = false
     };
   }
 
-  const runIndexing = async (): Promise<void> => {
+  const runIndexing = async (signal: AbortSignal): Promise<void> => {
     const { shouldSkipEntryDir, shouldSkipEntryFile } = getScanContext(project, scanRoot);
     
     const knowledgeDir = project.knowledgePath || path.join(scanRoot, '.rrce-workflow', 'knowledge');
@@ -209,6 +209,7 @@ export async function indexKnowledge(projectName: string, force: boolean = false
             itemsDone++;
             indexingJobs.update(project.name, { itemsDone });
             if (itemsDone % 10 === 0) {
+              if (signal.aborted) return;
               await new Promise<void>(resolve => setImmediate(resolve));
             }
           }

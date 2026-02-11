@@ -21,34 +21,64 @@
       "notes": ""
     }
   ],
-  "references": [],
-  "open_questions": [],
-  "decisions": [],
+  "references": [
+    {
+      "id": "R1",
+      "source": "src/example.ts:10-25",
+      "relevance": "Why this source matters",
+      "snippet": "key code or quote (optional)",
+      "phase": "research"
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q1",
+      "question": "What needs to be clarified?",
+      "status": "open",
+      "resolution": "",
+      "raised_in": "research"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "D1",
+      "decision": "What was decided",
+      "rationale": "Why this choice was made",
+      "made_in": "research"
+    }
+  ],
   "milestones": [],
   "agents": {
     "research": {
       "owner": "",
       "status": "pending",
       "artifact": "",
-      "notes": ""
+      "notes": "",
+      "completed_at": ""
     },
     "planning": {
       "owner": "",
       "status": "pending",
       "artifact": "",
-      "notes": ""
+      "notes": "",
+      "completed_at": "",
+      "task_count": 0
     },
     "executor": {
       "owner": "",
       "status": "pending",
       "artifact": "",
-      "notes": ""
+      "notes": "",
+      "completed_at": "",
+      "tasks_completed": 0,
+      "tests_passed": false
     },
     "documentation": {
       "owner": "",
       "status": "pending",
       "artifact": "",
-      "notes": ""
+      "notes": "",
+      "completed_at": ""
     }
   }
 }

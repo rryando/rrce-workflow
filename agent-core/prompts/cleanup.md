@@ -1,6 +1,7 @@
 ---
 name: RRCE Cleanup
 description: Extract valuable knowledge from tasks and delete artifacts
+version: "1.0.0"
 argument-hint: "TASK_SLUG=<slug> [TASK_SLUG_2=<slug>] [--all]"
 tools: ['rrce_get_task', 'rrce_search_knowledge', 'rrce_search_code', 'rrce_delete_task', 'rrce_index_knowledge', 'rrce_list_tasks', 'read', 'write']
 required-args: []
@@ -134,9 +135,18 @@ Updated: YYYY-MM-DD
 - [ ] Follow-up item 1
 ```
 
-### Step 3: Delete Task
-After successful knowledge extraction:
-- Call `rrce_delete_task(project: "{{WORKSPACE_NAME}}", task_slug: "<slug>")`
+### Step 3: Confirm & Delete Task
+After successful knowledge extraction, present the summary to the user:
+
+> "Extracted knowledge from `{slug}`:
+> - [Key insight 1]
+> - [Key insight 2]
+> Saved to: `{knowledge_file}`
+>
+> **Delete task artifacts for `{slug}`?** (y/n)"
+
+- If "y": Call `rrce_delete_task(project: "{{WORKSPACE_NAME}}", task_slug: "<slug>")`
+- If "n": Keep task artifacts, proceed to next task
 - If deletion fails, log error but keep knowledge for manual review
 
 ### Step 4: Reindex Knowledge
@@ -170,6 +180,15 @@ Cleaning up 3 tasks:
   ✓ task-api-refactor (knowledge extracted, deleted)
   ⚠ task-ui-refresh (knowledge extracted, delete failed - see logs)
 ```
+
+## Summary & Next Steps
+
+Report:
+- Tasks cleaned: [count]
+- Knowledge files created/merged: [list]
+- Any failures or skipped items
+
+Optional: **"Should I run `/rrce_sync` to verify knowledge consistency?** (y/n)"
 
 ## Deliverable
 

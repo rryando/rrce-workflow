@@ -7,7 +7,7 @@ import React, { createContext, useContext, useState, useCallback, useMemo, useEf
 import type { MCPConfig } from '../types';
 import type { DetectedProject } from '../../lib/detection';
 import { loadMCPConfig } from '../config';
-import { scanForProjects } from '../../lib/detection';
+import { projectService } from '../../lib/detection-service';
 import { findProjectConfig } from '../config-utils';
 import { DriftService, type DriftReport } from '../../lib/drift-service';
 import { getAgentCoreDir } from '../../lib/prompts';
@@ -50,13 +50,13 @@ interface ConfigProviderProps {
  */
 export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
   const [config, setConfig] = useState<MCPConfig>(() => loadMCPConfig());
-  const [projects, setProjects] = useState<DetectedProject[]>(() => scanForProjects());
+  const [projects, setProjects] = useState<DetectedProject[]>(() => projectService.scan());
   const [driftReports, setDriftReports] = useState<Record<string, DriftReport>>({});
   
   // Refresh function to reload config and projects
   const refresh = useCallback(() => {
     const newConfig = loadMCPConfig();
-    const newProjects = scanForProjects();
+    const newProjects = projectService.refresh();
     setConfig(newConfig);
     setProjects(newProjects);
   }, []);
@@ -74,9 +74,10 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     setDriftReports(reports);
   }, [projects, config]);
 
-  // Initial drift check
+  // Deferred drift check — let the TUI render first
   useEffect(() => {
-    checkAllDrift();
+    const timer = setTimeout(checkAllDrift, 500);
+    return () => clearTimeout(timer);
   }, [checkAllDrift]);
   
   // Memoize exposed projects calculation

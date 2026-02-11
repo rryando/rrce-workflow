@@ -43,27 +43,7 @@ Use `rrce_validate_phase` to check prerequisites before starting a phase:
 - Returns `valid`, `status`, `missing_items`, and `suggestions`
 - Prevents wasted work on incomplete prerequisites
 
-## Checklist Sync (OpenCode)
-When working on a task with a checklist:
-1. Always read the current checklist from `meta.json` via `rrce_get_task()`.
-2. Convert meta.json checklist to OpenCode format for `todowrite`:
-   - `id` → `id` (same)
-   - `label` → `content` (rename)
-   - `status` → `status` (same: pending/in_progress/completed)
-   - Derive `priority` from owner field:
-     * If `owner` is present → `"high"`
-     * If `owner` is empty → `"medium"`
-3. Use `todowrite` to sync to OpenCode's sidebar.
-4. Update the sidebar whenever a sub-task status changes.
-
-**Example conversion:**
-```json
-// meta.json format
-{"id": "1", "label": "Implement auth", "status": "pending", "owner": "research"}
-
-// OpenCode format
-{"id": "1", "content": "Implement auth", "status": "pending", "priority": "high"}
-```
+<!-- include-if: opencode _opencode.md -->
 
 ## Error Recovery
 If a tool call fails:
@@ -94,10 +74,9 @@ For active task visibility in the MCP TUI:
 This enables real-time progress display in the Overview tab.
 
 ## Workspace Constraints
-- All agents have read and write access to files as needed
-- Agents should respect task scope and avoid unnecessary modifications
-- All agents may write to their designated `RRCE_DATA` paths
-- Develop agent focuses on execution of planned changes in source code
+- All agents have read access to workspace files and write access to `RRCE_DATA` paths (knowledge, tasks, artifacts)
+- **Only the Develop agent** modifies project source code (`WORKSPACE_ROOT`)
+- Other agents should respect task scope and avoid unnecessary modifications outside `RRCE_DATA`
 
 ---
 

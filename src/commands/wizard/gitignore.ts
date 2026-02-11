@@ -63,7 +63,12 @@ ${entries.join('\n')}
 
   // Append to .gitignore
   const updatedContent = existingContent.trimEnd() + newSection;
-  fs.writeFileSync(gitignorePath, updatedContent);
+  try {
+    fs.writeFileSync(gitignorePath, updatedContent);
+  } catch (err) {
+    console.error(`[updateGitignore] Failed to write ${gitignorePath}:`, err);
+    return false;
+  }
 
   return true;
 }

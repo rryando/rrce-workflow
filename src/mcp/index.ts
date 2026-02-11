@@ -6,7 +6,7 @@
 import { intro, outro, confirm, note, isCancel } from '@clack/prompts';
 import pc from 'picocolors';
 import { ensureMCPGlobalPath } from './config';
-import { startMCPServer } from './server';
+import { startMCPServer, stopMCPServer } from './server';
 import { isInstalledAnywhere } from './install';
 import { detectWorkspaceRoot } from '../lib/paths';
 
@@ -22,6 +22,9 @@ import { runInstallWizard } from './commands/install-wizard';
 export async function runMCP(subcommand?: string): Promise<void> {
   // Handle 'start' subcommand for non-TTY mode (used by IDE integrations)
   if (subcommand === 'start' && !process.stdout.isTTY) {
+    const shutdown = () => { stopMCPServer().finally(() => process.exit(0)); };
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
     await startMCPServer();
     await new Promise(() => {}); // Never resolves - keep server running
     return;

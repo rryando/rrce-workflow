@@ -9,7 +9,7 @@
  * - getPromptDef
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createTestEnv, type TestEnv } from '../helpers/test-env';
@@ -220,64 +220,214 @@ Content for ${name}
     describe('getPromptDef', () => {
       it('should find prompt by name', async () => {
         const { getPromptDef, getAllPrompts } = await import('../../mcp/prompts');
-        
+
         const allPrompts = getAllPrompts();
         if (allPrompts.length === 0) {
           // Skip if no prompts available
           return;
         }
-        
+
         const firstPrompt = allPrompts[0];
         const firstName = firstPrompt?.name;
         if (!firstName) return;
-        
+
         const result = getPromptDef(firstName);
-        
+
         expect(result).toBeDefined();
         expect(result?.name).toBe(firstName);
       });
 
       it('should find prompt by id', async () => {
         const { getPromptDef, getAllPrompts } = await import('../../mcp/prompts');
-        
+
         const allPrompts = getAllPrompts();
         if (allPrompts.length === 0) {
           return;
         }
-        
+
         const firstPrompt = allPrompts[0];
         const firstId = firstPrompt?.id;
         if (!firstId) return;
-        
+
         const result = getPromptDef(firstId);
-        
+
         expect(result).toBeDefined();
         expect(result?.id).toBe(firstId);
       });
 
       it('should return undefined for non-existent prompt', async () => {
         const { getPromptDef } = await import('../../mcp/prompts');
-        
+
         const result = getPromptDef('non-existent-prompt-name');
-        
+
         expect(result).toBeUndefined();
       });
 
       it('should be case-insensitive', async () => {
         const { getPromptDef, getAllPrompts } = await import('../../mcp/prompts');
-        
+
         const allPrompts = getAllPrompts();
         if (allPrompts.length === 0) {
           return;
         }
-        
+
         const firstPrompt = allPrompts[0];
         const firstName = firstPrompt?.name;
         if (!firstName) return;
-        
+
         const result = getPromptDef(firstName.toLowerCase());
-        
+
         expect(result).toBeDefined();
+      });
+    });
+
+    describe('processIncludes', () => {
+      it('should resolve unconditional includes', async () => {
+        const { processIncludes } = await import('../../mcp/prompts');
+
+        const partialsDir = path.join(env.testDir, 'prompts');
+        fs.mkdirSync(partialsDir, { recursive: true });
+        fs.writeFileSync(path.join(partialsDir, '_shared.md'), 'Shared content here');
+
+        const content = 'Before\n<!-- include: _shared.md -->\nAfter';
+        const result = processIncludes(content, partialsDir);
+
+        expect(result).toContain('Before');
+        expect(result).toContain('Shared content here');
+        expect(result).toContain('After');
+        expect(result).not.toContain('<!-- include:');
+      });
+
+      it('should resolve conditional includes when client matches', async () => {
+        const { processIncludes, setDetectedClient } = await import('../../mcp/prompts');
+
+        setDetectedClient('testclient');
+        const partialsDir = path.join(env.testDir, 'prompts');
+        fs.mkdirSync(partialsDir, { recursive: true });
+        fs.writeFileSync(path.join(partialsDir, '_client.md'), 'Client-specific content');
+
+        const content = '<!-- include-if: testclient _client.md -->';
+        const result = processIncludes(content, partialsDir);
+
+        expect(result).toBe('Client-specific content');
+      });
+
+      it('should skip conditional includes when client does not match', async () => {
+        const { processIncludes, setDetectedClient } = await import('../../mcp/prompts');
+
+        setDetectedClient('otherclient');
+        const partialsDir = path.join(env.testDir, 'prompts');
+        fs.mkdirSync(partialsDir, { recursive: true });
+        fs.writeFileSync(path.join(partialsDir, '_client.md'), 'Client-specific content');
+
+        const content = 'Start\n<!-- include-if: testclient _client.md -->\nEnd';
+        const result = processIncludes(content, partialsDir);
+
+        expect(result).not.toContain('Client-specific content');
+        expect(result).toContain('Start');
+        expect(result).toContain('End');
+      });
+
+      it('should handle missing include files gracefully', async () => {
+        const { processIncludes } = await import('../../mcp/prompts');
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const partialsDir = path.join(env.testDir, 'prompts');
+        fs.mkdirSync(partialsDir, { recursive: true });
+
+        const content = '<!-- include: _nonexistent.md -->';
+        const result = processIncludes(content, partialsDir);
+
+        expect(result).toBe('');
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('_nonexistent.md'));
+
+        warnSpy.mockRestore();
+      });
+
+      it('should resolve nested includes recursively', async () => {
+        const { processIncludes } = await import('../../mcp/prompts');
+
+        const partialsDir = path.join(env.testDir, 'prompts');
+        fs.mkdirSync(partialsDir, { recursive: true });
+        fs.writeFileSync(path.join(partialsDir, '_outer.md'), 'Outer\n<!-- include: _inner.md -->');
+        fs.writeFileSync(path.join(partialsDir, '_inner.md'), 'Inner content');
+
+        const content = '<!-- include: _outer.md -->';
+        const result = processIncludes(content, partialsDir);
+
+        expect(result).toContain('Outer');
+        expect(result).toContain('Inner content');
+        expect(result).not.toContain('<!-- include:');
+      });
+
+      it('should stop at depth limit and warn', async () => {
+        const { processIncludes } = await import('../../mcp/prompts');
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const partialsDir = path.join(env.testDir, 'prompts');
+        fs.mkdirSync(partialsDir, { recursive: true });
+        fs.writeFileSync(path.join(partialsDir, '_l1.md'), '<!-- include: _l2.md -->');
+        fs.writeFileSync(path.join(partialsDir, '_l2.md'), '<!-- include: _l3.md -->');
+        fs.writeFileSync(path.join(partialsDir, '_l3.md'), '<!-- include: _l4.md -->');
+        fs.writeFileSync(path.join(partialsDir, '_l4.md'), 'Should not resolve');
+
+        const content = '<!-- include: _l1.md -->';
+        const result = processIncludes(content, partialsDir);
+
+        // _l4.md include directive should remain unresolved at depth 3
+        expect(result).toContain('<!-- include: _l4.md -->');
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('depth limit'));
+
+        warnSpy.mockRestore();
+      });
+
+      it('should strip frontmatter from included partials', async () => {
+        const { processIncludes } = await import('../../mcp/prompts');
+
+        const partialsDir = path.join(env.testDir, 'prompts');
+        fs.mkdirSync(partialsDir, { recursive: true });
+        fs.writeFileSync(path.join(partialsDir, '_withfm.md'), '---\nname: Test Partial\n---\nActual content');
+
+        const content = '<!-- include: _withfm.md -->';
+        const result = processIncludes(content, partialsDir);
+
+        expect(result).toContain('Actual content');
+        expect(result).not.toContain('name: Test Partial');
+      });
+    });
+
+    describe('resolveProjectContext', () => {
+      it('should return all expected fields', async () => {
+        const { resolveProjectContext } = await import('../../mcp/prompts');
+
+        const ctx = resolveProjectContext();
+
+        expect(ctx).toHaveProperty('rrceData');
+        expect(ctx).toHaveProperty('rrceHome');
+        expect(ctx).toHaveProperty('workspaceRoot');
+        expect(ctx).toHaveProperty('workspaceName');
+      });
+
+      it('should return string types for all fields', async () => {
+        const { resolveProjectContext } = await import('../../mcp/prompts');
+
+        const ctx = resolveProjectContext();
+
+        expect(typeof ctx.rrceData).toBe('string');
+        expect(typeof ctx.rrceHome).toBe('string');
+        expect(typeof ctx.workspaceRoot).toBe('string');
+        expect(typeof ctx.workspaceName).toBe('string');
+      });
+
+      it('should fall back to process.cwd() for workspaceRoot when no project detected', async () => {
+        const { resolveProjectContext } = await import('../../mcp/prompts');
+
+        const ctx = resolveProjectContext();
+
+        // In test env with no configured project, workspaceRoot should be cwd
+        // (unless a global workspace directory happens to exist for the cwd folder name)
+        expect(typeof ctx.workspaceRoot).toBe('string');
+        expect(ctx.workspaceRoot.length).toBeGreaterThan(0);
       });
     });
   });

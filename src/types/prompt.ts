@@ -23,6 +23,7 @@ export const PermissionSchema = z.object({
 export const PromptFrontmatterSchema = z.object({
   name: z.string(),
   description: z.string(),
+  version: z.string().optional(),
   'argument-hint': z.union([z.string(), z.array(z.string())]).optional(),
   tools: z.array(z.string()).optional(),
   mode: z.enum(['primary', 'subagent']).optional(),

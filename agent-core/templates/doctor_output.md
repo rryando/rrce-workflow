@@ -87,7 +87,7 @@ A brief 2-3 sentence summary of the overall codebase health and most critical fi
 
 ---
 
-## Recommended Tasks for Planning Agent
+## Recommended Tasks for Design Agent
 
 > These are ready-to-use task definitions for the `planning` agent.
 
@@ -130,7 +130,7 @@ Any relevant metrics collected during analysis:
 ## Next Steps
 
 1. Review findings with team/stakeholder
-2. Hand off high-priority tasks to `planning` agent: `rrce-workflow run planning --task="<Task Title>"`
+2. Hand off high-priority tasks to design agent: `/rrce_design <task-slug>`
 3. Schedule follow-up diagnosis in: [timeframe]
 
 ---

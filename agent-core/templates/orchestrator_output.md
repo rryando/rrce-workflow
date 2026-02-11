@@ -1,51 +1,49 @@
 # RRCE Orchestration Summary
 
-**Generated**: {{TIMESTAMP}}  
-**Orchestrator**: RRCE Workflow Orchestrator  
-**Phases Executed**: {{PHASES_EXECUTED}}
+**Generated**: {{timestamp}}
+**Orchestrator**: RRCE Workflow Orchestrator
+**Phases Executed**: {{phases_executed}}
 
 ---
 
 ## Workflow Execution Summary
 
 ### Requested Work
-{{USER_REQUEST}}
+{{user_request}}
 
 ### Phases Completed
 
-{{#each PHASES}}
-#### {{PHASE_NAME}}
+<!-- Repeat this block for each phase executed -->
 
-**Status**: {{STATUS}}  
-**Artifact**: `{{ARTIFACT_PATH}}`  
-**Duration**: {{DURATION}}
+#### {{phase_name}}
+
+**Status**: {{phase_status}}
+**Artifact**: `{{phase_artifact_path}}`
+**Duration**: {{phase_duration}}
 
 **Key Outcomes:**
-{{OUTCOMES}}
+{{phase_outcomes}}
 
 **Next Steps:**
-{{NEXT_STEPS}}
+{{phase_next_steps}}
 
 ---
-
-{{/each}}
 
 ## Overall Status
 
-**Completion**: {{COMPLETION_PERCENTAGE}}%  
-**Ready for Next Phase**: {{READY_FOR_NEXT}}
+**Completion**: {{completion_percentage}}%
+**Ready for Next Phase**: {{ready_for_next}}
 
 ### Artifacts Generated
 
-{{#each ARTIFACTS}}
-- [`{{PATH}}`]({{PATH}}) - {{DESCRIPTION}}
-{{/each}}
+<!-- List all artifacts produced -->
+- [`{{artifact_path}}`]({{artifact_path}}) - {{artifact_description}}
 
 ### Recommendations
 
-{{RECOMMENDATIONS}}
+{{recommendations}}
 
 ---
 
-**Session Complete**: {{SESSION_COMPLETE}}  
-**Return Summary**: {{RETURN_SUMMARY}}
+**Session Complete**: {{session_complete}}
+**Return Summary**: {{return_summary}}

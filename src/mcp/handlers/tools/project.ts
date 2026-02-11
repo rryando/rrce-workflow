@@ -59,7 +59,7 @@ export async function handleProjectTool(name: string, args: Record<string, any> 
     if (name === 'list_projects' || name === 'help_setup' || name === 'reload_config') {
       // These don't need args
     } else {
-      return null;
+      return { content: [{ type: 'text', text: `Tool '${name}' requires arguments.` }], isError: true };
     }
   }
 

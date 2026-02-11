@@ -304,8 +304,20 @@ export function findRelatedFiles(
   return results;
 }
 
+// Cache for dependency graphs per project root
+const GRAPH_CACHE_TTL_MS = 60_000; // 60 seconds
+const graphCache = new Map<string, { graph: DependencyGraph; cachedAt: number }>();
+
 /**
- * Scan a project directory and build a dependency graph
+ * Clear the dependency graph cache
+ */
+export function clearDependencyGraphCache(): void {
+  graphCache.clear();
+}
+
+/**
+ * Scan a project directory and build a dependency graph.
+ * Results are cached per projectRoot with a 60-second TTL.
  */
 export async function scanProjectDependencies(
   projectRoot: string,
@@ -314,20 +326,28 @@ export async function scanProjectDependencies(
     skipDirs?: string[];
   } = {}
 ): Promise<DependencyGraph> {
+  // Check cache
+  const now = Date.now();
+  const cached = graphCache.get(projectRoot);
+  if (cached && (now - cached.cachedAt) < GRAPH_CACHE_TTL_MS) {
+    logger.debug(`[DependencyGraph] Using cached graph for ${projectRoot}`);
+    return cached.graph;
+  }
+
   const {
     extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.rs', '.java'],
     skipDirs = ['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', 'venv', '.venv', 'target', 'vendor']
   } = options;
-  
+
   const files: Array<{ path: string; content: string }> = [];
-  
+
   function scanDir(dir: string) {
     try {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
-      
+
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
-        
+
         if (entry.isDirectory()) {
           if (!skipDirs.includes(entry.name) && !entry.name.startsWith('.')) {
             scanDir(fullPath);
@@ -348,13 +368,16 @@ export async function scanProjectDependencies(
       logger.error(`[DependencyGraph] Error scanning directory ${dir}`, err);
     }
   }
-  
+
   logger.info(`[DependencyGraph] Scanning project: ${projectRoot}`);
   scanDir(projectRoot);
   logger.info(`[DependencyGraph] Found ${files.length} files to analyze`);
-  
+
   const graph = buildDependencyGraph(files);
   logger.info(`[DependencyGraph] Built graph with ${graph.edges.length} edges`);
-  
+
+  // Store in cache
+  graphCache.set(projectRoot, { graph, cachedAt: now });
+
   return graph;
 }

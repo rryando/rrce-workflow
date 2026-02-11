@@ -124,6 +124,9 @@ export async function getContextBundle(
   let truncated = false;
   let indexAgeSeconds: number | undefined;
 
+  // Resolve projects once and pass through to avoid redundant scans
+  const resolvedProjects = getExposedProjects();
+
   // 1. Get project context
   let projectContext: string | null = null;
   if (include.project_context) {
@@ -134,7 +137,6 @@ export async function getContextBundle(
         projectContext = rawContext;
         totalTokens += contextTokens;
       } else {
-        // Truncate to budget
         const maxChars = contextBudget * 4;
         projectContext = rawContext.slice(0, maxChars) + '\n\n[truncated]';
         totalTokens += contextBudget;
@@ -143,16 +145,22 @@ export async function getContextBundle(
     }
   }
 
-  // 2. Search knowledge
+  // 2. Search knowledge and code in parallel (they are independent)
   const knowledgeResults: Array<{ file: string; matches: string[]; score?: number }> = [];
-  if (include.knowledge) {
-    const knowledgeSearch = await searchKnowledge(query, projectName, { max_tokens: knowledgeBudget });
+  const codeResults: Array<{ file: string; snippet: string; lineStart: number; lineEnd: number; context?: string; score: number }> = [];
+
+  const [knowledgeSearch, codeSearch] = await Promise.all([
+    include.knowledge
+      ? searchKnowledge(query, projectName, { max_tokens: knowledgeBudget, _resolvedProjects: resolvedProjects })
+      : null,
+    include.code
+      ? searchCode(query, projectName, 10, { max_tokens: codeBudget, _resolvedProjects: resolvedProjects })
+      : null,
+  ]);
+
+  if (knowledgeSearch) {
     for (const r of knowledgeSearch.results) {
-      knowledgeResults.push({
-        file: r.file,
-        matches: r.matches,
-        score: r.score
-      });
+      knowledgeResults.push({ file: r.file, matches: r.matches, score: r.score });
     }
     totalTokens += knowledgeSearch.token_count;
     if (knowledgeSearch.truncated) truncated = true;
@@ -161,10 +169,7 @@ export async function getContextBundle(
     }
   }
 
-  // 3. Search code
-  const codeResults: Array<{ file: string; snippet: string; lineStart: number; lineEnd: number; context?: string; score: number }> = [];
-  if (include.code) {
-    const codeSearch = await searchCode(query, projectName, 10, { max_tokens: codeBudget });
+  if (codeSearch) {
     for (const r of codeSearch.results) {
       codeResults.push({
         file: r.file,
@@ -261,12 +266,14 @@ export async function prefetchTaskContext(
     }
   });
 
-  // Get summaries of referenced files
+  // Get summaries of referenced files in parallel
+  // Supports both legacy string[] and new { source: string }[] formats
   const referencedFiles: Array<{ path: string; language: string; lines: number; exports: string[] }> = [];
-  const references = (task as any).references as string[] | undefined;
-  if (references && Array.isArray(references)) {
-    for (const ref of references.slice(0, 5)) {
-      const summary = await getFileSummary(ref, projectName);
+  const rawRefs = (task as any).references as Array<string | { source: string }> | undefined;
+  if (rawRefs && Array.isArray(rawRefs)) {
+    const refs = rawRefs.slice(0, 5).map(r => typeof r === 'string' ? r : r.source);
+    const summaries = await Promise.all(refs.map(ref => getFileSummary(ref, projectName)));
+    for (const summary of summaries) {
       if (summary.success && summary.summary) {
         referencedFiles.push({
           path: summary.summary.path,

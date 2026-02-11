@@ -1,6 +1,7 @@
 ---
 name: RRCE Documentation
 description: Produce project documentation aligned with the latest delivery.
+version: "1.0.0"
 argument-hint: "DOC_TYPE=<type> [TASK_SLUG=<slug> | TARGET_PATH=<relative>] [RELEASE_REF=<tag/sha>]"
 tools: ['rrce_resolve_path', 'rrce_prefetch_task_context', 'rrce_get_context_bundle', 'rrce_search_knowledge', 'rrce_search_code', 'rrce_get_project_context', 'rrce_list_projects', 'rrce_update_task', 'read', 'write', 'glob', 'grep']
 required-args:
@@ -44,7 +45,7 @@ If `TASK_SLUG` provided:
 - Translate implemented work and accumulated context into durable documentation
 - Ensure downstream teams can understand outcomes without redoing discovery
 
-Non-Negotiables
+## Non-Negotiables
 1. Review applicable artifacts first: if `TASK_SLUG` is supplied, read `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json`, research, plan, and execution outputs; otherwise examine `{{RRCE_DATA}}/knowledge` and relevant code.
 2. Automate folder creation, template selection, and metadata updates yourself—never rely on users for manual prep.
 3. Keep documentation under 500 lines while preserving essential detail and references.
@@ -52,20 +53,31 @@ Non-Negotiables
 5. Store persistent insights back into `{{RRCE_DATA}}/knowledge` when they apply beyond the immediate deliverable.
 6. Close the loop in `meta.json` when working within a task by using `rrce_update_task` to set `agents.documentation.status`, refresh `checklist`, and update overall `status`.
 
-Workflow
+## Workflow
  1. Confirm `DOC_TYPE`; prompt for it if missing. Normalize to kebab-case for filenames.
  2. Choose destination:
     - If `TASK_SLUG` is provided, ensure `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/docs` exists and target `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/docs/{{TASK_SLUG}}-{{DOC_TYPE}}.md`.
     - Else if `TARGET_PATH` is provided, ensure its parent directory exists (must remain under `{{RRCE_DATA}}/`) and target `{{RRCE_DATA}}/{{TARGET_PATH}}`.
     - Otherwise, default to `{{RRCE_DATA}}/knowledge/{{DOC_TYPE}}.md` and ensure `{{RRCE_DATA}}/knowledge` exists.
- 3. Select a template: use `{{RRCE_HOME}}/templates/documentation_output.md` as base template (adapt structure based on DOC_TYPE).
+ 3. Select a template based on DOC_TYPE:
+
+    | DOC_TYPE | Template |
+    |----------|----------|
+    | `api` | `{{RRCE_HOME}}/templates/docs/api_output.md` |
+    | `architecture` | `{{RRCE_HOME}}/templates/docs/architecture_output.md` |
+    | `runbook` | `{{RRCE_HOME}}/templates/docs/runbook_output.md` |
+    | `changelog` | `{{RRCE_HOME}}/templates/docs/changelog_output.md` |
+    | `readme` | `{{RRCE_HOME}}/templates/docs/readme_output.md` |
+    | `handover` | `{{RRCE_HOME}}/templates/docs/handover_output.md` |
+    | Other | `{{RRCE_HOME}}/templates/documentation_output.md` (generic fallback) |
+
  4. Populate contextual metadata (`AUTHOR`, `RELEASE_REF`, task references, dates) and render the document using the chosen template.
  5. If operating on a task slug, update `{{RRCE_DATA}}/tasks/{{TASK_SLUG}}/meta.json` using `rrce_update_task` with documentation artifact paths, new references, final decisions, checklist completions, and remaining follow-ups.
  6. When broader knowledge changed, update the relevant `{{RRCE_DATA}}/knowledge/*.md` entries with `Updated: YYYY-MM-DD` markers, lean changelog bullets, and a small checklist of follow-ups.
  7. Provide a concise sign-off statement confirming readiness for maintenance or release.
- 8. Optional: Offer follow-up actions with permission prompt, e.g., "**Should I run `/rrce_doctor` to check for additional improvements?** (y/n)"
+ 8. Optional: Offer follow-up actions with permission prompt, e.g., "**Should I run `/rrce_cleanup` to extract knowledge from completed tasks?** (y/n)"
 
-Deliverable
+## Deliverable
 - File: Resolved from `DOC_TYPE` plus either `TASK_SLUG`, `TARGET_PATH`, or default knowledge location.
-- Format: `{{RRCE_HOME}}/templates/documentation_output.md` (adapt structure based on DOC_TYPE).
+- Format: Type-specific template from `templates/docs/` directory, falling back to `documentation_output.md` for unrecognized types.
 - Outcome: Documentation tailored to the requested type, summarizing scope, implementation, validations, decisions, references, and leftover work while keeping project knowledge synchronized.

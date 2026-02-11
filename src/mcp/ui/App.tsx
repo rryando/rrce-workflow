@@ -99,8 +99,11 @@ export const App = ({ onExit, initialPort }: AppProps) => {
       const start = Math.max(0, stats.size - tailBytes);
       const buffer = Buffer.alloc(stats.size - start);
       const fd = fs.openSync(logPath, 'r');
-      fs.readSync(fd, buffer, 0, buffer.length, start);
-      fs.closeSync(fd);
+      try {
+        fs.readSync(fd, buffer, 0, buffer.length, start);
+      } finally {
+        fs.closeSync(fd);
+      }
       const content = buffer.toString('utf-8');
       const lines = content.split('\n').filter(l => l.trim());
       setLogs(lines.slice(-maxLines));
@@ -119,8 +122,11 @@ export const App = ({ onExit, initialPort }: AppProps) => {
       if (stats.size > lastSize) {
         const buffer = Buffer.alloc(stats.size - lastSize);
         const fd = fs.openSync(logPath, 'r');
-        fs.readSync(fd, buffer, 0, buffer.length, lastSize);
-        fs.closeSync(fd);
+        try {
+          fs.readSync(fd, buffer, 0, buffer.length, lastSize);
+        } finally {
+          fs.closeSync(fd);
+        }
         const newContent = buffer.toString('utf-8');
         const newLines = newContent.split('\n').filter(l => l.trim());
         setLogs(prev => {
@@ -137,14 +143,14 @@ export const App = ({ onExit, initialPort }: AppProps) => {
   // Input Handling for Exit and Restart
   useInput(async (input, key) => {
     if (input === 'q' || (key.ctrl && input === 'c')) {
-      stopMCPServer();
+      await stopMCPServer();
       onExit();
       exit();
     }
-    
+
     if (input === 'r') {
       setLogs(prev => [...prev, '[INFO] Restarting server...']);
-      stopMCPServer();
+      await stopMCPServer();
       setServerInfo(prev => ({ ...prev, running: false }));
       
       try {

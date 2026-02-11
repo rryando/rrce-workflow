@@ -22,6 +22,7 @@ export interface StartOrStatusResult {
 interface InternalJob {
   progress: IndexingProgress;
   promise?: Promise<void>;
+  abortController?: AbortController;
 }
 
 class IndexingJobManager {
@@ -54,7 +55,7 @@ class IndexingJobManager {
     return this.getProgress(project).state === 'running';
   }
 
-  startOrStatus(project: string, runner: () => Promise<void>): StartOrStatusResult {
+  startOrStatus(project: string, runner: (signal: AbortSignal) => Promise<void>): StartOrStatusResult {
     const current = this.jobs.get(project);
 
     if (current?.progress.state === 'running' && current.promise) {
@@ -79,22 +80,28 @@ class IndexingJobManager {
       lastError: undefined,
     };
 
-    const job: InternalJob = { progress: initial };
+    const abortController = new AbortController();
+    const job: InternalJob = { progress: initial, abortController };
     this.jobs.set(project, job);
 
     job.promise = (async () => {
       try {
-        await runner();
+        await runner(abortController.signal);
         this.update(project, { state: 'complete', completedAt: Date.now(), currentItem: undefined });
+        // Clean up completed job reference (keep progress for status queries)
+        job.promise = undefined;
+        job.abortController = undefined;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        logger.error(`[RAG] Indexing job failed for '${project}'`, err);
-        this.update(project, {
-          state: 'failed',
-          completedAt: Date.now(),
-          currentItem: undefined,
-          lastError: msg,
-        });
+        if (abortController.signal.aborted) {
+          logger.info(`[RAG] Indexing job aborted for '${project}'`);
+          this.update(project, { state: 'failed', completedAt: Date.now(), currentItem: undefined, lastError: 'Aborted' });
+        } else {
+          logger.error(`[RAG] Indexing job failed for '${project}'`, err);
+          this.update(project, { state: 'failed', completedAt: Date.now(), currentItem: undefined, lastError: msg });
+        }
+        job.promise = undefined;
+        job.abortController = undefined;
       }
     })();
 
@@ -103,6 +110,18 @@ class IndexingJobManager {
       state: 'running',
       progress: { ...this.getProgress(project) },
     };
+  }
+
+  /**
+   * Abort all running indexing jobs (used during server shutdown)
+   */
+  abortAll(): void {
+    for (const [project, job] of this.jobs) {
+      if (job.progress.state === 'running' && job.abortController) {
+        logger.info(`[RAG] Aborting indexing job for '${project}'`);
+        job.abortController.abort();
+      }
+    }
   }
 }
 

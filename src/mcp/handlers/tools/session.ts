@@ -1,7 +1,8 @@
-import { 
+import {
   startSession,
   endSession,
-  updateAgentTodos
+  updateAgentTodos,
+  cleanStaleSessions
 } from '../../resources';
 
 export const sessionTools = [
@@ -29,6 +30,17 @@ export const sessionTools = [
         task_slug: { type: 'string', description: 'The slug of the task' },
       },
       required: ['project', 'task_slug'],
+    },
+  },
+  {
+    name: 'cleanup_sessions',
+    description: 'Remove stale agent sessions (no heartbeat for 30+ minutes). Call this when the dashboard shows ghost sessions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Name of the project' },
+      },
+      required: ['project'],
     },
   },
   {
@@ -62,7 +74,9 @@ export const sessionTools = [
 ];
 
 export async function handleSessionTool(name: string, args: Record<string, any> | undefined) {
-  if (!args) return null;
+  if (!args) {
+    return { content: [{ type: 'text', text: `Tool '${name}' requires arguments.` }], isError: true };
+  }
 
   switch (name) {
     case 'start_session': {
@@ -75,6 +89,15 @@ export async function handleSessionTool(name: string, args: Record<string, any> 
       const params = args as { project: string; task_slug: string };
       const result = endSession(params.project, params.task_slug);
       return { content: [{ type: 'text', text: result.message }], isError: !result.success };
+    }
+
+    case 'cleanup_sessions': {
+      const params = args as { project: string };
+      const result = cleanStaleSessions(params.project);
+      const msg = result.cleaned.length > 0
+        ? `Cleaned ${result.cleaned.length} stale session(s): ${result.cleaned.join(', ')}`
+        : 'No stale sessions found.';
+      return { content: [{ type: 'text', text: msg }] };
     }
 
     case 'update_agent_todos': {

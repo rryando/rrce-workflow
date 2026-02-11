@@ -9,6 +9,35 @@ import { configService, isProjectExposed, getProjectPermissions } from '../confi
 import { type DetectedProject, findClosestProject } from '../../lib/detection';
 import { projectService } from '../../lib/detection-service';
 
+// Cache for linked projects config reads (keyed by config file path)
+const LINKED_PROJECTS_CACHE_TTL_MS = 30_000;
+const linkedProjectsCache = new Map<string, { content: string | null; cachedAt: number; fileMtime: number }>();
+
+function readLinkedProjectsConfig(dataPath: string): string | null {
+  const candidates = [
+    path.join(dataPath, '.rrce-workflow', 'config.yaml'),
+    path.join(dataPath, '.rrce-workflow.yaml'),
+  ];
+
+  for (const cfgPath of candidates) {
+    if (!fs.existsSync(cfgPath)) continue;
+    try {
+      const stat = fs.statSync(cfgPath);
+      const now = Date.now();
+      const cached = linkedProjectsCache.get(cfgPath);
+      if (cached && cached.fileMtime === stat.mtimeMs && (now - cached.cachedAt) < LINKED_PROJECTS_CACHE_TTL_MS) {
+        return cached.content;
+      }
+      const content = fs.readFileSync(cfgPath, 'utf-8');
+      linkedProjectsCache.set(cfgPath, { content, cachedAt: now, fileMtime: stat.mtimeMs });
+      return content;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 /**
  * Get list of projects exposed via MCP
  */
@@ -27,12 +56,7 @@ export function getExposedProjects(): DetectedProject[] {
   const potentialProjects = [...allProjects];
 
   if (activeProject) {
-    let cfgContent: string | null = null;
-    if (fs.existsSync(path.join(activeProject.dataPath, '.rrce-workflow', 'config.yaml'))) {
-      cfgContent = fs.readFileSync(path.join(activeProject.dataPath, '.rrce-workflow', 'config.yaml'), 'utf-8');
-    } else if (fs.existsSync(path.join(activeProject.dataPath, '.rrce-workflow.yaml'))) {
-      cfgContent = fs.readFileSync(path.join(activeProject.dataPath, '.rrce-workflow.yaml'), 'utf-8');
-    }
+    const cfgContent = readLinkedProjectsConfig(activeProject.dataPath);
 
     if (cfgContent) {
       if (cfgContent.includes('linked_projects:')) {
@@ -94,16 +118,28 @@ export function detectActiveProject(knownProjects?: DetectedProject[]): Detected
   return findClosestProject(scanList);
 }
 
+// Cache for project-context.md content per project
+const PROJECT_CONTEXT_CACHE_TTL_MS = 30_000; // 30 seconds
+const projectContextCache = new Map<string, { content: string | null; cachedAt: number; fileMtime: number }>();
+
+/**
+ * Clear project context cache
+ */
+export function clearProjectContextCache(): void {
+  projectContextCache.clear();
+  linkedProjectsCache.clear();
+}
+
 /**
  * Get project context (project-context.md)
+ * Results are cached per project with a 30-second TTL and mtime check.
  */
 export function getProjectContext(projectName: string): string | null {
   const config = configService.load();
   const projects = projectService.scan();
-  
-  // Find the SPECIFIC project that is exposed (disambiguate by path if need be)
+
   const project = projects.find(p => p.name === projectName && isProjectExposed(config, p.name, p.sourcePath || p.path));
-  
+
   if (!project) {
     return null;
   }
@@ -112,18 +148,34 @@ export function getProjectContext(projectName: string): string | null {
   if (!permissions.knowledge) {
     return null;
   }
-  
+
   if (!project.knowledgePath) {
     return null;
   }
 
   const contextPath = path.join(project.knowledgePath, 'project-context.md');
-  
+
   if (!fs.existsSync(contextPath)) {
     return null;
   }
 
-  return fs.readFileSync(contextPath, 'utf-8');
+  // Check cache
+  const now = Date.now();
+  const cached = projectContextCache.get(contextPath);
+  try {
+    const stat = fs.statSync(contextPath);
+    const fileMtime = stat.mtimeMs;
+
+    if (cached && cached.fileMtime === fileMtime && (now - cached.cachedAt) < PROJECT_CONTEXT_CACHE_TTL_MS) {
+      return cached.content;
+    }
+
+    const content = fs.readFileSync(contextPath, 'utf-8');
+    projectContextCache.set(contextPath, { content, cachedAt: now, fileMtime });
+    return content;
+  } catch {
+    return null;
+  }
 }
 
 /**
